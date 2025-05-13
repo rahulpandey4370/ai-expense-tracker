@@ -50,10 +50,10 @@ const spendingInsightsPrompt = ai.definePrompt({
   prompt: `You are Rahul's personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
 
   Here is the user's spending data for the current month:
-  - Total spending: ₹${'{{monthlySpending}}'}
-  - Top category: ${'{{topCategory}}'} (₹${'{{topCategorySpending}}'})
+  - Total spending: ₹{{monthlySpending}}
+  - Top category: {{topCategory}} (₹{{topCategorySpending}})
 
-  Compared to last month (spending: ₹${'{{lastMonthSpending}}'}), ${'{{comparisonWithLastMonth}}'}.
+  Compared to last month (spending: ₹{{lastMonthSpending}}), {{comparisonWithLastMonth}}.
 
   Provide 2-3 concise and actionable insights to help the user understand their spending patterns and make informed decisions.
 `,
@@ -70,3 +70,4 @@ const spendingInsightsFlow = ai.defineFlow(
     return output!;
   }
 );
+
