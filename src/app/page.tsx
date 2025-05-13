@@ -9,9 +9,11 @@ import { ExpensePaymentMethodChart } from "@/components/charts/expense-payment-m
 import { SpendingInsights } from "@/components/spending-insights";
 import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
+import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
+import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import type { Transaction } from '@/lib/types';
 import { initialTransactions } from '@/lib/data';
-import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, CalendarDays } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, CalendarDays, LineChart, BarChartHorizontal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
@@ -39,14 +41,14 @@ export default function DashboardPage() {
   const handleMonthChange = (monthValue: string) => {
     const newDate = new Date(selectedDate);
     newDate.setMonth(parseInt(monthValue, 10));
-    newDate.setDate(1); // Avoid issues with day overflow
+    newDate.setDate(1); 
     setSelectedDate(newDate);
   };
 
   const handleYearChange = (yearValue: string) => {
     const newDate = new Date(selectedDate);
     newDate.setFullYear(parseInt(yearValue, 10));
-    newDate.setDate(1); // Avoid issues with day overflow
+    newDate.setDate(1); 
     setSelectedDate(newDate);
   };
   
@@ -78,22 +80,22 @@ export default function DashboardPage() {
   
   const lastMonthTotalSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1); // Start of selected month
-    prevMonthDate.setMonth(selectedDate.getMonth() - 1); // Go to previous month
+    prevMonthDate.setDate(1); 
+    prevMonthDate.setMonth(selectedDate.getMonth() - 1); 
     
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
     return transactions
       .filter(t => t.type === 'expense' && t.date.getMonth() === lastMonth && t.date.getFullYear() === yearForLastMonth)
-      .reduce((sum, t) => sum + t.amount, 0) || 180000; // fallback if no data
+      .reduce((sum, t) => sum + t.amount, 0) || 0; // Corrected fallback to 0
   }, [transactions, selectedDate]);
 
 
   if (!isClient) {
     return (
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse">
-        <div className="h-20 bg-muted rounded-lg"></div> {/* Placeholder for month selector */}
+        <div className="h-20 bg-muted rounded-lg"></div> 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="h-32 bg-muted rounded-lg"></div>
           <div className="h-32 bg-muted rounded-lg"></div>
@@ -104,11 +106,13 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-6">
             <div className="h-96 bg-muted rounded-lg"></div>
             <div className="h-80 bg-muted rounded-lg"></div>
+            <div className="h-80 bg-muted rounded-lg"></div> {/* Placeholder for new charts */}
+            <div className="h-80 bg-muted rounded-lg"></div>
           </div>
           <div className="lg:col-span-1 space-y-6">
             <div className="h-96 bg-muted rounded-lg"></div>
             <div className="h-80 bg-muted rounded-lg"></div>
-            <div className="h-96 bg-muted rounded-lg"></div> {/* Placeholder for chatbot */}
+            <div className="h-96 bg-muted rounded-lg"></div> 
           </div>
         </div>
       </main>
@@ -117,7 +121,7 @@ export default function DashboardPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background">
-      <Card className="shadow-md">
+      <Card className="shadow-lg"> {/* Changed to shadow-lg */}
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-primary" />
@@ -173,6 +177,10 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ExpenseCategoryChart transactions={currentMonthTransactions} selectedMonthName={monthNames[selectedMonth]} selectedYear={selectedYear} />
             <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNames[selectedMonth]} selectedYear={selectedYear} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <MonthlySpendingTrendChart transactions={transactions} />
+            <IncomeExpenseTrendChart transactions={transactions} />
           </div>
            <RecentTransactionsList transactions={currentMonthTransactions} />
         </div>

@@ -32,7 +32,7 @@ body {
     --chart-3: 285 70% 65%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Increased for a "funkier" look */
 
     /* Sidebar specific theme */
     --sidebar-background: 180 20% 97%; /* Very light teal, almost white */
@@ -70,6 +70,7 @@ body {
     --chart-3: 285 65% 55%;
     --chart-4: 43 70% 60%;
     --chart-5: 27 80% 60%;
+    --radius: 0.75rem; /* Increased for a "funkier" look */
 
     /* Dark Sidebar specific theme */
     --sidebar-background: 180 15% 10%; /* Dark teal, almost black */

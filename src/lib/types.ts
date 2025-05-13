@@ -22,7 +22,7 @@ export interface Category {
 export interface PaymentMethod {
   id: string;
   name: string;
-  type: "Credit Card" | "UPI" | "Cash" | "Bank Transfer";
+  type: "Credit Card" | "UPI" | "Cash" | "Others";
 }
 
 export interface Investment {
