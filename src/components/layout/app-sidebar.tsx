@@ -29,8 +29,8 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="Rahul's AI Expense Tracker Home">
-          <AppLogo />
+        <Link href="/" aria-label="Chaos Cash Tracker Home">
+          <AppLogo appName="Chaos Cash Tracker" />
         </Link>
       </SidebarHeader>
       <Separator className="mb-2" />

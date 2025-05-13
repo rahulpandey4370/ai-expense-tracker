@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rahul's AI Expense Tracker",
-  description: "Track your expenses intelligently with Rahul's AI Expense Tracker.",
+  title: "Chaos Cash Tracker",
+  description: "Track your expenses intelligently with Chaos Cash Tracker.",
 };
 
 export default function RootLayout({
