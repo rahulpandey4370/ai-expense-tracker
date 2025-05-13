@@ -61,7 +61,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                   </div>
                   <div className="text-right">
                     <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                      {transaction.type === 'income' ? '+' : '-'} ${transaction.amount.toFixed(2)}
+                      {transaction.type === 'income' ? '+' : '-'} ₹{transaction.amount.toFixed(2)}
                     </p>
                     {transaction.type === 'expense' && transaction.expenseType && (
                        <Badge variant={

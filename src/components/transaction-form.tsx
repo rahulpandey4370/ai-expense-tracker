@@ -61,7 +61,7 @@ export function TransactionForm({ onAddTransaction }: TransactionFormProps) {
     onAddTransaction(newTransaction);
     toast({
       title: "Transaction Added",
-      description: `${type === 'income' ? 'Income' : 'Expense'} of $${amount} for "${description}" added successfully.`,
+      description: `${type === 'income' ? 'Income' : 'Expense'} of ₹${amount} for "${description}" added successfully.`,
     });
 
     // Reset form
@@ -129,7 +129,7 @@ export function TransactionForm({ onAddTransaction }: TransactionFormProps) {
               </Popover>
             </div>
             <div>
-              <Label htmlFor="amount">Amount</Label>
+              <Label htmlFor="amount">Amount (₹)</Label>
               <Input id="amount" type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1" required />
             </div>
           </div>

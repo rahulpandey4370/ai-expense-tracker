@@ -85,7 +85,7 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
           <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel nameKey="name" />}
+              content={<ChartTooltipContent hideLabel nameKey="name" formatter={(value, name, props) => ([`₹${(props.payload?.value as number || 0).toLocaleString()}`, name])} />}
             />
             <Pie
               data={chartData}
@@ -104,7 +104,7 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
       </CardContent>
        <CardFooter className="flex-col gap-2 text-sm mt-auto">
         <div className="flex items-center gap-2 font-medium leading-none">
-          Total Expenses: ${totalExpenses.toLocaleString()}
+          Total Expenses: ₹{totalExpenses.toLocaleString()}
         </div>
         <div className="leading-none text-muted-foreground">
           Showing data for the current period.

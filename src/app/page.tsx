@@ -52,7 +52,7 @@ export default function DashboardPage() {
 
     return transactions
       .filter(t => t.type === 'expense' && t.date.getMonth() === lastMonth && t.date.getFullYear() === yearForLastMonth)
-      .reduce((sum, t) => sum + t.amount, 0) || 1800; // fallback if no data
+      .reduce((sum, t) => sum + t.amount, 0) || 180000; // fallback if no data, adjusted for INR
   }, [transactions]);
 
 
@@ -84,9 +84,9 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background">
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Total Income" value={`$${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description="This month" />
-        <KpiCard title="Total Spending" value={`$${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description="This month" valueClassName="text-red-500"/>
-        <KpiCard title="Total Savings" value={`$${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description="This month" valueClassName={monthlyMetrics.savings >= 0 ? "text-green-500" : "text-red-500"} />
+        <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description="This month" />
+        <KpiCard title="Total Spending" value={`₹${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description="This month" valueClassName="text-red-500"/>
+        <KpiCard title="Total Savings" value={`₹${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description="This month" valueClassName={monthlyMetrics.savings >= 0 ? "text-green-500" : "text-red-500"} />
         <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description="This month" valueClassName={monthlyMetrics.savingsRate >=0 ? "text-primary" : "text-destructive"}/>
       </div>
 

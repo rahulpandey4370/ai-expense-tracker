@@ -13,8 +13,6 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
 } from "@/components/ui/chart"
 import type { Transaction } from "@/lib/types"
 
@@ -39,7 +37,7 @@ export function ExpensePaymentMethodChart({ transactions }: ExpensePaymentMethod
   
   const chartConfig = {
     expenses: {
-      label: "Expenses",
+      label: "Expenses (₹)",
       color: "hsl(var(--primary))",
     },
   }
@@ -68,7 +66,7 @@ export function ExpensePaymentMethodChart({ transactions }: ExpensePaymentMethod
         <ChartContainer config={chartConfig} className="max-h-[300px] w-full">
           <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
             <CartesianGrid horizontal={false} />
-            <XAxis type="number" dataKey="expenses" hide/>
+            <XAxis type="number" dataKey="expenses" hide tickFormatter={(value) => `₹${value}`} />
             <YAxis
               dataKey="name"
               type="category"
@@ -80,7 +78,7 @@ export function ExpensePaymentMethodChart({ transactions }: ExpensePaymentMethod
             />
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel />}
+              content={<ChartTooltipContent formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, name === 'expenses' ? chartConfig.expenses.label : name ])} />}
             />
             <Bar dataKey="expenses" radius={5} />
           </BarChart>

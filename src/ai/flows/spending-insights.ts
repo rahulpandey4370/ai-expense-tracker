@@ -16,16 +16,16 @@ import {z} from 'genkit';
 const SpendingInsightsInputSchema = z.object({
   monthlySpending: z
     .number()
-    .describe('The total spending for the current month in USD.'),
+    .describe('The total spending for the current month in INR.'),
   lastMonthSpending: z
     .number()
-    .describe('The total spending for the last month in USD.'),
+    .describe('The total spending for the last month in INR.'),
   topCategory: z
     .string()
     .describe('The most spent category this month (e.g., Food & Dining).'),
   topCategorySpending: z
     .number()
-    .describe('The amount spent in the top category this month in USD.'),
+    .describe('The amount spent in the top category this month in INR.'),
   comparisonWithLastMonth: z
     .string()
     .describe(
@@ -47,13 +47,13 @@ const spendingInsightsPrompt = ai.definePrompt({
   name: 'spendingInsightsPrompt',
   input: {schema: SpendingInsightsInputSchema},
   output: {schema: SpendingInsightsOutputSchema},
-  prompt: `You are a personal finance advisor providing insights to the user about their spending habits.
+  prompt: `You are a personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
 
   Here is the user's spending data for the current month:
-  - Total spending: ${'{{monthlySpending}}'} USD
-  - Top category: ${'{{topCategory}}'} (${'{{topCategorySpending}}'} USD)
+  - Total spending: ₹${'{{monthlySpending}}'}
+  - Top category: ${'{{topCategory}}'} (₹${'{{topCategorySpending}}'})
 
-  Compared to last month (spending: ${'{{lastMonthSpending}}'} USD), ${'{{comparisonWithLastMonth}}'}.
+  Compared to last month (spending: ₹${'{{lastMonthSpending}}'}), ${'{{comparisonWithLastMonth}}'}.
 
   Provide 2-3 concise and actionable insights to help the user understand their spending patterns and make informed decisions.
 `,

@@ -14,7 +14,7 @@ interface SpendingInsightsProps {
   lastMonthTotalSpending?: number; 
 }
 
-export function SpendingInsights({ transactions, lastMonthTotalSpending = 1800 }: SpendingInsightsProps) {
+export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000 }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +51,9 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 1800 }
     setInsights(null);
 
     const comparisonWithLastMonth = monthlySpending > lastMonthTotalSpending
-      ? `you spent $${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more.`
+      ? `you spent ₹${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more.`
       : monthlySpending < lastMonthTotalSpending
-      ? `you spent $${(lastMonthTotalSpending - monthlySpending).toFixed(2)} less.`
+      ? `you spent ₹${(lastMonthTotalSpending - monthlySpending).toFixed(2)} less.`
       : `your spending was about the same.`;
       
     const input: SpendingInsightsInput = {
@@ -81,7 +81,7 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 1800 }
       generateInsights();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions]); // Dependency on transactions is important
+  }, [transactions, monthlySpending]); // Added monthlySpending to dependencies
 
   return (
     <Card className="shadow-lg">

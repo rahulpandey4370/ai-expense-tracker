@@ -10,6 +10,7 @@ export const expenseCategories: Category[] = [
   { id: 'cat7', name: 'Shopping', type: 'expense' },
   { id: 'cat8', name: 'Rent/Mortgage', type: 'expense'},
   { id: 'cat9', name: 'Other', type: 'expense' },
+  { id: 'cat10', name: 'Investments', type: 'expense'}, // Added for consistency
 ];
 
 export const incomeCategories: Category[] = [
@@ -34,7 +35,7 @@ export const initialTransactions: Transaction[] = [
     id: 'txn1',
     type: 'income' as TransactionEnumType,
     date: new Date(new Date().setDate(1)),
-    amount: 5000,
+    amount: 75000, // Adjusted for INR
     source: 'Salary',
     description: 'Monthly Salary',
   },
@@ -42,7 +43,7 @@ export const initialTransactions: Transaction[] = [
     id: 'txn2',
     type: 'expense' as TransactionEnumType,
     date: new Date(new Date().setDate(2)),
-    amount: 75,
+    amount: 3500, // Adjusted for INR
     description: 'Weekly Groceries',
     category: 'Groceries',
     paymentMethod: 'Credit Card Alpha',
@@ -52,7 +53,7 @@ export const initialTransactions: Transaction[] = [
     id: 'txn3',
     type: 'expense' as TransactionEnumType,
     date: new Date(new Date().setDate(3)),
-    amount: 30,
+    amount: 1200, // Adjusted for INR
     description: 'Lunch with colleagues',
     category: 'Dining Out',
     paymentMethod: 'UPI Gamma',
@@ -62,7 +63,7 @@ export const initialTransactions: Transaction[] = [
     id: 'txn4',
     type: 'expense' as TransactionEnumType,
     date: new Date(new Date().setDate(5)),
-    amount: 1200,
+    amount: 20000, // Adjusted for INR
     description: 'Monthly Rent',
     category: 'Rent/Mortgage',
     paymentMethod: 'Bank Transfer Epsilon',
@@ -72,7 +73,7 @@ export const initialTransactions: Transaction[] = [
     id: 'txn5',
     type: 'expense' as TransactionEnumType,
     date: new Date(new Date().setDate(7)),
-    amount: 50,
+    amount: 1500, // Adjusted for INR
     description: 'Movie Tickets',
     category: 'Entertainment',
     paymentMethod: 'Credit Card Beta',
@@ -82,9 +83,9 @@ export const initialTransactions: Transaction[] = [
     id: 'txn6',
     type: 'expense' as TransactionEnumType,
     date: new Date(new Date().setDate(10)),
-    amount: 200,
+    amount: 10000, // Adjusted for INR
     description: 'Stock Investment',
-    category: 'Investments', // This could be a special category
+    category: 'Investments',
     paymentMethod: 'Bank Transfer Epsilon',
     expenseType: 'investment_expense' as ExpenseEnumType,
   },
