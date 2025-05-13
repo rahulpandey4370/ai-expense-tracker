@@ -5,7 +5,7 @@ interface AppLogoProps extends SVGProps<SVGSVGElement> {
   appName?: string;
 }
 
-export function AppLogo({ className, appName = "Rahul's AI Expense Tracker", ...props }: AppLogoProps) {
+export function AppLogo({ className, appName = "Rahul's AI Tracker", ...props }: AppLogoProps) {
   return (
     <div className={`flex items-center gap-2 ${className || ''}`}>
       <svg
@@ -23,7 +23,7 @@ export function AppLogo({ className, appName = "Rahul's AI Expense Tracker", ...
         <path d="M2 17l10 5 10-5"></path>
         <path d="M2 12l10 5 10-5"></path>
       </svg>
-      <span className="text-xl font-bold text-primary group-data-[collapsible=icon]:hidden whitespace-nowrap">
+      <span className="text-lg font-bold text-primary group-data-[collapsible=icon]:hidden whitespace-nowrap">
         {appName}
       </span>
     </div>
