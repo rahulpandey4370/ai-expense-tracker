@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -7,6 +8,7 @@ import AppSidebar from '@/components/layout/app-sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 import AppHeader from '@/components/layout/app-header';
 import { ThemeProvider } from "@/components/theme-provider";
+import { DateSelectionProvider } from '@/contexts/DateSelectionContext';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -19,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chaos Cash Tracker",
-  description: "Track your expenses intelligently with Chaos Cash Tracker.",
+  title: "Rahul's Chaos Cash Tracker",
+  description: "Track your expenses intelligently with Rahul's Chaos Cash Tracker.",
 };
 
 export default function RootLayout({
@@ -37,13 +39,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarProvider defaultOpen>
-            <AppSidebar />
-            <SidebarInset>
-              <AppHeader />
-              {children}
-            </SidebarInset>
-          </SidebarProvider>
+          <DateSelectionProvider>
+            <SidebarProvider defaultOpen>
+              <AppSidebar />
+              <SidebarInset>
+                <AppHeader />
+                {children}
+              </SidebarInset>
+            </SidebarProvider>
+          </DateSelectionProvider>
           <Toaster />
         </ThemeProvider>
       </body>
