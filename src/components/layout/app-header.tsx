@@ -2,7 +2,8 @@
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { UserNav } from "@/components/user-nav";
-import { FinWiseLogo } from "@/components/finwise-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
+
 
 export default function AppHeader() {
   return (
@@ -14,7 +15,7 @@ export default function AppHeader() {
         {/* Placeholder to maintain layout, or could be breadcrumbs */}
       </div>
       <div className="flex flex-1 items-center justify-end gap-4">
-        {/* Add search or other header actions here if needed */}
+        <ThemeToggle />
         <UserNav />
       </div>
     </header>

@@ -6,6 +6,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/layout/app-sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 import AppHeader from '@/components/layout/app-header';
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,14 +31,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SidebarProvider defaultOpen>
-          <AppSidebar />
-          <SidebarInset>
-            <AppHeader />
-            {children}
-          </SidebarInset>
-        </SidebarProvider>
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SidebarProvider defaultOpen>
+            <AppSidebar />
+            <SidebarInset>
+              <AppHeader />
+              {children}
+            </SidebarInset>
+          </SidebarProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
