@@ -47,7 +47,7 @@ const spendingInsightsPrompt = ai.definePrompt({
   name: 'spendingInsightsPrompt',
   input: {schema: SpendingInsightsInputSchema},
   output: {schema: SpendingInsightsOutputSchema},
-  prompt: `You are a personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
+  prompt: `You are Rahul's personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
 
   Here is the user's spending data for the current month:
   - Total spending: ₹${'{{monthlySpending}}'}

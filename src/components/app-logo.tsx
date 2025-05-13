@@ -1,6 +1,11 @@
 import type { SVGProps } from 'react';
 
-export function FinWiseLogo({ className, ...props }: SVGProps<SVGSVGElement> & { className?: string }) {
+interface AppLogoProps extends SVGProps<SVGSVGElement> {
+  className?: string;
+  appName?: string;
+}
+
+export function AppLogo({ className, appName = "Rahul's AI Expense Tracker", ...props }: AppLogoProps) {
   return (
     <div className={`flex items-center gap-2 ${className || ''}`}>
       <svg
@@ -18,7 +23,9 @@ export function FinWiseLogo({ className, ...props }: SVGProps<SVGSVGElement> & {
         <path d="M2 17l10 5 10-5"></path>
         <path d="M2 12l10 5 10-5"></path>
       </svg>
-      <span className="text-2xl font-bold text-primary group-data-[collapsible=icon]:hidden">FinWise</span>
+      <span className="text-xl font-bold text-primary group-data-[collapsible=icon]:hidden whitespace-nowrap">
+        {appName}
+      </span>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 "use client"
 
-import { TrendingUp } from "lucide-react"
 import { Pie, PieChart, Cell } from "recharts"
 import {
   Card,
@@ -20,7 +19,9 @@ import {
 import type { Transaction } from "@/lib/types"
 
 interface ExpenseCategoryChartProps {
-  transactions: Transaction[];
+  transactions: Transaction[]; // Should be pre-filtered for the selected month/year
+  selectedMonthName: string;
+  selectedYear: number;
 }
 
 const CHART_COLORS = [
@@ -35,8 +36,8 @@ const CHART_COLORS = [
 ];
 
 
-export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps) {
-  const expenseData = transactions
+export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear }: ExpenseCategoryChartProps) {
+  const expenseData = transactions // Already filtered for the selected period
     .filter(t => t.type === 'expense' && t.category)
     .reduce((acc, curr) => {
       const category = curr.category!;
@@ -46,7 +47,7 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
 
   const chartData = Object.entries(expenseData)
     .map(([name, value]) => ({ name, value, fill: "" }))
-    .sort((a,b) => b.value - a.value) // Sort for consistent color assignment
+    .sort((a,b) => b.value - a.value) 
     .map((item, index) => ({...item, fill: CHART_COLORS[index % CHART_COLORS.length]}));
 
 
@@ -62,10 +63,10 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Expenses by Category</CardTitle>
-          <CardDescription>Distribution of your spending across categories this month.</CardDescription>
+          <CardDescription>Spending distribution for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-[300px]">
-          <p className="text-muted-foreground">No expense data available for this period.</p>
+          <p className="text-muted-foreground">No expense data for {selectedMonthName} {selectedYear}.</p>
         </CardContent>
       </Card>
     );
@@ -75,7 +76,7 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
     <Card className="flex flex-col shadow-lg">
       <CardHeader className="items-center pb-0">
         <CardTitle>Expenses by Category</CardTitle>
-        <CardDescription>Distribution of your spending across categories this month.</CardDescription>
+        <CardDescription>Spending distribution for {selectedMonthName} {selectedYear}.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
         <ChartContainer
@@ -107,7 +108,7 @@ export function ExpenseCategoryChart({ transactions }: ExpenseCategoryChartProps
           Total Expenses: ₹{totalExpenses.toLocaleString()}
         </div>
         <div className="leading-none text-muted-foreground">
-          Showing data for the current period.
+          Showing data for {selectedMonthName} {selectedYear}.
         </div>
       </CardFooter>
     </Card>

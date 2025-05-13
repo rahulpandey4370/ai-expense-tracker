@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { FinWiseLogo } from "@/components/finwise-logo";
+import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle } from "lucide-react";
@@ -29,8 +29,8 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="FinWise Home">
-          <FinWiseLogo />
+        <Link href="/" aria-label="Rahul's AI Expense Tracker Home">
+          <AppLogo />
         </Link>
       </SidebarHeader>
       <Separator className="mb-2" />

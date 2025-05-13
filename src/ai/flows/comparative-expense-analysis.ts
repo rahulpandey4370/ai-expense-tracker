@@ -16,8 +16,8 @@ const ComparativeExpenseAnalysisInputSchema = z.object({
   previousMonth: z.string().describe('The previous month for expense comparison (e.g., "December").'),
   currentMonthExpenses: z.number().describe('Total expenses for the current month in INR.'),
   previousMonthExpenses: z.number().describe('Total expenses for the previous month in INR.'),
-  expenseCategoriesCurrent: z.string().describe('A string representation of expense categories and amounts for the current month, e.g., \"Food: ₹5000, Transport: ₹3000\".'),
-  expenseCategoriesPrevious: z.string().describe('A string representation of expense categories and amounts for the previous month, e.g., \"Food: ₹4000, Transport: ₹2500\".'),
+  expenseCategoriesCurrent: z.string().describe('A string representation of expense categories and amounts for the current month, e.g., "Food: ₹5000, Transport: ₹3000".'),
+  expenseCategoriesPrevious: z.string().describe('A string representation of expense categories and amounts for the previous month, e.g., "Food: ₹4000, Transport: ₹2500".'),
 });
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 
@@ -36,7 +36,7 @@ const prompt = ai.definePrompt({
   name: 'comparativeExpenseAnalysisPrompt',
   input: {schema: ComparativeExpenseAnalysisInputSchema},
   output: {schema: ComparativeExpenseAnalysisOutputSchema},
-  prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
+  prompt: `You are Rahul's personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
 
 Current Month: {{currentMonth}}
 Previous Month: {{previousMonth}}

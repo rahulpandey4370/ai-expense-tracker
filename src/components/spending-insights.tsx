@@ -9,41 +9,38 @@ import type { Transaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface SpendingInsightsProps {
-  transactions: Transaction[];
-  // For simplicity, last month's spending is mocked. In a real app, this would come from data.
-  lastMonthTotalSpending?: number; 
+  currentMonthTransactions: Transaction[]; // Pre-filtered for selected month/year
+  lastMonthTotalSpending: number; 
+  selectedMonthName: string;
+  selectedYear: number;
 }
 
-export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000 }: SpendingInsightsProps) {
+export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedYear }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-
-  const monthlySpending = transactions
-    .filter(t => t.type === 'expense' && t.date.getMonth() === currentMonth && t.date.getFullYear() === currentYear)
+  const monthlySpending = currentMonthTransactions
+    .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const getTopCategory = () => {
     const categorySpending: Record<string, number> = {};
-    transactions
-      .filter(t => t.type === 'expense' && t.category && t.date.getMonth() === currentMonth && t.date.getFullYear() === currentYear)
+    currentMonthTransactions // Use pre-filtered transactions
+      .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         categorySpending[t.category!] = (categorySpending[t.category!] || 0) + t.amount;
       });
     
     if (Object.keys(categorySpending).length === 0) return { name: 'N/A', amount: 0 };
 
-    return Object.entries(categorySpending)
-      .sort(([, a], [, b]) => b - a)[0];
+    const sortedCategories = Object.entries(categorySpending).sort(([, a], [, b]) => b - a);
+    return { name: sortedCategories[0][0], amount: sortedCategories[0][1] };
   };
 
   const topCategoryData = getTopCategory();
-  const topCategoryName = topCategoryData ? topCategoryData[0] : 'N/A';
-  const topCategorySpending = topCategoryData ? topCategoryData[1] : 0;
-
+  const topCategoryName = topCategoryData.name;
+  const topCategorySpending = topCategoryData.amount;
 
   const generateInsights = async () => {
     setIsLoading(true);
@@ -51,10 +48,10 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000
     setInsights(null);
 
     const comparisonWithLastMonth = monthlySpending > lastMonthTotalSpending
-      ? `you spent ₹${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more.`
+      ? `you spent ₹${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more than the previous month.`
       : monthlySpending < lastMonthTotalSpending
-      ? `you spent ₹${(lastMonthTotalSpending - monthlySpending).toFixed(2)} less.`
-      : `your spending was about the same.`;
+      ? `you spent ₹${(lastMonthTotalSpending - monthlySpending).toFixed(2)} less than the previous month.`
+      : `your spending was about the same as the previous month.`;
       
     const input: SpendingInsightsInput = {
       monthlySpending,
@@ -75,13 +72,15 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000
     }
   };
   
-  // Auto-generate insights on load if there's data
   useEffect(() => {
-    if (transactions.length > 0 && monthlySpending > 0) {
+    if (currentMonthTransactions.length > 0 && monthlySpending > 0) {
       generateInsights();
+    } else {
+      setInsights(null); // Clear insights if no relevant data
+      setError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, monthlySpending]); // Added monthlySpending to dependencies
+  }, [currentMonthTransactions, monthlySpending, lastMonthTotalSpending]);
 
   return (
     <Card className="shadow-lg">
@@ -89,7 +88,7 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000
         <CardTitle className="flex items-center gap-2 text-xl">
           <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights
         </CardTitle>
-        <CardDescription>Discover patterns and tips from your spending.</CardDescription>
+        <CardDescription>Insights for {selectedMonthName} {selectedYear}.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading && (
@@ -107,13 +106,10 @@ export function SpendingInsights({ transactions, lastMonthTotalSpending = 180000
             ))}
           </div>
         )}
-        {!insights && !isLoading && !error && transactions.length > 0 && monthlySpending > 0 && (
-           <p className="text-sm text-muted-foreground">Click the button to generate insights.</p>
+        {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
+           <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
         )}
-         {!insights && !isLoading && !error && (transactions.length === 0 || monthlySpending === 0) && (
-           <p className="text-sm text-muted-foreground">Add some transactions to get insights.</p>
-        )}
-        <Button onClick={generateInsights} disabled={isLoading || transactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+        <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
           <Zap className="mr-2 h-4 w-4" />
           {isLoading ? "Generating..." : "Refresh Insights"}
         </Button>

@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'FinWise - AI Powered Expense Tracker',
-  description: 'Track your expenses intelligently with FinWise.',
+  title: "Rahul's AI Expense Tracker",
+  description: "Track your expenses intelligently with Rahul's AI Expense Tracker.",
 };
 
 export default function RootLayout({
