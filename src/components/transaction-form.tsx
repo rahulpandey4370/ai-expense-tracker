@@ -19,8 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface TransactionFormProps {
   onAddTransaction: (transaction: Transaction) => void;
-  initialTransactionData?: Transaction | null; // For editing
-  onCancel?: () => void; // For closing edit modal
+  initialTransactionData?: Transaction | null; 
+  onCancel?: () => void; 
 }
 
 export function TransactionForm({ onAddTransaction, initialTransactionData, onCancel }: TransactionFormProps) {
@@ -34,7 +34,7 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
   const [expenseType, setExpenseType] = useState<ExpenseEnumType | undefined>(undefined);
   const [source, setSource] = useState<string | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);
-  const [id, setId] = useState<string | null>(null); // For editing
+  const [id, setId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -52,7 +52,6 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
         setSource(initialTransactionData.source);
       }
     } else {
-        // Reset form for new transaction
         setId(null);
         setType('expense');
         setDate(new Date());
@@ -70,15 +69,15 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
     e.preventDefault();
     if (!date || !amount || !description || (type === 'expense' && (!category || !paymentMethod || !expenseType)) || (type === 'income' && !source)) {
       toast({
-        title: "Missing Spell Ingredients",
-        description: "Please fill in all required fields for your financial charm.",
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
         variant: "destructive",
       });
       return;
     }
 
     const transactionData: Transaction = {
-      id: id || new Date().toISOString() + Math.random().toString(), // Use existing id if editing
+      id: id || new Date().toISOString() + Math.random().toString(),
       type,
       date,
       amount: parseFloat(amount),
@@ -87,9 +86,9 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
       ...(type === 'income' && { source }),
     };
 
-    onAddTransaction(transactionData); // This will be handleAddTransaction or handleEditTransaction
+    onAddTransaction(transactionData); 
     
-    if (!initialTransactionData) { // Only reset for new transactions
+    if (!initialTransactionData) { 
         setDate(new Date());
         setAmount('');
         setDescription('');
@@ -100,17 +99,15 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
     }
   };
   
-  const cardTitle = initialTransactionData ? "Revise Your Spell (Edit Transaction)" : "Cast a New Spell (Add Transaction)";
-  const cardDescription = initialTransactionData ? "Modify the details of this financial enchantment." : "Log your income or expenses quickly.";
-  const submitButtonText = initialTransactionData ? "Update Enchantment" : "Add Financial Charm";
+  const cardTitle = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
+  const cardDescription = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
+  const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
 
-  if (!isClient && !initialTransactionData) { // Don't hide if it's part of a modal for editing
+  if (!isClient && !initialTransactionData) { 
     return null; 
   }
   
-  // If this form is used in a modal (like for editing), Card wrapper might be redundant
-  // For the main page, it's fine. We can make it conditional or remove if always in modal.
   const FormWrapper = initialTransactionData ? React.Fragment : Card;
   const formWrapperProps = initialTransactionData ? {} : { className: "shadow-lg border-primary/20 border rounded-xl bg-card/80" };
 
@@ -120,30 +117,30 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
       {!initialTransactionData && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
-            <PlusCircle className="h-6 w-6 text-yellow-500" /> {cardTitle}
+            <PlusCircle className="h-6 w-6 text-accent" /> {cardTitle}
           </CardTitle>
           <CardDescription className="text-muted-foreground/80">{cardDescription}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={initialTransactionData ? 'pt-0' : ''}> {/* Adjust padding if no header */}
+      <CardContent className={initialTransactionData ? 'pt-0' : ''}>
         <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
           <div>
-            <Label className="text-foreground/80">Transaction Type (Charm or Curse?)</Label>
+            <Label className="text-foreground/80">Transaction Type</Label>
             <RadioGroup value={type} onValueChange={(value) => setType(value as TransactionEnumType)} className="flex space-x-4 mt-1">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="income" id={`income-${id || 'new'}`} />
-                <Label htmlFor={`income-${id || 'new'}`}>Income (Galleons In)</Label>
+                <Label htmlFor={`income-${id || 'new'}`}>Income</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="expense" id={`expense-${id || 'new'}`} />
-                <Label htmlFor={`expense-${id || 'new'}`}>Expense (Galleons Out)</Label>
+                <Label htmlFor={`expense-${id || 'new'}`}>Expense</Label>
               </div>
             </RadioGroup>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor={`date-${id || 'new'}`} className="text-foreground/80">Date of Enchantment</Label>
+              <Label htmlFor={`date-${id || 'new'}`} className="text-foreground/80">Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -168,21 +165,21 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
               </Popover>
             </div>
             <div>
-              <Label htmlFor={`amount-${id || 'new'}`} className="text-foreground/80">Amount (Galleons, Sickles, Knuts)</Label>
+              <Label htmlFor={`amount-${id || 'new'}`} className="text-foreground/80">Amount (INR)</Label>
               <Input id={`amount-${id || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent" required />
             </div>
           </div>
 
           <div>
-            <Label htmlFor={`description-${id || 'new'}`} className="text-foreground/80">Description (Spell Incantation)</Label>
-            <Input id={`description-${id || 'new'}`} placeholder="e.g., Potion Ingredients, Owl Post Delivery" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent" required />
+            <Label htmlFor={`description-${id || 'new'}`} className="text-foreground/80">Description</Label>
+            <Input id={`description-${id || 'new'}`} placeholder="e.g., Groceries, Salary" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent" required />
           </div>
 
           {type === 'expense' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor={`category-${id || 'new'}`} className="text-foreground/80">Category (Department of Magical Expenses)</Label>
+                  <Label htmlFor={`category-${id || 'new'}`} className="text-foreground/80">Category</Label>
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger id={`category-${id || 'new'}`} className="w-full mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent">
                       <SelectValue placeholder="Select category" />
@@ -193,7 +190,7 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor={`paymentMethod-${id || 'new'}`} className="text-foreground/80">Payment Method (Mode of Magical Exchange)</Label>
+                  <Label htmlFor={`paymentMethod-${id || 'new'}`} className="text-foreground/80">Payment Method</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                     <SelectTrigger id={`paymentMethod-${id || 'new'}`} className="w-full mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent">
                       <SelectValue placeholder="Select payment method" />
@@ -205,12 +202,12 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
                 </div>
               </div>
               <div>
-                <Label className="text-foreground/80">Expense Type (Reason for Spell)</Label>
+                <Label className="text-foreground/80">Expense Type</Label>
                 <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as ExpenseEnumType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                   {[
-                    { value: 'need', label: 'Need (Essential Charm)' },
-                    { value: 'want', label: 'Want (Desirable Hex)' },
-                    { value: 'investment_expense', label: 'Investment (Future Fortune Potion)' }
+                    { value: 'need', label: 'Need' },
+                    { value: 'want', label: 'Want' },
+                    { value: 'investment_expense', label: 'Investment' }
                   ].map(et => (
                     <div key={et.value} className="flex items-center space-x-2">
                       <RadioGroupItem value={et.value} id={`${et.value}-${id || 'new'}`} />
@@ -224,7 +221,7 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
 
           {type === 'income' && (
             <div>
-              <Label htmlFor={`source-${id || 'new'}`} className="text-foreground/80">Source (Origin of Galleons)</Label>
+              <Label htmlFor={`source-${id || 'new'}`} className="text-foreground/80">Source</Label>
               <Select value={source} onValueChange={setSource}>
                 <SelectTrigger id={`source-${id || 'new'}`} className="w-full mt-1 bg-background/70 border-primary/30 focus:border-accent focus:ring-accent">
                   <SelectValue placeholder="Select source" />
@@ -237,13 +234,13 @@ export function TransactionForm({ onAddTransaction, initialTransactionData, onCa
           )}
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button type="submit" className="w-full sm:flex-1 bg-yellow-500 hover:bg-yellow-600 text-primary-foreground">
+            <Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
               {submitButtonText}
             </Button>
             {initialTransactionData && onCancel && (
               <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:flex-1 border-primary/50 hover:bg-primary/10">
                 <XCircle className="mr-2 h-4 w-4"/>
-                Cancel Revision
+                Cancel Edit
               </Button>
             )}
           </div>

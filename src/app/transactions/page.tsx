@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Transaction, TransactionEnumType, ExpenseEnumType } from '@/lib/types';
-import { initialTransactions, expenseCategories, incomeCategories, paymentMethods } from '@/lib/data'; // Assuming initialTransactions are all transactions
+import { initialTransactions, expenseCategories, incomeCategories, paymentMethods } from '@/lib/data'; 
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Filter, Edit3, Trash2, Download } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Filter, Edit3, Trash2, Download, ListFilter } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { TransactionForm } from '@/components/transaction-form'; // Re-use for editing
+import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
 
 export default function TransactionsPage() {
@@ -39,7 +39,7 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const { toast } = useToast();
-  const { selectedMonth, selectedYear, monthNamesList } = useDateSelection(); // To show current context if needed
+  const { selectedMonth, selectedYear, monthNamesList } = useDateSelection(); 
 
   useEffect(() => {
     let tempTransactions = [...allTransactions];
@@ -71,7 +71,6 @@ export default function TransactionsPage() {
 
         if (aValue === undefined || bValue === undefined) return 0;
 
-
         if (sortConfig.key === 'date') {
            return sortConfig.direction === 'ascending' ? (aValue as Date).getTime() - (bValue as Date).getTime() : (bValue as Date).getTime() - (aValue as Date).getTime();
         }
@@ -85,7 +84,6 @@ export default function TransactionsPage() {
       });
     }
 
-
     setFilteredTransactions(tempTransactions);
   }, [allTransactions, searchTerm, filterType, filterCategory, filterPaymentMethod, sortConfig]);
 
@@ -96,7 +94,7 @@ export default function TransactionsPage() {
 
   const handleEditTransaction = (updatedTransaction: Transaction) => {
     setAllTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
-    setEditingTransaction(null); // Close edit modal
+    setEditingTransaction(null); 
     toast({ title: "Transaction Updated", description: `Successfully updated "${updatedTransaction.description}".` });
   };
 
@@ -134,7 +132,7 @@ export default function TransactionsPage() {
       t.type,
       format(t.date, "yyyy-MM-dd"),
       t.amount.toFixed(2),
-      `"${t.description.replace(/"/g, '""')}"`, // Escape double quotes
+      `"${t.description.replace(/"/g, '""')}"`, 
       t.type === 'expense' ? t.category || '' : t.source || '',
       t.paymentMethod || '',
       t.expenseType || ''
@@ -151,21 +149,16 @@ export default function TransactionsPage() {
     toast({ title: "Export Successful", description: "Transactions exported to CSV." });
   };
 
-
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <Card className="shadow-xl border-primary/20 border-2 rounded-xl bg-card/80">
         <CardHeader>
           <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-yellow-500 transform -rotate-12">
-              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM8.547 4.505a8.25 8.25 0 1 0 0 14.99c.166.085.337.162.513.229a8.25 8.25 0 0 0 5.88-15.448 8.183 8.183 0 0 0-.513-.229Z" clipRule="evenodd" />
-              <path fillRule="evenodd" d="M12.75 6a.75.75 0 0 0-1.5 0v6.19L8.03 9.07a.75.75 0 0 0-1.06 1.06L10.94 14l-3.97 3.87a.75.75 0 0 0 1.06 1.06L11.25 15.81V18a.75.75 0 0 0 1.5 0V6Z" clipRule="evenodd" />
-              <path d="M15.94 14.132a.75.75 0 0 1-1.334-.667V8.667a.75.75 0 0 1 1.334-.667v6.132Z" />
-            </svg>
-             Manage Your Galleons (Transactions)
+             <ListFilter className="w-8 h-8 text-primary transform -rotate-6"/>
+             Manage Transactions
           </CardTitle>
           <CardDescription className="text-muted-foreground/80">
-            Keep a keen eye on all your financial charms and curses. Filters available below the search bar.
+            View and manage all your financial transactions. Filters available below.
             Currently viewing data for: {monthNamesList[selectedMonth]} {selectedYear}.
           </CardDescription>
         </CardHeader>
@@ -173,7 +166,7 @@ export default function TransactionsPage() {
           <div className="mb-6 space-y-4">
             <Input
               type="text"
-              placeholder="Search transactions (e.g., 'Potion ingredients', 'Owl Post')"
+              placeholder="Search transactions (e.g., 'Groceries', 'Salary')"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-background/70 border-primary/30 focus:border-accent focus:ring-accent"
@@ -183,8 +176,8 @@ export default function TransactionsPage() {
                 <SelectTrigger className="bg-background/70 border-primary/30 focus:border-accent focus:ring-accent"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="income">Income (Galleons In)</SelectItem>
-                  <SelectItem value="expense">Expense (Galleons Out)</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                  <SelectItem value="expense">Expense</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
@@ -201,9 +194,9 @@ export default function TransactionsPage() {
                   {paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.name}>{pm.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button onClick={exportToCSV} variant="outline" className="bg-yellow-500/20 border-yellow-600 hover:bg-yellow-500/30 text-yellow-700">
+              <Button onClick={exportToCSV} variant="outline" className="bg-primary/10 border-primary/50 hover:bg-primary/20 text-primary">
                 <Download className="mr-2 h-4 w-4" />
-                Export to Parchment (CSV)
+                Export to CSV
               </Button>
             </div>
           </div>
@@ -257,26 +250,26 @@ export default function TransactionsPage() {
                       <TableCell className="space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(transaction)} className="text-yellow-600 hover:text-yellow-500 hover:bg-yellow-500/10">
                           <Edit3 className="h-4 w-4" />
-                           <span className="sr-only">Edit Spell (Transaction)</span>
+                           <span className="sr-only">Edit Transaction</span>
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-500 hover:bg-red-500/10">
                               <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Banish Spell (Delete Transaction)</span>
+                              <span className="sr-only">Delete Transaction</span>
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent className="bg-background/90 border-primary/30">
                             <AlertDialogHeader>
-                              <AlertDialogTitle className="text-primary">Are you sure you want to banish this transaction?</AlertDialogTitle>
+                              <AlertDialogTitle className="text-primary">Are you sure you want to delete this transaction?</AlertDialogTitle>
                               <AlertDialogDescription className="text-muted-foreground/80">
                                 This action cannot be undone. This will permanently remove the transaction: "{transaction.description}".
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel className="border-primary/50 hover:bg-primary/10">Nevermind (Cancel)</AlertDialogCancel>
+                              <AlertDialogCancel className="border-primary/50 hover:bg-primary/10">Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)} className="bg-destructive hover:bg-destructive/80 text-destructive-foreground">
-                                Banish! (Delete)
+                                Delete
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -287,7 +280,7 @@ export default function TransactionsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground/70 py-10">
-                      No transactions found. Perhaps the Nifflers took them? Or try adjusting your filters.
+                      No transactions found. Try adjusting your filters or adding new transactions.
                     </TableCell>
                   </TableRow>
                 )}
@@ -297,34 +290,26 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
       
-      {/* Add New Transaction and Edit Transaction Modals */}
       <AlertDialog open={editingTransaction !== null} onOpenChange={(isOpen) => !isOpen && setEditingTransaction(null)}>
           <AlertDialogContent className="bg-background/90 border-primary/30 sm:max-w-2xl">
               <AlertDialogHeader>
                   <AlertDialogTitle className="text-primary text-xl">
-                    {editingTransaction ? "Revise Your Spell (Edit Transaction)" : "Cast a New Spell (Add Transaction)"}
+                    {editingTransaction ? "Edit Transaction" : "Add Transaction"}
                   </AlertDialogTitle>
                   <AlertDialogDescription className="text-muted-foreground/80">
-                    {editingTransaction ? "Modify the details of this financial enchantment." : "Record a new income or expense charm."}
+                    {editingTransaction ? "Modify the details of this transaction." : "Record a new income or expense."}
                   </AlertDialogDescription>
               </AlertDialogHeader>
-              {/* The TransactionForm will be conditionally rendered here or its content integrated */}
-              {/* For simplicity, we'll assume TransactionForm can handle an initialData prop for editing */}
               <div className="py-4">
-                 {/* A simplified version: if editingTransaction, show a form prefilled with its data */}
-                 {/* In a real app, TransactionForm would take `initialData={editingTransaction}` and `onSubmit={handleEditTransaction}` */}
                 <TransactionForm 
                   onAddTransaction={editingTransaction ? handleEditTransaction : handleAddTransaction} 
-                  // @ts-ignore - This is a simplified example, a real form would handle initial data
                   initialTransactionData={editingTransaction} 
                   onCancel={() => setEditingTransaction(null)}
                 />
               </div>
-              {/* Footer with cancel can be part of TransactionForm or managed here */}
           </AlertDialogContent>
       </AlertDialog>
-
-
     </main>
   );
 }
+
