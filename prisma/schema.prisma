@@ -1,0 +1,27 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL") // Uses Vercel Data Proxy or similar connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // Used for migrations by Prisma CLI
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  type          String // "income" or "expense"
+  date          DateTime
+  amount        Float
+  description   String
+  category      String?
+  paymentMethod String?
+  expenseType   String? // "need", "want", "investment_expense"
+  source        String? // for income sources
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
