@@ -16,7 +16,7 @@ import {
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle } from "lucide-react";
 
 const navItems = [
@@ -42,26 +42,28 @@ export default function AppSidebar() {
         <SidebarMenu className="px-2">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href={item.href} asChild>
+              <Link href={item.href} passHref legacyBehavior>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <SidebarMenuButton
-                      // REMOVED asChild from SidebarMenuButton here
+                      asAnchor // Instruct SidebarMenuButton to render as <a>
                       isActive={pathname === item.href}
                       className="justify-start"
+                      // href will be passed by Link legacyBehavior
+                      // other props (onClick, etc.) from Link will also be passed
+                      // and props from TooltipTrigger asChild will be merged
                     >
-                      {/* Icon and span are now direct children of SidebarMenuButton */}
                       <item.icon className="h-5 w-5" />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
-                  </Link>
-                </TooltipTrigger>
-                {sidebarState === 'collapsed' && !isMobile && (
-                  <TooltipContent side="right" align="center">
-                    {item.label}
-                  </TooltipContent>
-                )}
-              </Tooltip>
+                  </TooltipTrigger>
+                  {sidebarState === 'collapsed' && !isMobile && (
+                    <TooltipContent side="right" align="center">
+                      {item.label}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </Link>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

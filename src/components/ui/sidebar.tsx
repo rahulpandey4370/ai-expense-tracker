@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -533,64 +534,79 @@ const sidebarMenuButtonVariants = cva(
   }
 )
 
+type SidebarMenuButtonProps = (React.ComponentProps<"button"> | React.ComponentProps<"a">) & {
+  asChild?: boolean;
+  asAnchor?: boolean; // New prop to indicate rendering as an anchor
+  isActive?: boolean;
+  tooltip?: string | React.ComponentProps<typeof TooltipContent>;
+} & VariantProps<typeof sidebarMenuButtonVariants>;
+
+
 const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
-  React.ComponentProps<"button"> & {
-    asChild?: boolean
-    isActive?: boolean
-    tooltip?: string | React.ComponentProps<typeof TooltipContent>
-  } & VariantProps<typeof sidebarMenuButtonVariants>
+  HTMLElement, // Can be HTMLButtonElement or HTMLAnchorElement
+  SidebarMenuButtonProps
 >(
   (
     {
-      asChild = false,
+      asChild: propAsChild = false,
+      asAnchor = false, // Added prop
       isActive = false,
       variant = "default",
       size = "default",
       tooltip,
       className,
-      ...props
+      children,
+      ...otherProps // This will include href if Link legacyBehavior passes it
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button"
-    const { isMobile, state } = useSidebar()
+    const Comp = propAsChild ? Slot : (asAnchor ? "a" : "button");
+    const { isMobile, state } = useSidebar();
 
-    const button = (
+    // If Comp is a DOM element (button or a), remove asChild from otherProps
+    // to prevent it from being passed to the DOM element.
+    const { asChild: _leakedAsChild, ...elementProps } = otherProps;
+    
+    const finalProps = propAsChild ? otherProps : elementProps;
+
+    const interactiveElement = (
       <Comp
-        ref={ref}
+        ref={ref as any} // Type assertion for ref based on Comp
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-        {...props}
-      />
-    )
+        {...finalProps} // Pass the potentially filtered props
+      >
+        {children}
+      </Comp>
+    );
 
     if (!tooltip) {
-      return button
+      return interactiveElement;
     }
 
-    if (typeof tooltip === "string") {
-      tooltip = {
-        children: tooltip,
-      }
+    const tooltipContentProps = typeof tooltip === "string" ? { children: tooltip } : tooltip;
+    // Add default side/align if only string is passed
+    if (typeof tooltip === 'string') {
+        tooltipContentProps.side = "right";
+        tooltipContentProps.align = "center";
     }
+
 
     return (
       <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipTrigger asChild>{interactiveElement}</TooltipTrigger>
         <TooltipContent
-          side="right"
-          align="center"
           hidden={state !== "collapsed" || isMobile}
-          {...tooltip}
+          {...tooltipContentProps}
         />
       </Tooltip>
-    )
+    );
   }
-)
-SidebarMenuButton.displayName = "SidebarMenuButton"
+);
+SidebarMenuButton.displayName = "SidebarMenuButton";
+
 
 const SidebarMenuAction = React.forwardRef<
   HTMLButtonElement,
