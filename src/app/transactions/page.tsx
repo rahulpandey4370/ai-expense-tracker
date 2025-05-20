@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { AppTransaction, Category, PaymentMethod } from '@/lib/types'; // Using AppTransaction
+import type { AppTransaction, Category, PaymentMethod } from '@/lib/types'; 
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2 } from "lucide-react";
-import { useDateSelection } from '@/contexts/DateSelectionContext';
+// useDateSelection is not used here, can be removed if not needed.
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -51,8 +51,8 @@ const tableRowVariants = {
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<AppTransaction[]>([]);
-  const [allCategories, setAllCategoriesState] = useState<Category[]>([]); // Renamed to avoid conflict
-  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]); // Renamed
+  const [allCategoriesState, setAllCategoriesState] = useState<Category[]>([]); 
+  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]); 
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string | 'all'>('all');
@@ -65,7 +65,6 @@ export default function TransactionsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast } = useToast();
-  // useDateSelection is not used here, so it can be removed if not needed elsewhere on this page.
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -76,8 +75,8 @@ export default function TransactionsPage() {
         getPaymentMethods()
       ]);
       setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
-      setAllCategoriesState(fetchedCategories); // Use renamed state setter
-      setAllPaymentMethodsState(fetchedPaymentMethods); // Use renamed state setter
+      setAllCategoriesState(fetchedCategories); 
+      setAllPaymentMethodsState(fetchedPaymentMethods); 
     } catch (error) {
       console.error("Failed to fetch initial data:", error);
       toast({ title: "Error Fetching Data", description: "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
@@ -109,12 +108,10 @@ export default function TransactionsPage() {
     }
 
     if (filterCategoryId !== 'all') {
-      // Assuming AppTransaction has category.id
       tempTransactions = tempTransactions.filter(t => t.category?.id === filterCategoryId);
     }
 
     if (filterPaymentMethodId !== 'all') {
-       // Assuming AppTransaction has paymentMethod.id
       tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
     
@@ -392,7 +389,7 @@ export default function TransactionsPage() {
               <div className="py-4">
                 <TransactionForm 
                   onTransactionAdded={handleTransactionUpdateOrAdd} 
-                  initialTransactionData={editingTransaction} // Pass the whole AppTransaction object
+                  initialTransactionData={editingTransaction} 
                   onCancel={() => setEditingTransaction(null)}
                 />
               </div>

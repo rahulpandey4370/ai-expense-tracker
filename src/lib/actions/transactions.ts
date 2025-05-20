@@ -218,7 +218,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   };
   
   try {
-    await put(blobPath, JSON.stringify(rawTransactionUpdate), { access: 'public', addRandomSuffix: false });
+    await put(blobPath, JSON.stringify(rawTransactionUpdate), { access: 'public', addRandomSuffix: false, allowOverwrite: true });
     
     revalidatePath('/');
     revalidatePath('/transactions');
@@ -243,7 +243,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {
   try {
-    await del(`${TRANSACTIONS_DIR}${id}.json`);
+    await del([`${TRANSACTIONS_DIR}${id}.json`]); // Pass URL or array of URLs to del
     
     revalidatePath('/');
     revalidatePath('/transactions');
@@ -259,3 +259,14 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     throw new Error(`Could not delete transaction from blob storage. Original error: ${error.message}`);
   }
 }
+
+// Helper to get full blob URL from pathname - not strictly necessary if SDK handles pathnames
+// async function getBlobUrl(pathname: string): Promise<string | null> {
+//   try {
+//     const blobInfo = await head(pathname);
+//     return blobInfo.url;
+//   } catch (error) {
+//     // console.warn(`Could not get URL for blob ${pathname}:`, error);
+//     return null;
+//   }
+// }

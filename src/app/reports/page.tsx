@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { AppTransaction } from '@/lib/types'; // Using AppTransaction
+import type { AppTransaction } from '@/lib/types'; 
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen } from 'lucide-react';
@@ -130,7 +130,6 @@ export default function ReportsPage() {
     const expenses = trans.filter(t => t.type === 'expense' && t.category);
     const categoryMap: Record<string, number> = {};
     expenses.forEach(t => {
-      // Null check for category and category.name
       if (t.category && t.category.name) {
          categoryMap[t.category.name] = (categoryMap[t.category.name] || 0) + t.amount;
       }

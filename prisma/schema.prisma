@@ -1,42 +1,46 @@
-generator client {
-  provider = "prisma-client-js"
-}
+// This file is a placeholder or can be removed if Prisma is not used.
+// If you were using Prisma, your schema definition would go here.
+// For Vercel Blob storage, no Prisma schema is needed.
 
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL") // For Prisma Client with Accelerate
-  directUrl = env("POSTGRES_URL_NON_POOLING") // For migrations
-}
+// Example of what it might have looked like if you were using Prisma:
+// generator client {
+//   provider = "prisma-client-js"
+// }
 
-model Category {
-  id           String        @id @default(cuid())
-  name         String        @unique // Assuming category names should be unique
-  type         String // "income" or "expense"
-  transactions Transaction[]
-}
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+//   directUrl = env("POSTGRES_URL_NON_POOLING") // For migrations
+//   relationMode = "prisma"
+// }
 
-model PaymentMethod {
-  id           String        @id @default(cuid())
-  name         String        @unique // Assuming payment method names should be unique
-  type         String // e.g., "Credit Card", "UPI", "Cash"
-  transactions Transaction[]
-}
+// model Category {
+//   id        String   @id @default(cuid())
+//   name      String
+//   type      String // "income" or "expense"
+//   transactions Transaction[]
+// }
 
-model Transaction {
-  id              String    @id @default(cuid()) // Changed to cuid for consistency
-  type            String // "income" or "expense"
-  date            DateTime
-  amount          Float // Prisma maps Float to double precision in Postgres
-  description     String?
-  categoryId      String?
-  paymentMethodId String?
-  source          String?   // For income source, if category isn't detailed enough
-  expenseType     String? // "need", "want", "investment_expense" for expenses
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+// model PaymentMethod {
+//   id        String   @id @default(cuid())
+//   name      String
+//   type      String // e.g., "Credit Card", "UPI"
+//   transactions Transaction[]
+// }
 
-  category      Category?      @relation(fields: [categoryId], references: [id])
-  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+// model Transaction {
+//   id             String    @id @default(cuid())
+//   type           String    // "income" or "expense"
+//   date           DateTime
+//   amount         Float
+//   description    String?
+//   categoryId     String?
+//   paymentMethodId String?
+//   source         String?   // For income, e.g., "Salary", "Freelance"
+//   expenseType    String?   // For expense, e.g., "need", "want", "investment_expense"
+//   createdAt      DateTime  @default(now())
+//   updatedAt      DateTime  @updatedAt
 
-  @@index([date])
-}
+//   category       Category? @relation(fields: [categoryId], references: [id])
+//   paymentMethod  PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+// }

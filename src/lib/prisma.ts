@@ -1,23 +1,28 @@
-import { PrismaClient } from '@prisma/client/edge'; // For Accelerate, using /edge client
-import { withAccelerate } from '@prisma/extension-accelerate';
+// This file is a placeholder or can be removed if Prisma is not used.
+// If you were using Prisma, your Prisma Client initialization would go here.
+// For Vercel Blob storage, no Prisma client is needed.
 
-// PrismaClient is instantiated with Accelerate extension.
-// It will use the DATABASE_URL environment variable which should be your Accelerate connection string.
+// Example of what it might have looked like for Prisma with Accelerate:
+// import { PrismaClient } from '@prisma/client/edge'; // For Accelerate, using /edge client
+// import { withAccelerate } from '@prisma/extension-accelerate';
 
-declare global {
-  // allow global `var` declarations
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
+// // PrismaClient is instantiated with Accelerate extension.
+// // It will use the DATABASE_URL environment variable which should be your Accelerate connection string.
 
-const prismaClientSingleton = () => {
-  return new PrismaClient().$extends(withAccelerate());
-};
+// declare global {
+//   // allow global `var` declarations
+//   // eslint-disable-next-line no-var
+//   var prisma: PrismaClient | undefined;
+// }
 
-const prisma = global.prisma ?? prismaClientSingleton();
+// const prismaClientSingleton = () => {
+//   return new PrismaClient().$extends(withAccelerate());
+// };
 
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
-}
+// const prisma = global.prisma ?? prismaClientSingleton();
 
-export default prisma;
+// if (process.env.NODE_ENV !== 'production') {
+//   global.prisma = prisma;
+// }
+
+// export default prisma;

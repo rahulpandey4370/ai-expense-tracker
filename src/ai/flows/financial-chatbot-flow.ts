@@ -98,7 +98,7 @@ ${JSON.stringify(transactions, null, 2)}
 
     const llmResponse = await ai.generate({
       prompt: prompt,
-      model: 'googleai/gemini-2.0-flash', // Ensure this model is appropriate for your Genkit config
+      model: 'googleai/gemini-2.0-flash', 
       config: {
         temperature: 0.4, 
         safetySettings: [

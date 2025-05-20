@@ -12,13 +12,13 @@ import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
-import type { AppTransaction } from '@/lib/types'; // Using AppTransaction
+import type { AppTransaction } from '@/lib/types'; 
 import { getTransactions } from '@/lib/actions/transactions'; 
 import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
-import { Card } from '@/components/ui/card'; // Ensure Card is imported if used for TransactionForm wrapper
+import { Card } from '@/components/ui/card'; 
 import { cn } from '@/lib/utils';
 
 const containerVariants = {
@@ -174,8 +174,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
       
-      {/* TransactionForm is now directly used, its internal Card will handle styling & glow */}
-      <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+      <Card className={cn("shadow-xl rounded-xl", glowClass, "bg-card")}>
+        <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+      </Card>
 
 
       <motion.div
