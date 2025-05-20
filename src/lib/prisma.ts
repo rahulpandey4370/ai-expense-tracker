@@ -1,5 +1,5 @@
-
 import { PrismaClient } from '@prisma/client';
+import { withAccelerate } from '@prisma/extension-accelerate';
 
 declare global {
   // allow global `var` declarations
@@ -7,12 +7,11 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-const prisma =
-  global.prisma ||
-  new PrismaClient({
-    // Consider enabling logging for development if needed
-    // log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : [],
-  });
+const prismaClientSingleton = () => {
+  return new PrismaClient().$extends(withAccelerate());
+};
+
+const prisma = global.prisma ?? prismaClientSingleton();
 
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma;

@@ -1,25 +1,25 @@
 // /prisma/schema.prisma
 datasource db {
   provider     = "postgresql"
-  // These environment variables (POSTGRES_PRISMA_URL and POSTGRES_URL_NON_POOLING)
-  // are automatically provided by Vercel when a Vercel Postgres database is connected to the project.
-  // Ensure they are correctly set in your Vercel project's Environment Variable settings.
-  // POSTGRES_PRISMA_URL is typically used by the Prisma Client for queries.
-  url          = env("POSTGRES_PRISMA_URL")
-  // POSTGRES_URL_NON_POOLING is a direct, non-pooled connection string ESSENTIAL for migrations (prisma migrate deploy).
+  // url for Prisma Client (will use Accelerate via DATABASE_URL env var)
+  url          = env("DATABASE_URL")
+  // directUrl for migrations (must be a direct, non-pooled connection via POSTGRES_URL_NON_POOLING env var)
   directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "prisma"
 }
 
 generator client {
   provider = "prisma-client-js"
+  // Default output path is node_modules/.prisma/client
+  // Using a custom output like "/app/generated/prisma-client" is generally for specific Vercel setups
+  // and not needed for standard Next.js apps. We'll stick to the default.
 }
 
 model Transaction {
   id            String              @id @default(cuid())
   type          TransactionEnumType
   date          DateTime
-  amount        Decimal // Prisma handles mapping this to a numeric type in Postgres
+  amount        Decimal
   description   String
   category      String?
   paymentMethod String?
