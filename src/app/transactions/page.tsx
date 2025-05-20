@@ -24,6 +24,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Added missing import
 } from "@/components/ui/alert-dialog";
 import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
@@ -398,3 +399,5 @@ export default function TransactionsPage() {
     </main>
   );
 }
+
+    
