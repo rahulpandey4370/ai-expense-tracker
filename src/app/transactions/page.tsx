@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, ListNumbers } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List } from "lucide-react";
 // useDateSelection is not used here, can be removed if not needed.
 import { Badge } from '@/components/ui/badge';
 import {
@@ -284,7 +284,7 @@ export default function TransactionsPage() {
             <div className="my-4 p-4 border rounded-lg bg-background/50 border-primary/20">
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <div className="flex items-center text-sm text-muted-foreground">
-                  <ListNumbers className="mr-2 h-5 w-5 text-primary" />
+                  <List className="mr-2 h-5 w-5 text-primary" />
                   <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s)</span>
                 </div>
                 <div className="flex items-center text-sm text-muted-foreground">
