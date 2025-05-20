@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { AppTransaction, Category, PaymentMethod } from '@/lib/types'; 
+import type { AppTransaction, Category, PaymentMethod } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, ListNumbers } from "lucide-react";
 // useDateSelection is not used here, can be removed if not needed.
 import { Badge } from '@/components/ui/badge';
 import {
@@ -55,15 +55,15 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<AppTransaction[]>([]);
-  const [allCategoriesState, setAllCategoriesState] = useState<Category[]>([]); 
-  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]); 
-  
+  const [allCategoriesState, setAllCategoriesState] = useState<Category[]>([]);
+  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string | 'all'>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
   const [filterPaymentMethodId, setFilterPaymentMethodId] = useState<string | 'all'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: keyof AppTransaction | 'categoryName' | 'paymentMethodName' | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
-  
+
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -79,8 +79,8 @@ export default function TransactionsPage() {
         getPaymentMethods()
       ]);
       setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
-      setAllCategoriesState(fetchedCategories); 
-      setAllPaymentMethodsState(fetchedPaymentMethods); 
+      setAllCategoriesState(fetchedCategories);
+      setAllPaymentMethodsState(fetchedPaymentMethods);
     } catch (error) {
       console.error("Failed to fetch initial data:", error);
       toast({ title: "Error Fetching Data", description: error instanceof Error ? error.message : "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
@@ -118,7 +118,7 @@ export default function TransactionsPage() {
     if (filterPaymentMethodId !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
-    
+
     if (sortConfig.key) {
       tempTransactions.sort((a, b) => {
         let aValue, bValue;
@@ -133,7 +133,7 @@ export default function TransactionsPage() {
           aValue = a[sortConfig.key as keyof AppTransaction];
           bValue = b[sortConfig.key as keyof AppTransaction];
         }
-        
+
         if (aValue === undefined || bValue === undefined || aValue === null || bValue === null) return 0;
 
         if (sortConfig.key === 'date' && aValue instanceof Date && bValue instanceof Date) {
@@ -152,10 +152,18 @@ export default function TransactionsPage() {
     setFilteredTransactions(tempTransactions);
   }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, sortConfig]);
 
+  const filteredSummary = useMemo(() => {
+    const count = filteredTransactions.length;
+    const netAmount = filteredTransactions.reduce((acc, curr) => {
+      return acc + (curr.type === 'income' ? curr.amount : -curr.amount);
+    }, 0);
+    return { count, netAmount };
+  }, [filteredTransactions]);
+
 
   const handleTransactionUpdateOrAdd = () => {
-    fetchData(); 
-    setEditingTransaction(null); 
+    fetchData();
+    setEditingTransaction(null);
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -163,7 +171,7 @@ export default function TransactionsPage() {
     try {
       await deleteTransaction(transactionId);
       toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
-      fetchData(); 
+      fetchData();
     } catch (error) {
       console.error("Failed to delete transaction:", error);
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
@@ -171,7 +179,7 @@ export default function TransactionsPage() {
       setIsDeleting(false);
     }
   };
-  
+
   const requestSort = (key: keyof AppTransaction | 'categoryName' | 'paymentMethodName') => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -186,7 +194,7 @@ export default function TransactionsPage() {
     }
     return '';
   };
-  
+
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) {
       toast({ title: "No Data to Export", description: "There are no transactions matching your current filters.", variant: "default"});
@@ -198,7 +206,7 @@ export default function TransactionsPage() {
       t.type,
       format(new Date(t.date), "yyyy-MM-dd"),
       t.amount.toFixed(2),
-      `"${(t.description || '').replace(/"/g, '""')}"`, 
+      `"${(t.description || '').replace(/"/g, '""')}"`,
       t.category?.name || t.source || '',
       t.paymentMethod?.name || '',
       t.expenseType || ''
@@ -217,7 +225,7 @@ export default function TransactionsPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
-      <motion.div 
+      <motion.div
         variants={pageVariants}
         initial="hidden"
         animate="visible"
@@ -273,6 +281,19 @@ export default function TransactionsPage() {
               </div>
             </div>
 
+            <div className="my-4 p-4 border rounded-lg bg-background/50 border-primary/20">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <ListNumbers className="mr-2 h-5 w-5 text-primary" />
+                  <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s)</span>
+                </div>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Sigma className="mr-2 h-5 w-5 text-primary" />
+                  <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
+                </div>
+              </div>
+            </div>
+
             {isLoading ? (
               <div className="flex justify-center items-center h-[400px]">
                 <Loader2 className="h-12 w-12 text-accent animate-spin" />
@@ -296,19 +317,19 @@ export default function TransactionsPage() {
                 <motion.tbody variants={tableContainerVariants} initial="hidden" animate="visible">
                   {filteredTransactions.length > 0 ? (
                     filteredTransactions.map((transaction) => (
-                      <motion.tr 
-                        key={transaction.id} 
+                      <motion.tr
+                        key={transaction.id}
                         variants={tableRowVariants}
-                        layout 
+                        layout
                         className="hover:bg-accent/10 border-b-primary/20"
                       >
                         <TableCell className="text-foreground/90">{format(new Date(transaction.date), "dd MMM, yyyy")}</TableCell>
                         <TableCell className="font-medium text-foreground">{transaction.description}</TableCell>
                         <TableCell>
-                          <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'} 
+                          <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
                                 className={cn(
-                                  transaction.type === 'income' ? 
-                                  'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' : 
+                                  transaction.type === 'income' ?
+                                  'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' :
                                   'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 hover:bg-red-500/30'
                                 )}>
                             {transaction.type === 'income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
@@ -322,7 +343,7 @@ export default function TransactionsPage() {
                         <TableCell className="text-foreground/90">{transaction.paymentMethod?.name || 'N/A'}</TableCell>
                         <TableCell>
                           {transaction.type === 'expense' && transaction.expenseType && (
-                            <Badge 
+                            <Badge
                               variant={'outline'}
                               className={cn(
                                 `capitalize border-opacity-50`,
@@ -384,7 +405,7 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
       </motion.div>
-      
+
       <AlertDialog open={editingTransaction !== null} onOpenChange={(isOpen) => !isOpen && setEditingTransaction(null)}>
           <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg sm:max-w-2xl">
               <AlertDialogHeader>
@@ -396,9 +417,9 @@ export default function TransactionsPage() {
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-4">
-                <TransactionForm 
-                  onTransactionAdded={handleTransactionUpdateOrAdd} 
-                  initialTransactionData={editingTransaction} 
+                <TransactionForm
+                  onTransactionAdded={handleTransactionUpdateOrAdd}
+                  initialTransactionData={editingTransaction}
                   onCancel={() => setEditingTransaction(null)}
                 />
               </div>
@@ -407,5 +428,3 @@ export default function TransactionsPage() {
     </main>
   );
 }
-
-    
