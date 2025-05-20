@@ -2,13 +2,14 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import type { Transaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { BarChart, PieChartIcon, TrendingUp, BookOpen, Download, FileText, Loader2, AlertTriangle } from 'lucide-react'; // Removed TrendingDown
+import { BarChart, PieChartIcon, TrendingUp, BookOpen, Download, FileText, Loader2, AlertTriangle } from 'lucide-react';
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
@@ -19,6 +20,21 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
+
+const pageVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+const buttonHoverTap = {
+  whileHover: { scale: 1.03 },
+  whileTap: { scale: 0.97 },
+};
 
 
 export default function ReportsPage() {
@@ -39,7 +55,7 @@ export default function ReportsPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); // Ensure dates are Date objects
+      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); 
     } catch (error) {
       console.error("Failed to fetch transactions for reports:", error);
       toast({
@@ -200,108 +216,122 @@ export default function ReportsPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
-      <Card className="shadow-xl border-purple-500/30 border-2 rounded-xl bg-card/80">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-purple-300 flex items-center gap-2">
-            <FileText className="w-8 h-8 text-yellow-400 transform rotate-[-3deg]" />
-            Financial Reports
-          </CardTitle>
-          <CardDescription className="text-purple-400/80">
-            Analyze your spending and income patterns. Use filters to select the report period.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-6 flex flex-wrap items-center gap-4">
-            <Select value={reportMonth.toString()} onValueChange={handleMonthChangeInternal}>
-              <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground">
-                <SelectValue placeholder="Select Report Period" />
-              </SelectTrigger>
-              <SelectContent className="bg-card border-purple-500/60 text-foreground">
-                <SelectItem value="-1">Annual Report</SelectItem>
-                {monthNamesList.map((month, index) => (
-                  <SelectItem key={index} value={index.toString()}>{month}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={reportYear.toString()} onValueChange={handleYearChange}>
-              <SelectTrigger className="w-full md:w-[120px] bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground">
-                <SelectValue placeholder="Select Year" />
-              </SelectTrigger>
-              <SelectContent className="bg-card border-purple-500/60 text-foreground">
-                {contextYears.map(year => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button onClick={exportReportToPDF} variant="outline" className="bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30 text-yellow-200">
-                <Download className="mr-2 h-4 w-4" />
-                Export to PDF
-            </Button>
-          </div>
-        
-          <div id="report-content-area" className="space-y-6 p-4 bg-background rounded-lg">
-            {isLoadingData ? (
-              <div className="flex justify-center items-center h-[400px]">
-                <Loader2 className="h-12 w-12 text-yellow-400 animate-spin" />
-                <p className="ml-4 text-purple-300">Loading report data...</p>
-              </div>
-            ) : filteredTransactions.length === 0 && !isLoadingData ? (
-               <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-300 shadow-md">
-                <AlertTriangle className="h-4 w-4 text-yellow-400" />
-                <AlertTitle>No Data for this Period</AlertTitle>
-                <AlertDescription>
-                  No transactions found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ExpenseCategoryChart transactions={filteredTransactions} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/>
-                  <ExpensePaymentMethodChart transactions={filteredTransactions} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /> 
-                    <IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} />
-                </div>
-              </>
-            )}
-
-            <Card className="shadow-lg border-yellow-500/30 bg-yellow-900/10">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold text-yellow-300 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-yellow-400" />
-                  AI Insights
-                </CardTitle>
-                <CardDescription className="text-yellow-400/80">
-                  AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${monthNamesList[previousMonthForAI.getMonth()]} ${previousMonthForAI.getFullYear()}`}.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isAiLoading && (
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-full bg-yellow-500/30" />
-                    <Skeleton className="h-4 w-full bg-yellow-500/30" />
-                    <Skeleton className="h-4 w-3/4 bg-yellow-500/30" />
-                  </div>
-                )}
-                {aiError && <p className="text-sm text-red-400">{aiError}</p>}
-                {aiAnalysis && !isAiLoading && (
-                  <div className="text-sm space-y-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-yellow-200">
-                    {aiAnalysis.split('\n').map((line, index) => (
-                      <p key={index}>{line.replace(/^- /, '• ')}</p>
-                    ))}
-                  </div>
-                )}
-                {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactions.length === 0 && !isLoadingData) && (
-                  <p className="text-sm text-yellow-400/70">Not enough data to generate AI analysis for this period.</p>
-                )}
-                 <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactions.length === 0 && !isLoadingData)} className="w-full mt-4 bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
-                   {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
-                  {isAiLoading ? "Generating..." : "Generate AI Analysis"}
+      <motion.div variants={pageVariants} initial="hidden" animate="visible">
+        <Card className="shadow-xl border-purple-500/30 border-2 rounded-xl bg-card/80">
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold text-purple-300 flex items-center gap-2">
+              <FileText className="w-8 h-8 text-yellow-400 transform rotate-[-3deg]" />
+              Financial Reports
+            </CardTitle>
+            <CardDescription className="text-purple-400/80">
+              Analyze your spending and income patterns. Use filters to select the report period.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6 flex flex-wrap items-center gap-4">
+              <Select value={reportMonth.toString()} onValueChange={handleMonthChangeInternal}>
+                <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground">
+                  <SelectValue placeholder="Select Report Period" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-purple-500/60 text-foreground">
+                  <SelectItem value="-1">Annual Report</SelectItem>
+                  {monthNamesList.map((month, index) => (
+                    <SelectItem key={index} value={index.toString()}>{month}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={reportYear.toString()} onValueChange={handleYearChange}>
+                <SelectTrigger className="w-full md:w-[120px] bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground">
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-purple-500/60 text-foreground">
+                  {contextYears.map(year => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <motion.div {...buttonHoverTap}>
+                <Button onClick={exportReportToPDF} variant="outline" className="bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30 text-yellow-200">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export to PDF
                 </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+              </motion.div>
+            </div>
+          
+            <motion.div 
+              id="report-content-area" 
+              className="space-y-6 p-4 bg-background rounded-lg"
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {isLoadingData ? (
+                <div className="flex justify-center items-center h-[400px]">
+                  <Loader2 className="h-12 w-12 text-yellow-400 animate-spin" />
+                  <p className="ml-4 text-purple-300">Loading report data...</p>
+                </div>
+              ) : filteredTransactions.length === 0 && !isLoadingData ? (
+                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-300 shadow-md">
+                  <AlertTriangle className="h-4 w-4 text-yellow-400" />
+                  <AlertTitle>No Data for this Period</AlertTitle>
+                  <AlertDescription>
+                    No transactions found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <motion.div variants={cardVariants}><ExpenseCategoryChart transactions={filteredTransactions} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/></motion.div>
+                    <motion.div variants={cardVariants}><ExpensePaymentMethodChart transactions={filteredTransactions} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/></motion.div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div> 
+                      <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
+                  </div>
+                </>
+              )}
+
+              <motion.div variants={cardVariants}>
+                <Card className="shadow-lg border-yellow-500/30 bg-yellow-900/10">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-semibold text-yellow-300 flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-yellow-400" />
+                      AI Insights
+                    </CardTitle>
+                    <CardDescription className="text-yellow-400/80">
+                      AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${monthNamesList[previousMonthForAI.getMonth()]} ${previousMonthForAI.getFullYear()}`}.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isAiLoading && (
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full bg-yellow-500/30" />
+                        <Skeleton className="h-4 w-full bg-yellow-500/30" />
+                        <Skeleton className="h-4 w-3/4 bg-yellow-500/30" />
+                      </div>
+                    )}
+                    {aiError && <p className="text-sm text-red-400">{aiError}</p>}
+                    {aiAnalysis && !isAiLoading && (
+                      <div className="text-sm space-y-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-yellow-200">
+                        {aiAnalysis.split('\n').map((line, index) => (
+                          <p key={index}>{line.replace(/^- /, '• ')}</p>
+                        ))}
+                      </div>
+                    )}
+                    {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactions.length === 0 && !isLoadingData) && (
+                      <p className="text-sm text-yellow-400/70">Not enough data to generate AI analysis for this period.</p>
+                    )}
+                    <motion.div {...buttonHoverTap}>
+                      <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactions.length === 0 && !isLoadingData)} className="w-full mt-4 bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
+                        {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
+                        {isAiLoading ? "Generating..." : "Generate AI Analysis"}
+                      </Button>
+                    </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </main>
   );
 }

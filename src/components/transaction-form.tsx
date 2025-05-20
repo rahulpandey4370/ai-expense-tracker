@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, type FormEvent, useEffect } from 'react';
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, PlusCircle, XCircle, FilePlus, Loader2 } from "lucide-react"; // Replaced Wand2 with FilePlus
+import { CalendarIcon, PlusCircle, XCircle, FilePlus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Transaction, TransactionEnumType, ExpenseEnumType } from "@/lib/types";
 import { addTransaction, updateTransaction, type TransactionInput } from '@/lib/actions/transactions';
@@ -23,6 +24,16 @@ interface TransactionFormProps {
   initialTransactionData?: Transaction | null; 
   onCancel?: () => void; 
 }
+
+const formCardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+const buttonHoverTap = {
+  whileHover: { scale: 1.03, transition: { duration: 0.15 } },
+  whileTap: { scale: 0.97 },
+};
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
@@ -44,7 +55,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (initialTransactionData) {
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type);
-      setDate(new Date(initialTransactionData.date)); // Ensure date is a Date object
+      setDate(new Date(initialTransactionData.date)); 
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description);
       if (initialTransactionData.type === 'expense') {
@@ -155,11 +166,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     return null; 
   }
   
-  const FormWrapper = initialTransactionData ? React.Fragment : Card;
-  const formWrapperProps = initialTransactionData ? {} : { className: "shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl" };
+  const FormWrapperComponent = initialTransactionData ? motion.div : motion(Card);
+  const formWrapperProps = initialTransactionData 
+    ? { variants: formCardVariants, initial: "hidden", animate: "visible" } 
+    : { 
+        className: "shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl",
+        variants: formCardVariants, 
+        initial: "hidden", 
+        animate: "visible" 
+      };
 
   return (
-    <FormWrapper {...formWrapperProps}>
+    <FormWrapperComponent {...formWrapperProps}>
       {!initialTransactionData && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl text-purple-300">
@@ -281,19 +299,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-3">
-            <Button type="submit" disabled={isLoading} className="w-full sm:flex-1 bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}
-              {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
-            </Button>
-            {initialTransactionData && onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full sm:flex-1 border-purple-500/70 text-purple-300 hover:bg-purple-700/30 hover:text-purple-100">
-                <XCircle className="mr-2 h-4 w-4"/>
-                Cancel Edit
+            <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
+              <Button type="submit" disabled={isLoading} className="w-full bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}
+                {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
               </Button>
+            </motion.div>
+            {initialTransactionData && onCancel && (
+              <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full border-purple-500/70 text-purple-300 hover:bg-purple-700/30 hover:text-purple-100">
+                  <XCircle className="mr-2 h-4 w-4"/>
+                  Cancel Edit
+                </Button>
+              </motion.div>
             )}
           </div>
         </form>
       </CardContent>
-    </FormWrapper>
+    </FormWrapperComponent>
   );
 }

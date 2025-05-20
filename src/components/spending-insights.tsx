@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Zap } from "lucide-react";
@@ -15,6 +16,16 @@ interface SpendingInsightsProps {
   selectedMonthName: string;
   selectedYear: number;
 }
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
+const buttonHoverTap = {
+  whileHover: { scale: 1.03 },
+  whileTap: { scale: 0.97 },
+};
 
 export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedYear }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
@@ -80,40 +91,45 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setInsights(null);
       setError(null);
     }
-  }, [currentMonthTransactions, monthlySpending, lastMonthTotalSpending, generateInsights, selectedMonthName, selectedYear]); // Added selectedMonthName and selectedYear to dependencies
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear]); 
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights
-        </CardTitle>
-        <CardDescription>Insights for {selectedMonthName} {selectedYear}.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {isLoading && (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {insights && !isLoading && (
-          <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
-            {insights.split('\n').map((line, index) => (
-              <p key={index} className="text-foreground">{line.replace(/^- /, '• ')}</p>
-            ))}
-          </div>
-        )}
-        {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
-           <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
-        )}
-        <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-          <Zap className="mr-2 h-4 w-4" />
-          {isLoading ? "Generating..." : "Refresh Insights"}
-        </Button>
-      </CardContent>
-    </Card>
+    <motion.div variants={cardVariants} initial="hidden" animate="visible">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights
+          </CardTitle>
+          <CardDescription>Insights for {selectedMonthName} {selectedYear}.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading && (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {insights && !isLoading && (
+            <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
+              {insights.split('\n').map((line, index) => (
+                <p key={index} className="text-foreground">{line.replace(/^- /, '• ')}</p>
+              ))}
+            </div>
+          )}
+          {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
+            <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
+          )}
+          <motion.div {...buttonHoverTap}>
+            <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Zap className="mr-2 h-4 w-4" />
+              {isLoading ? "Generating..." : "Refresh Insights"}
+            </Button>
+          </motion.div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

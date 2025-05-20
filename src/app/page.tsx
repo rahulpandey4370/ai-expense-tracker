@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion } from "framer-motion";
 import { KpiCard } from "@/components/kpi-card";
 import { TransactionForm } from "@/components/transaction-form";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
@@ -13,11 +14,39 @@ import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import type { Transaction, TransactionInput } from '@/lib/types';
-import { getTransactions, addTransaction } from '@/lib/actions/transactions'; // Will use in-memory store
+import { getTransactions, addTransaction } from '@/lib/actions/transactions';
 import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+const sectionVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
+};
 
 
 export default function DashboardPage() {
@@ -118,25 +147,45 @@ export default function DashboardPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20"/>
-        <KpiCard title="Total Expenses" value={`₹${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName="text-red-400" className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20"/>
-        <KpiCard title="Net Savings" value={`₹${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savings >= 0 ? "text-green-400" : "text-red-400"} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20" />
-        <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-400" : "text-orange-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20"/>
-      </div>
+      <motion.div 
+        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Total Expenses" value={`₹${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName="text-red-400" className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Net Savings" value={`₹${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savings >= 0 ? "text-green-400" : "text-red-400"} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20" />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-400" : "text-orange-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20"/>
+        </motion.div>
+      </motion.div>
 
        {monthlyMetrics.spending > monthlyMetrics.income && (
-        <Alert variant="destructive" className="shadow-md border-red-700/50 bg-red-600/20 text-red-100">
-          <AlertTriangle className="h-5 w-5 text-red-300" />
-          <AlertTitle className="text-red-200">Spending Alert!</AlertTitle>
-          <AlertDescription className="text-red-300">
-            You've spent more than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your expenses.
-          </AlertDescription>
-        </Alert>
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Alert variant="destructive" className="shadow-md border-red-700/50 bg-red-600/20 text-red-100">
+            <AlertTriangle className="h-5 w-5 text-red-300" />
+            <AlertTitle className="text-red-200">Spending Alert!</AlertTitle>
+            <AlertDescription className="text-red-300">
+              You've spent more than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your expenses.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        <motion.div 
+          className="lg:col-span-2 space-y-6"
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ExpenseCategoryChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
             <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
@@ -146,9 +195,15 @@ export default function DashboardPage() {
             <IncomeExpenseTrendChart transactions={transactions} />
           </div>
            <RecentTransactionsList transactions={currentMonthTransactions} />
-        </div>
+        </motion.div>
 
-        <div className="lg:col-span-1 space-y-6">
+        <motion.div 
+          className="lg:col-span-1 space-y-6"
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+          // transition={{ delay: 0.2 }}
+        >
           <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
           <SpendingInsights 
             currentMonthTransactions={currentMonthTransactions} 
@@ -157,7 +212,7 @@ export default function DashboardPage() {
             selectedYear={selectedYear}
           />
           <FinancialChatbot allTransactions={transactions} />
-        </div>
+        </motion.div>
       </div>
     </main>
   );
