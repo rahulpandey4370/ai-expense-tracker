@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Transaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { BarChart, PieChartIcon, TrendingUp, TrendingDown, BookOpen, Download, FileText, Loader2 } from 'lucide-react';
+import { BarChart, PieChartIcon, TrendingUp, BookOpen, Download, FileText, Loader2, AlertTriangle } from 'lucide-react'; // Removed TrendingDown
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
@@ -16,19 +16,18 @@ import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-m
 import { comparativeExpenseAnalysis, type ComparativeExpenseAnalysisInput } from '@/ai/flows/comparative-expense-analysis';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 
 
 export default function ReportsPage() {
-  const { selectedDate, selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
+  const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); 
   const [isLoadingData, setIsLoadingData] = useState(true);
   
   const [reportYear, setReportYear] = useState<number>(selectedYear);
-  const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for annual, 0-11 for monthly
+  const [reportMonth, setReportMonth] = useState<number>(selectedMonth);
 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
@@ -40,7 +39,7 @@ export default function ReportsPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-      setAllTransactions(fetchedTransactions);
+      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); // Ensure dates are Date objects
     } catch (error) {
       console.error("Failed to fetch transactions for reports:", error);
       toast({
@@ -73,9 +72,9 @@ export default function ReportsPage() {
 
   const filteredTransactions = useMemo(() => {
     return allTransactions.filter(t => {
-      const transactionYear = t.date.getFullYear();
-      const transactionMonth = t.date.getMonth();
-      if (reportMonth === -1) { // Annual report
+      const transactionYear = new Date(t.date).getFullYear();
+      const transactionMonth = new Date(t.date).getMonth();
+      if (reportMonth === -1) { 
         return transactionYear === reportYear;
       }
       return transactionYear === reportYear && transactionMonth === reportMonth;
@@ -94,9 +93,9 @@ export default function ReportsPage() {
     const prevReportMonth = reportMonth === -1 ? -1 : (reportMonth === 0 ? 11 : reportMonth -1);
     const prevReportYear = reportMonth === -1 ? reportYear -1 : (reportMonth === 0 ? reportYear -1 : reportYear);
     
-    return allTransactions.filter(t => { // Use allTransactions for previous period
-      const transactionYear = t.date.getFullYear();
-      const transactionMonth = t.date.getMonth();
+    return allTransactions.filter(t => { 
+      const transactionYear = new Date(t.date).getFullYear();
+      const transactionMonth = new Date(t.date).getMonth();
        if (prevReportMonth === -1) { 
         return transactionYear === prevReportYear;
       }
@@ -110,7 +109,7 @@ export default function ReportsPage() {
     expenses.forEach(t => {
       categoryMap[t.category!] = (categoryMap[t.category!] || 0) + t.amount;
     });
-    return Object.entries(categoryMap).map(([cat, amt]) => `${cat}: ₲${amt.toFixed(2)}`).join(', ') || 'No expenses in this period.';
+    return Object.entries(categoryMap).map(([cat, amt]) => `${cat}: ₹${amt.toFixed(2)}`).join(', ') || 'No expenses in this period.';
   };
 
 
@@ -129,9 +128,9 @@ export default function ReportsPage() {
       previousMonthExpenses: previousPeriodExpenses,
       expenseCategoriesCurrent: formatExpenseCategoriesForAI(filteredTransactions),
       expenseCategoriesPrevious: formatExpenseCategoriesForAI(
-        allTransactions.filter(t => { // Use allTransactions for previous period categories
-            const transactionYear = t.date.getFullYear();
-            const transactionMonth = t.date.getMonth();
+        allTransactions.filter(t => { 
+            const transactionYear = new Date(t.date).getFullYear();
+            const transactionMonth = new Date(t.date).getMonth();
             const prevReportMonth = reportMonth === -1 ? -1 : (reportMonth === 0 ? 11 : reportMonth -1);
             const prevReportYear = reportMonth === -1 ? reportYear -1 : (reportMonth === 0 ? reportYear -1 : reportYear);
             if (prevReportMonth === -1) return transactionYear === prevReportYear;
@@ -145,7 +144,7 @@ export default function ReportsPage() {
       setAiAnalysis(result.analysis);
     } catch (err) {
       console.error("Error generating AI report:", err);
-      setAiError("Owl Post Error! Failed to generate the AI report from the Ministry of Magic. Please try again.");
+      setAiError("Failed to generate the AI report. Please try again.");
     } finally {
       setIsAiLoading(false);
     }
@@ -154,20 +153,20 @@ export default function ReportsPage() {
   const exportReportToPDF = async () => {
     const reportContentElement = document.getElementById('report-content-area');
     if (!reportContentElement) {
-      toast({ title: "Export Failed", description: "Could not find report content (the ancient scroll is missing!).", variant: "destructive"});
+      toast({ title: "Export Failed", description: "Could not find report content.", variant: "destructive"});
       return;
     }
     
-    toast({ title: "Generating PDF Scroll...", description: "Please wait while your magical report is being transcribed."});
+    toast({ title: "Generating PDF...", description: "Please wait while your report is being generated."});
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Ensure content is rendered
+      await new Promise(resolve => setTimeout(resolve, 500)); 
 
       const canvas = await html2canvas(reportContentElement, {
         scale: 2, 
         useCORS: true, 
         logging: true,
-        backgroundColor: "hsl(var(--background))", // Capture background for theme consistency
+        backgroundColor: "hsl(var(--background))", 
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
@@ -182,7 +181,7 @@ export default function ReportsPage() {
       const imgHeight = canvas.height;
       
       const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const newImgWidth = imgWidth * ratio * 0.95; // Add a small margin
+      const newImgWidth = imgWidth * ratio * 0.95; 
       const newImgHeight = imgHeight * ratio * 0.95;
 
       const x = (pdfWidth - newImgWidth) / 2;
@@ -190,11 +189,11 @@ export default function ReportsPage() {
 
 
       pdf.addImage(imgData, 'PNG', x, y, newImgWidth, newImgHeight);
-      pdf.save(`financial_report_scroll_${reportMonth === -1 ? reportYear : monthNamesList[reportMonth] + '_' + reportYear}.pdf`);
-      toast({ title: "Report Scroll Exported!", description: "Your financial report PDF has been delivered by Owl Post." });
+      pdf.save(`financial_report_${reportMonth === -1 ? reportYear : monthNamesList[reportMonth] + '_' + reportYear}.pdf`);
+      toast({ title: "Report Exported!", description: "Your financial report PDF has been generated." });
     } catch (error) {
       console.error("Error exporting PDF:", error);
-      toast({ title: "Export Failed", description: "A rouge bludger seems to have interfered with PDF generation.", variant: "destructive"});
+      toast({ title: "Export Failed", description: "An error occurred during PDF generation.", variant: "destructive"});
     }
   };
 
@@ -205,10 +204,10 @@ export default function ReportsPage() {
         <CardHeader>
           <CardTitle className="text-3xl font-bold text-purple-300 flex items-center gap-2">
             <FileText className="w-8 h-8 text-yellow-400 transform rotate-[-3deg]" />
-            Gringotts Financial Scrolls
+            Financial Reports
           </CardTitle>
           <CardDescription className="text-purple-400/80">
-            Analyze your spending and income patterns. Use filters to select the report period for your scrolls.
+            Analyze your spending and income patterns. Use filters to select the report period.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -218,7 +217,7 @@ export default function ReportsPage() {
                 <SelectValue placeholder="Select Report Period" />
               </SelectTrigger>
               <SelectContent className="bg-card border-purple-500/60 text-foreground">
-                <SelectItem value="-1">Annual Scroll</SelectItem>
+                <SelectItem value="-1">Annual Report</SelectItem>
                 {monthNamesList.map((month, index) => (
                   <SelectItem key={index} value={index.toString()}>{month}</SelectItem>
                 ))}
@@ -234,22 +233,22 @@ export default function ReportsPage() {
             </Select>
             <Button onClick={exportReportToPDF} variant="outline" className="bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30 text-yellow-200">
                 <Download className="mr-2 h-4 w-4" />
-                Export to PDF Scroll
+                Export to PDF
             </Button>
           </div>
         
-          <div id="report-content-area" className="space-y-6 p-4 bg-background rounded-lg"> {/* Added padding and bg for PDF export */}
+          <div id="report-content-area" className="space-y-6 p-4 bg-background rounded-lg">
             {isLoadingData ? (
               <div className="flex justify-center items-center h-[400px]">
                 <Loader2 className="h-12 w-12 text-yellow-400 animate-spin" />
-                <p className="ml-4 text-purple-300">Summoning report data...</p>
+                <p className="ml-4 text-purple-300">Loading report data...</p>
               </div>
             ) : filteredTransactions.length === 0 && !isLoadingData ? (
                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-300 shadow-md">
                 <AlertTriangle className="h-4 w-4 text-yellow-400" />
                 <AlertTitle>No Data for this Period</AlertTitle>
                 <AlertDescription>
-                  No transaction scrolls found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
+                  No transactions found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
                 </AlertDescription>
               </Alert>
             ) : (
@@ -269,7 +268,7 @@ export default function ReportsPage() {
               <CardHeader>
                 <CardTitle className="text-xl font-semibold text-yellow-300 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-yellow-400" />
-                  Owl Post AI Analysis
+                  AI Insights
                 </CardTitle>
                 <CardDescription className="text-yellow-400/80">
                   AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${monthNamesList[previousMonthForAI.getMonth()]} ${previousMonthForAI.getFullYear()}`}.
@@ -292,11 +291,11 @@ export default function ReportsPage() {
                   </div>
                 )}
                 {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactions.length === 0 && !isLoadingData) && (
-                  <p className="text-sm text-yellow-400/70">Not enough data to generate AI analysis for this period's scroll.</p>
+                  <p className="text-sm text-yellow-400/70">Not enough data to generate AI analysis for this period.</p>
                 )}
                  <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactions.length === 0 && !isLoadingData)} className="w-full mt-4 bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
                    {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
-                  {isAiLoading ? "Consulting the Oracle..." : "Generate AI Analysis"}
+                  {isAiLoading ? "Generating..." : "Generate AI Analysis"}
                 </Button>
               </CardContent>
             </Card>

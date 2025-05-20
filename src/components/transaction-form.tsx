@@ -11,15 +11,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, PlusCircle, XCircle, Wand2, Loader2 } from "lucide-react";
+import { CalendarIcon, PlusCircle, XCircle, FilePlus, Loader2 } from "lucide-react"; // Replaced Wand2 with FilePlus
 import { format } from "date-fns";
 import type { Transaction, TransactionEnumType, ExpenseEnumType } from "@/lib/types";
 import { addTransaction, updateTransaction, type TransactionInput } from '@/lib/actions/transactions';
-import { expenseCategories, incomeCategories, paymentMethods } from "@/lib/data"; // Keep these static for now
+import { expenseCategories, incomeCategories, paymentMethods } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
 
 interface TransactionFormProps {
-  onTransactionAdded?: () => void; // Callback after a transaction is successfully added/updated
+  onTransactionAdded?: () => void;
   initialTransactionData?: Transaction | null; 
   onCancel?: () => void; 
 }
@@ -36,15 +36,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [source, setSource] = useState<string | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [formId, setFormId] = useState<string | null>(null); // To store existing transaction ID for updates
+  const [formId, setFormId] = useState<string | null>(null);
 
 
   useEffect(() => {
     setIsClient(true);
     if (initialTransactionData) {
-      setFormId(initialTransactionData.id); // Use a different state variable for the ID
+      setFormId(initialTransactionData.id);
       setType(initialTransactionData.type);
-      setDate(initialTransactionData.date);
+      setDate(new Date(initialTransactionData.date)); // Ensure date is a Date object
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description);
       if (initialTransactionData.type === 'expense') {
@@ -59,8 +59,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setExpenseType(undefined);
       }
     } else {
-        setFormId(null); // Reset formId for new transactions
-        // Reset other form fields to default for new transaction
+        setFormId(null);
         setType('expense');
         setDate(new Date());
         setAmount('');
@@ -79,8 +78,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     if (!date || !amount || !description ) {
       toast({
-        title: "Missing Potion Ingredients!",
-        description: "Please fill in all required fields for your spell (transaction).",
+        title: "Missing Information!",
+        description: "Please fill in all required fields for the transaction.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -93,12 +92,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       amount: parseFloat(amount),
       description,
       ...(type === 'expense' && { 
-        category: category || '', // Ensure empty string if undefined
+        category: category || '',
         paymentMethod: paymentMethod || '', 
-        expenseType: expenseType || 'need' // Default if undefined
+        expenseType: expenseType || 'need'
       }),
       ...(type === 'income' && { 
-        source: source || '' // Ensure empty string if undefined
+        source: source || ''
       }),
     };
     
@@ -113,19 +112,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         return;
     }
 
-
     try {
-      if (formId) { // If formId exists, it's an update
+      if (formId) {
         await updateTransaction(formId, transactionPayload);
-        toast({ title: "Transaction Spell Updated!", description: "Your transaction has been successfully modified." });
-      } else { // Otherwise, it's a new transaction
+        toast({ title: "Transaction Updated!", description: "Your transaction has been successfully modified." });
+      } else {
         await addTransaction(transactionPayload);
-        toast({ title: "Transaction Spell Cast!", description: "New transaction recorded successfully." });
+        toast({ title: "Transaction Added!", description: "New transaction recorded successfully." });
       }
       
-      onTransactionAdded?.(); // Call callback to refresh list or perform other actions
+      onTransactionAdded?.();
 
-      if (!initialTransactionData) { // Reset form only if it was for a new transaction
+      if (!initialTransactionData) {
         setDate(new Date());
         setAmount('');
         setDescription('');
@@ -133,15 +131,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setPaymentMethod(paymentMethods.length > 0 ? paymentMethods[0].name : undefined);
         setExpenseType('need');
         setSource(incomeCategories.length > 0 ? incomeCategories[0].name : undefined);
-        setType('expense'); // Default back to expense
+        setType('expense');
       }
-      if (onCancel && formId) onCancel(); // Close modal if it was an edit
+      if (onCancel && formId) onCancel();
 
     } catch (error) {
       console.error("Transaction form error:", error);
       toast({
-        title: "Spell Misfired!",
-        description: error instanceof Error ? error.message : "Could not save transaction. Check your magic (details).",
+        title: "Error!",
+        description: error instanceof Error ? error.message : "Could not save transaction. Please check the details.",
         variant: "destructive",
       });
     } finally {
@@ -149,10 +147,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
   
-  const cardTitle = initialTransactionData ? "Alter Transaction Scroll" : "New Transaction Scroll";
-  const cardDescription = initialTransactionData ? "Modify the details of this financial enchantment." : "Log your galleons or knuts quickly.";
-  const submitButtonText = initialTransactionData ? "Update Scroll" : "Cast Spell (Add)";
-
+  const cardTitle = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
+  const cardDescription = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
+  const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData) { 
     return null; 
@@ -161,13 +158,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const FormWrapper = initialTransactionData ? React.Fragment : Card;
   const formWrapperProps = initialTransactionData ? {} : { className: "shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl" };
 
-
   return (
     <FormWrapper {...formWrapperProps}>
       {!initialTransactionData && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl text-purple-300">
-            <Wand2 className="h-6 w-6 text-yellow-400" /> {cardTitle}
+            <FilePlus className="h-6 w-6 text-yellow-400" /> {cardTitle}
           </CardTitle>
           <CardDescription className="text-purple-400/80">{cardDescription}</CardDescription>
         </CardHeader>
@@ -179,18 +175,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <RadioGroup value={type} onValueChange={(value) => setType(value as TransactionEnumType)} className="flex space-x-4 mt-1">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="income" id={`income-${formId || 'new'}`} className="border-yellow-400 text-yellow-400 focus:ring-yellow-500 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-600"/>
-                <Label htmlFor={`income-${formId || 'new'}`} className="text-purple-200/90">Income (Galleons)</Label>
+                <Label htmlFor={`income-${formId || 'new'}`} className="text-purple-200/90">Income (₹)</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="expense" id={`expense-${formId || 'new'}`} className="border-red-400 text-red-400 focus:ring-red-500 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600"/>
-                <Label htmlFor={`expense-${formId || 'new'}`} className="text-purple-200/90">Expense (Knuts)</Label>
+                <Label htmlFor={`expense-${formId || 'new'}`} className="text-purple-200/90">Expense (₹)</Label>
               </div>
             </RadioGroup>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor={`date-${formId || 'new'}`} className="text-purple-300/90">Date of Enchantment</Label>
+              <Label htmlFor={`date-${formId || 'new'}`} className="text-purple-300/90">Date of Transaction</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -216,21 +212,21 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </Popover>
             </div>
             <div>
-              <Label htmlFor={`amount-${formId || 'new'}`} className="text-purple-300/90">Amount (Currency)</Label>
+              <Label htmlFor={`amount-${formId || 'new'}`} className="text-purple-300/90">Amount (₹)</Label>
               <Input id={`amount-${formId || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 placeholder:text-purple-400/60 focus:border-yellow-400 focus:ring-yellow-400" required />
             </div>
           </div>
 
           <div>
-            <Label htmlFor={`description-${formId || 'new'}`} className="text-purple-300/90">Description of Spell</Label>
-            <Input id={`description-${formId || 'new'}`} placeholder="e.g., Potion ingredients, Broomstick polish" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 placeholder:text-purple-400/60 focus:border-yellow-400 focus:ring-yellow-400" required />
+            <Label htmlFor={`description-${formId || 'new'}`} className="text-purple-300/90">Description</Label>
+            <Input id={`description-${formId || 'new'}`} placeholder="e.g., Groceries, Dinner out" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 placeholder:text-purple-400/60 focus:border-yellow-400 focus:ring-yellow-400" required />
           </div>
 
           {type === 'expense' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor={`category-${formId || 'new'}`} className="text-purple-300/90">Category of Magic</Label>
+                  <Label htmlFor={`category-${formId || 'new'}`} className="text-purple-300/90">Category</Label>
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger id={`category-${formId || 'new'}`} className="w-full mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400">
                       <SelectValue placeholder="Select category" />
@@ -253,12 +249,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 </div>
               </div>
               <div>
-                <Label className="text-purple-300/90">Expense Type (Need, Want, or Investment Curse)</Label>
+                <Label className="text-purple-300/90">Expense Type (Need, Want, or Investment)</Label>
                 <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as ExpenseEnumType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                   {[
-                    { value: 'need', label: 'Essential (Need)' },
-                    { value: 'want', label: 'Desire (Want)' },
-                    { value: 'investment_expense', label: 'Future Investment' }
+                    { value: 'need', label: 'Need' },
+                    { value: 'want', label: 'Want' },
+                    { value: 'investment_expense', label: 'Investment' }
                   ].map(et => (
                     <div key={et.value} className="flex items-center space-x-2">
                       <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`} className="border-yellow-400 text-yellow-400 focus:ring-yellow-500 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-600"/>
@@ -272,7 +268,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
           {type === 'income' && (
             <div>
-              <Label htmlFor={`source-${formId || 'new'}`} className="text-purple-300/90">Source of Galleons</Label>
+              <Label htmlFor={`source-${formId || 'new'}`} className="text-purple-300/90">Source of Income</Label>
               <Select value={source} onValueChange={setSource}>
                 <SelectTrigger id={`source-${formId || 'new'}`} className="w-full mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400">
                   <SelectValue placeholder="Select source" />
@@ -286,13 +282,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
           <div className="flex flex-col sm:flex-row gap-3 pt-3">
             <Button type="submit" disabled={isLoading} className="w-full sm:flex-1 bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4"/>}
-              {isLoading ? (formId ? "Updating..." : "Casting...") : submitButtonText}
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}
+              {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
             </Button>
             {initialTransactionData && onCancel && (
               <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full sm:flex-1 border-purple-500/70 text-purple-300 hover:bg-purple-700/30 hover:text-purple-100">
                 <XCircle className="mr-2 h-4 w-4"/>
-                Cancel Alteration
+                Cancel Edit
               </Button>
             )}
           </div>

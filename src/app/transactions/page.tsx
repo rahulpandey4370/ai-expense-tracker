@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Transaction, TransactionEnumType, ExpenseEnumType, TransactionInput } from '@/lib/types';
 import { getTransactions, deleteTransaction } from '@/lib/actions/transactions';
-import { expenseCategories, incomeCategories, paymentMethods } from '@/lib/data'; // For filter dropdowns
+import { expenseCategories, incomeCategories, paymentMethods } from '@/lib/data';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Filter, Edit3, Trash2, Download, ListFilter, BookOpen, Loader2 } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -40,7 +40,6 @@ export default function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
-
   const { toast } = useToast();
   const { selectedMonth, selectedYear, monthNamesList } = useDateSelection(); 
 
@@ -51,7 +50,7 @@ export default function TransactionsPage() {
       setAllTransactions(fetchedTransactions);
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
-      toast({ title: "Error Fetching Scrolls", description: "Could not load your transaction scrolls. Please try again.", variant: "destructive"});
+      toast({ title: "Error Fetching Transactions", description: "Could not load your transaction data. Please try again.", variant: "destructive"});
       setAllTransactions([]);
     } finally {
       setIsLoading(false);
@@ -93,7 +92,7 @@ export default function TransactionsPage() {
         if (aValue === undefined || bValue === undefined) return 0;
 
         if (sortConfig.key === 'date') {
-           return sortConfig.direction === 'ascending' ? (aValue as Date).getTime() - (bValue as Date).getTime() : (bValue as Date).getTime() - (aValue as Date).getTime();
+           return sortConfig.direction === 'ascending' ? (new Date(aValue as Date).getTime()) - (new Date(bValue as Date).getTime()) : (new Date(bValue as Date).getTime()) - (new Date(aValue as Date).getTime());
         }
         if (typeof aValue === 'number' && typeof bValue === 'number') {
           return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
@@ -110,19 +109,19 @@ export default function TransactionsPage() {
 
 
   const handleTransactionUpdateOrAdd = () => {
-    fetchTransactionsCallback(); // Re-fetch all transactions
-    setEditingTransaction(null); // Close the modal
+    fetchTransactionsCallback(); 
+    setEditingTransaction(null); 
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
     setIsDeleting(true);
     try {
       await deleteTransaction(transactionId);
-      toast({ title: "Transaction Vanished!", description: "The transaction scroll has been successfully removed from the archives." });
-      fetchTransactionsCallback(); // Re-fetch transactions
+      toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
+      fetchTransactionsCallback(); 
     } catch (error) {
       console.error("Failed to delete transaction:", error);
-      toast({ title: "Deletion Spell Failed", description: "Could not remove the transaction scroll.", variant: "destructive" });
+      toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
     } finally {
       setIsDeleting(false);
     }
@@ -143,7 +142,7 @@ export default function TransactionsPage() {
     return '';
   };
   
-  const allCategories = useMemo(() => {
+  const allCategoriesForFilter = useMemo(() => {
     const uniqueCategories = new Set<string>();
     expenseCategories.forEach(cat => uniqueCategories.add(cat.name));
     incomeCategories.forEach(cat => uniqueCategories.add(cat.name));
@@ -152,14 +151,14 @@ export default function TransactionsPage() {
 
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) {
-      toast({ title: "No Scrolls to Export", description: "There are no transactions matching your current filters.", variant: "default"});
+      toast({ title: "No Data to Export", description: "There are no transactions matching your current filters.", variant: "default"});
       return;
     }
     const headers = ["ID", "Type", "Date", "Amount (INR)", "Description", "Category/Source", "Payment Method", "Expense Type"];
     const rows = filteredTransactions.map(t => [
       t.id,
       t.type,
-      format(t.date, "yyyy-MM-dd"),
+      format(new Date(t.date), "yyyy-MM-dd"),
       t.amount.toFixed(2),
       `"${t.description.replace(/"/g, '""')}"`, 
       t.type === 'expense' ? t.category || '' : t.source || '',
@@ -171,11 +170,11 @@ export default function TransactionsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `rahuls_transaction_scrolls_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `rahuls_transactions_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Scrolls Exported!", description: "Your transactions have been exported to a CSV scroll." });
+    toast({ title: "Data Exported!", description: "Your transactions have been exported to a CSV file." });
   };
 
   return (
@@ -184,10 +183,10 @@ export default function TransactionsPage() {
         <CardHeader>
           <CardTitle className="text-3xl font-bold text-purple-300 flex items-center gap-2">
              <BookOpen className="w-8 h-8 text-yellow-400 transform -rotate-6"/>
-             Manage Transaction Scrolls
+             Manage Transactions
           </CardTitle>
           <CardDescription className="text-purple-400/80">
-            View and manage all your financial enchantments. Filters available below.
+            View and manage all your financial entries. Filters available below.
             Currently viewing data for: {monthNamesList[selectedMonth]} {selectedYear}.
           </CardDescription>
         </CardHeader>
@@ -195,7 +194,7 @@ export default function TransactionsPage() {
           <div className="mb-6 space-y-4">
             <Input
               type="text"
-              placeholder="Search scrolls (e.g., 'Potion ingredients', 'Ministry Salary')"
+              placeholder="Search transactions (e.g., 'Groceries', 'Salary')"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground placeholder:text-muted-foreground/70"
@@ -204,28 +203,28 @@ export default function TransactionsPage() {
               <Select value={filterType} onValueChange={(value) => setFilterType(value as TransactionEnumType | 'all')}>
                 <SelectTrigger className="bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                 <SelectContent className="bg-card border-purple-500/60 text-foreground">
-                  <SelectItem value="all">All Spell Types</SelectItem>
-                  <SelectItem value="income">Income (Galleons)</SelectItem>
-                  <SelectItem value="expense">Expense (Knuts)</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                  <SelectItem value="expense">Expense</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
                 <SelectTrigger className="bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
                 <SelectContent className="bg-card border-purple-500/60 text-foreground">
                   <SelectItem value="all">All Categories/Sources</SelectItem>
-                  {allCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  {allCategoriesForFilter.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
                 <SelectTrigger className="bg-background/70 border-purple-500/40 focus:border-yellow-400 focus:ring-yellow-400 text-foreground"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
                 <SelectContent className="bg-card border-purple-500/60 text-foreground">
-                  <SelectItem value="all">All Payment Charms</SelectItem>
+                  <SelectItem value="all">All Payment Methods</SelectItem>
                   {paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.name}>{pm.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Button onClick={exportToCSV} variant="outline" className="bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30 text-yellow-200">
                 <Download className="mr-2 h-4 w-4" />
-                Export to CSV Scroll
+                Export to CSV
               </Button>
             </div>
           </div>
@@ -233,7 +232,7 @@ export default function TransactionsPage() {
           {isLoading ? (
             <div className="flex justify-center items-center h-[400px]">
               <Loader2 className="h-12 w-12 text-yellow-400 animate-spin" />
-              <p className="ml-4 text-purple-300">Summoning transaction scrolls...</p>
+              <p className="ml-4 text-purple-300">Loading transactions...</p>
             </div>
           ) : (
           <ScrollArea className="h-[500px] rounded-md border border-purple-500/30 p-1 bg-background/50">
@@ -243,7 +242,7 @@ export default function TransactionsPage() {
                   <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Date{getSortIndicator('date')}</TableHead>
                   <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Description{getSortIndicator('description')}</TableHead>
                   <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Type{getSortIndicator('type')}</TableHead>
-                  <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-purple-300/80 hover:text-yellow-300">Amount (₲/Ӿ){getSortIndicator('amount')}</TableHead>
+                  <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-purple-300/80 hover:text-yellow-300">Amount (₹){getSortIndicator('amount')}</TableHead>
                   <TableHead onClick={() => requestSort('category')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Category/Source{getSortIndicator('category')}</TableHead>
                   <TableHead onClick={() => requestSort('paymentMethod')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Payment Method{getSortIndicator('paymentMethod')}</TableHead>
                   <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-purple-300/80 hover:text-yellow-300">Expense Type{getSortIndicator('expenseType')}</TableHead>
@@ -254,7 +253,7 @@ export default function TransactionsPage() {
                 {filteredTransactions.length > 0 ? (
                   filteredTransactions.map((transaction) => (
                     <TableRow key={transaction.id} className="hover:bg-yellow-500/10 border-b-purple-500/20">
-                      <TableCell className="text-purple-200/90">{format(transaction.date, "dd MMM, yyyy")}</TableCell>
+                      <TableCell className="text-purple-200/90">{format(new Date(transaction.date), "dd MMM, yyyy")}</TableCell>
                       <TableCell className="font-medium text-purple-100">{transaction.description}</TableCell>
                       <TableCell>
                         <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'} 
@@ -264,7 +263,7 @@ export default function TransactionsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className={`text-right font-semibold ${transaction.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
-                        {transaction.type === 'income' ? '+' : '-'}₲{transaction.amount.toFixed(2)}
+                        {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-purple-200/90">{transaction.type === 'expense' ? transaction.category : transaction.source}</TableCell>
                       <TableCell className="text-purple-200/90">{transaction.paymentMethod || 'N/A'}</TableCell>
@@ -296,16 +295,16 @@ export default function TransactionsPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent className="bg-background/95 border-purple-600/50 shadow-lg">
                             <AlertDialogHeader>
-                              <AlertDialogTitle className="text-yellow-400">Are you sure you want to banish this transaction scroll?</AlertDialogTitle>
+                              <AlertDialogTitle className="text-yellow-400">Are you sure you want to delete this transaction?</AlertDialogTitle>
                               <AlertDialogDescription className="text-purple-300/80">
-                                This action cannot be undone (Evanesco!). This will permanently remove the transaction: "{transaction.description}".
+                                This action cannot be undone. This will permanently remove the transaction: "{transaction.description}".
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel className="border-purple-500/70 text-purple-300 hover:bg-purple-700/30">Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-red-100">
                                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                {isDeleting ? "Vanishing..." : "Banish"}
+                                {isDeleting ? "Deleting..." : "Delete"}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -316,7 +315,7 @@ export default function TransactionsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-purple-400/70 py-10">
-                      No transaction scrolls found in the archives. Try adjusting your filters or casting a new transaction spell.
+                      No transactions found. Try adjusting your filters or adding a new transaction.
                     </TableCell>
                   </TableRow>
                 )}
@@ -331,10 +330,10 @@ export default function TransactionsPage() {
           <AlertDialogContent className="bg-background/95 border-purple-600/50 shadow-lg sm:max-w-2xl">
               <AlertDialogHeader>
                   <AlertDialogTitle className="text-yellow-400 text-xl">
-                    {editingTransaction ? "Alter Transaction Scroll" : "New Transaction Scroll"}
+                    {editingTransaction ? "Edit Transaction" : "New Transaction"}
                   </AlertDialogTitle>
                   <AlertDialogDescription className="text-purple-300/80">
-                    {editingTransaction ? "Modify the details of this financial enchantment." : "Record a new income or expense from Gringotts."}
+                    {editingTransaction ? "Modify the details of this transaction." : "Record a new income or expense."}
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-4">

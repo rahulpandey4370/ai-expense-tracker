@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ interface RecentTransactionsListProps {
 
 export function RecentTransactionsList({ transactions, count = 5 }: RecentTransactionsListProps) {
   const recentTransactions = [...transactions]
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, count);
 
   if (recentTransactions.length === 0) {
@@ -53,7 +54,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                     <div>
                       <p className="font-medium text-sm">{transaction.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(transaction.date, "MMM d, yyyy")}
+                        {format(new Date(transaction.date), "MMM d, yyyy")}
                         {transaction.type === 'expense' && transaction.category && ` • ${transaction.category}`}
                         {transaction.type === 'income' && transaction.source && ` • ${transaction.source}`}
                       </p>
@@ -67,7 +68,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                        <Badge variant={
                          transaction.expenseType === 'need' ? 'default' : 
                          transaction.expenseType === 'want' ? 'secondary' : 
-                         'outline' // investment_expense
+                         'outline'
                        } className="text-xs mt-1 capitalize">
                          {transaction.expenseType.replace('_expense', '')}
                        </Badge>

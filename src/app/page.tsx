@@ -12,9 +12,9 @@ import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
-import type { Transaction, TransactionInput } from '@/lib/types'; // Assuming TransactionInput might be needed if TransactionForm expects it
-import { getTransactions, addTransaction } from '@/lib/actions/transactions';
-import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, ShoppingBag, Utensils, Film, Bitcoin } from 'lucide-react';
+import type { Transaction, TransactionInput } from '@/lib/types';
+import { getTransactions, addTransaction } from '@/lib/actions/transactions'; // Will use in-memory store
+import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -40,7 +40,7 @@ export default function DashboardPage() {
         description: "Could not fetch transactions. Please try refreshing.",
         variant: "destructive",
       });
-      setTransactions([]); // Set to empty on error
+      setTransactions([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -52,25 +52,16 @@ export default function DashboardPage() {
   }, [fetchAndSetTransactions]);
   
   const handleAddTransactionCallback = async (newTransactionData: TransactionInput) => {
-    // The TransactionForm will call the server action directly.
-    // This callback can be used to refresh data or provide UI feedback if needed.
     try {
-        // Server action `addTransaction` is called from TransactionForm.
-        // After it completes, we re-fetch to update the UI.
         await fetchAndSetTransactions(); 
-        // Toast for success is now handled within TransactionForm or the server action could return a status
     } catch (error) {
-        // Error handling for the action call itself should be in TransactionForm
-        // or communicated if the server action throws.
         console.error("Error after attempting to add transaction:", error);
-        // Toast for error here might be redundant if TransactionForm handles it.
     }
   };
 
-
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
-      t => t.date.getMonth() === selectedMonth && t.date.getFullYear() === selectedYear
+      t => new Date(t.date).getMonth() === selectedMonth && new Date(t.date).getFullYear() === selectedYear
     );
   }, [transactions, selectedMonth, selectedYear]);
 
@@ -95,7 +86,7 @@ export default function DashboardPage() {
     const yearForLastMonth = prevMonthDate.getFullYear();
 
     return transactions
-      .filter(t => t.type === 'expense' && t.date.getMonth() === lastMonth && t.date.getFullYear() === yearForLastMonth)
+      .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === lastMonth && new Date(t.date).getFullYear() === yearForLastMonth)
       .reduce((sum, t) => sum + t.amount, 0) || 0;
   }, [transactions, selectedDate]);
 
@@ -128,18 +119,18 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Galleons Earned" value={`₲${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20"/>
-        <KpiCard title="Knuts Spent" value={`Ӿ${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName="text-red-400" className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20"/>
-        <KpiCard title="Gringotts Vault" value={`₲${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savings >= 0 ? "text-green-400" : "text-red-400"} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20" />
-        <KpiCard title="Savings Charm Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-400" : "text-orange-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20"/>
+        <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20"/>
+        <KpiCard title="Total Expenses" value={`₹${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName="text-red-400" className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20"/>
+        <KpiCard title="Net Savings" value={`₹${monthlyMetrics.savings.toFixed(2)}`} icon={PiggyBank} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savings >= 0 ? "text-green-400" : "text-red-400"} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20" />
+        <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-400" : "text-orange-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20"/>
       </div>
 
        {monthlyMetrics.spending > monthlyMetrics.income && (
         <Alert variant="destructive" className="shadow-md border-red-700/50 bg-red-600/20 text-red-100">
           <AlertTriangle className="h-5 w-5 text-red-300" />
-          <AlertTitle className="text-red-200">Ministry Warning!</AlertTitle>
+          <AlertTitle className="text-red-200">Spending Alert!</AlertTitle>
           <AlertDescription className="text-red-300">
-            Careful, wizard! You've spent more than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your scrolls (expenses)!
+            You've spent more than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your expenses.
           </AlertDescription>
         </Alert>
       )}
@@ -151,8 +142,8 @@ export default function DashboardPage() {
             <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <MonthlySpendingTrendChart transactions={transactions} /> {/* All transactions for trend */}
-            <IncomeExpenseTrendChart transactions={transactions} /> {/* All transactions for trend */}
+            <MonthlySpendingTrendChart transactions={transactions} />
+            <IncomeExpenseTrendChart transactions={transactions} />
           </div>
            <RecentTransactionsList transactions={currentMonthTransactions} />
         </div>
@@ -165,7 +156,7 @@ export default function DashboardPage() {
             selectedMonthName={monthNamesList[selectedMonth]}
             selectedYear={selectedYear}
           />
-          <FinancialChatbot allTransactions={transactions} /> {/* All transactions for chatbot context */}
+          <FinancialChatbot allTransactions={transactions} />
         </div>
       </div>
     </main>

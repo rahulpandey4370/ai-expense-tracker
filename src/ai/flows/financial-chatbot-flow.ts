@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI-powered chatbot for answering financial questions.
@@ -48,13 +49,14 @@ export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema
 // Exported wrapper function
 export async function askFinancialBot(input: {
   query: string;
-  transactions: AppTransaction[]; // Use actual app type here for input from client
+  transactions: AppTransaction[]; 
   chatHistory?: ChatMessage[];
 }): Promise<FinancialChatbotOutput> {
   // Convert AppTransaction[] to AITransaction[] (Date to ISO string)
   const aiTransactions: AITransaction[] = input.transactions.map(t => ({
     ...t,
-    date: t.date.toISOString(),
+    // Ensure date is converted to ISO string for the AI
+    date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
   }));
   return financialChatbotFlow({ query: input.query, transactions: aiTransactions, chatHistory: input.chatHistory });
 }
@@ -67,7 +69,7 @@ const financialChatbotFlow = ai.defineFlow(
     outputSchema: FinancialChatbotOutputSchema,
   },
   async ({ query, transactions, chatHistory }) => {
-    let prompt = `You are Rahul's AI Financial Assistant, an expert in analyzing personal finance data in Indian Rupees (INR).
+    let prompt = `You are an AI Financial Assistant, an expert in analyzing personal finance data in Indian Rupees (INR).
 The user has provided their transaction data. Your task is to answer the user's questions based on this data and any provided conversation history.
 Be concise and helpful. If the data doesn't support an answer, clearly state that. Refer to amounts in INR (e.g., ₹1000).
 
@@ -90,18 +92,16 @@ ${JSON.stringify(transactions, null, 2)}
       prompt: prompt,
       model: 'googleai/gemini-2.0-flash',
       config: {
-        temperature: 0.4, // Slightly creative but still factual
-        safetySettings: [ // Relax safety settings slightly if needed, be cautious
+        temperature: 0.4, 
+        safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          // Consider other categories if you face issues, but default is often best
         ],
       },
     });
 
     const responseText = llmResponse.text;
     if (!responseText) {
-      // Log error or provide a more specific fallback
       console.error("AI model returned no text for financial chatbot query:", query);
       return { response: "I'm sorry, I encountered an issue generating a response. Please try again." };
     }

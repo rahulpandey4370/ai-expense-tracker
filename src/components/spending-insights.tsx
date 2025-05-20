@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Zap } from "lucide-react";
@@ -9,7 +10,7 @@ import type { Transaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface SpendingInsightsProps {
-  currentMonthTransactions: Transaction[]; // Pre-filtered for selected month/year
+  currentMonthTransactions: Transaction[];
   lastMonthTotalSpending: number; 
   selectedMonthName: string;
   selectedYear: number;
@@ -24,9 +25,9 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const getTopCategory = () => {
+  const getTopCategory = useCallback(() => {
     const categorySpending: Record<string, number> = {};
-    currentMonthTransactions // Use pre-filtered transactions
+    currentMonthTransactions
       .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         categorySpending[t.category!] = (categorySpending[t.category!] || 0) + t.amount;
@@ -36,16 +37,16 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
 
     const sortedCategories = Object.entries(categorySpending).sort(([, a], [, b]) => b - a);
     return { name: sortedCategories[0][0], amount: sortedCategories[0][1] };
-  };
+  }, [currentMonthTransactions]);
 
-  const topCategoryData = getTopCategory();
-  const topCategoryName = topCategoryData.name;
-  const topCategorySpending = topCategoryData.amount;
-
-  const generateInsights = async () => {
+  const generateInsights = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setInsights(null);
+    
+    const topCategoryData = getTopCategory();
+    const topCategoryName = topCategoryData.name;
+    const topCategorySpending = topCategoryData.amount;
 
     const comparisonWithLastMonth = monthlySpending > lastMonthTotalSpending
       ? `you spent ₹${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more than the previous month.`
@@ -70,17 +71,16 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [monthlySpending, lastMonthTotalSpending, getTopCategory]);
   
   useEffect(() => {
     if (currentMonthTransactions.length > 0 && monthlySpending > 0) {
       generateInsights();
     } else {
-      setInsights(null); // Clear insights if no relevant data
+      setInsights(null);
       setError(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthTransactions, monthlySpending, lastMonthTotalSpending]);
+  }, [currentMonthTransactions, monthlySpending, lastMonthTotalSpending, generateInsights, selectedMonthName, selectedYear]); // Added selectedMonthName and selectedYear to dependencies
 
   return (
     <Card className="shadow-lg">

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -13,7 +14,7 @@ import type { Transaction as AppTransaction } from "@/lib/types";
 import { cn } from '@/lib/utils';
 
 interface FinancialChatbotProps {
-  allTransactions: AppTransaction[]; // Pass all transactions, flow can filter if needed or use contextually
+  allTransactions: AppTransaction[];
 }
 
 export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
@@ -49,8 +50,8 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     try {
       const result = await askFinancialBot({
         query: userMessage.content,
-        transactions: allTransactions, // Provide all transactions as context
-        chatHistory: messages.slice(-5), // Send last 5 messages as history
+        transactions: allTransactions,
+        chatHistory: messages.slice(-5),
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response };
       setMessages(prev => [...prev, assistantMessage]);
@@ -68,7 +69,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     <Card className="shadow-lg flex flex-col h-[500px]">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl">
-          <Bot className="h-6 w-6 text-primary" /> Rahul's AI Financial Assistant
+          <Bot className="h-6 w-6 text-primary" /> AI Financial Assistant
         </CardTitle>
         <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
       </CardHeader>
@@ -85,9 +86,9 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               >
                 <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
                   <AvatarImage
-                    src={message.role === 'user' ? "https://picsum.photos/seed/user/100/100" : "https://picsum.photos/seed/ai/100/100"}
+                    src={message.role === 'user' ? "https://placehold.co/100x100.png" : "https://placehold.co/100x100.png"}
                     alt={message.role}
-                    data-ai-hint={message.role === 'user' ? 'user avatar' : 'ai avatar'}
+                    data-ai-hint={message.role === 'user' ? 'user avatar' : 'robot avatar'}
                   />
                   <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                 </Avatar>
@@ -99,7 +100,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
             {isLoading && (
               <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/10 mr-auto max-w-[85%]">
                 <Avatar className="h-8 w-8">
-                   <AvatarImage src="https://picsum.photos/seed/ai-loading/100/100" alt="AI thinking" data-ai-hint="ai avatar" />
+                   <AvatarImage src="https://placehold.co/100x100.png" alt="AI thinking" data-ai-hint="robot avatar" />
                    <AvatarFallback><Bot className="h-4 w-4 animate-pulse" /></AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-2 py-1">

@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -36,14 +37,14 @@ const prompt = ai.definePrompt({
   name: 'comparativeExpenseAnalysisPrompt',
   input: {schema: ComparativeExpenseAnalysisInputSchema},
   output: {schema: ComparativeExpenseAnalysisOutputSchema},
-  prompt: `You are Rahul's personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
+  prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
 
-Current Month: {{currentMonth}}
-Previous Month: {{previousMonth}}
-Current Month Expenses: ₹{{currentMonthExpenses}}
-Previous Month Expenses: ₹{{previousMonthExpenses}}
-Current Month Expense Categories: {{expenseCategoriesCurrent}}
-Previous Month Expense Categories: {{expenseCategoriesPrevious}}
+Current Period: {{currentMonth}}
+Previous Period: {{previousMonth}}
+Current Period Expenses: ₹{{currentMonthExpenses}}
+Previous Period Expenses: ₹{{previousMonthExpenses}}
+Current Period Expense Categories: {{expenseCategoriesCurrent}}
+Previous Period Expense Categories: {{expenseCategoriesPrevious}}
 
 Provide a detailed comparative analysis. Focus on identifying specific categories where spending has increased or decreased significantly. Offer suggestions for potential savings or areas where the user could adjust their spending habits.
 `, 

@@ -1,4 +1,5 @@
-// 'use server';
+
+'use server';
 
 /**
  * @fileOverview AI-powered insights about spending habits.
@@ -7,8 +8,6 @@
  * - SpendingInsightsInput - The input type for the getSpendingInsights function.
  * - SpendingInsightsOutput - The return type for the getSpendingInsights function.
  */
-
-'use server';
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
@@ -47,7 +46,7 @@ const spendingInsightsPrompt = ai.definePrompt({
   name: 'spendingInsightsPrompt',
   input: {schema: SpendingInsightsInputSchema},
   output: {schema: SpendingInsightsOutputSchema},
-  prompt: `You are Rahul's personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
+  prompt: `You are a personal finance advisor providing insights to the user about their spending habits in Indian Rupees (INR).
 
   Here is the user's spending data for the current month:
   - Total spending: ₹{{monthlySpending}}
@@ -55,7 +54,7 @@ const spendingInsightsPrompt = ai.definePrompt({
 
   Compared to last month (spending: ₹{{lastMonthSpending}}), {{comparisonWithLastMonth}}.
 
-  Provide 2-3 concise and actionable insights to help the user understand their spending patterns and make informed decisions.
+  Provide 2-3 concise and actionable insights to help the user understand their spending patterns and make informed decisions. Focus on practical advice.
 `,
 });
 
@@ -70,4 +69,3 @@ const spendingInsightsFlow = ai.defineFlow(
     return output!;
   }
 );
-

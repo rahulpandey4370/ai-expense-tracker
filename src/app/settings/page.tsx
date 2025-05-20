@@ -32,6 +32,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveChanges = () => {
+    // In a real app, you would persist these settings
     console.log("Saving settings:", { userProfile, notifications });
     toast({
       title: "Settings Saved!",
@@ -111,7 +112,6 @@ export default function SettingsPage() {
              <p className="text-xs text-muted-foreground/70 mt-2">Be careful, some actions are irreversible!</p>
           </section>
 
-
           <div className="mt-8 flex justify-end">
             <Button onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Save className="mr-2 h-4 w-4" />
@@ -123,4 +123,3 @@ export default function SettingsPage() {
     </main>
   );
 }
-

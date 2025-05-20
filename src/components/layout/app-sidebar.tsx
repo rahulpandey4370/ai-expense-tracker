@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -29,8 +30,8 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="Chaos Cash Tracker Home">
-          <AppLogo appName="Chaos Cash Tracker" />
+        <Link href="/" aria-label="Rahul's Tracker Home">
+          <AppLogo appName="Rahul's Tracker" />
         </Link>
       </SidebarHeader>
       <Separator className="mb-2" />
@@ -45,7 +46,7 @@ export default function AppSidebar() {
                   tooltip={item.label}
                   className="justify-start"
                 >
-                  <a> {/* Link component needs an a tag as child for legacyBehavior */}
+                  <a> 
                     <item.icon className="h-5 w-5" />
                     <span>{item.label}</span>
                   </a>
