@@ -13,7 +13,7 @@ import type { AppTransaction, Category, PaymentMethod } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List } from "lucide-react";
-// useDateSelection is not used here, can be removed if not needed.
+import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -52,6 +52,8 @@ const tableRowVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
+type ViewMode = 'selected_month' | 'full_year';
+
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<AppTransaction[]>([]);
@@ -69,6 +71,8 @@ export default function TransactionsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast } = useToast();
+  const { selectedMonth, selectedYear, monthNamesList } = useDateSelection();
+  const [viewMode, setViewMode] = useState<ViewMode>('selected_month');
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -99,6 +103,20 @@ export default function TransactionsPage() {
   useEffect(() => {
     let tempTransactions = [...allTransactions];
 
+    // Apply global date filter based on viewMode
+    if (viewMode === 'selected_month') {
+      tempTransactions = tempTransactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
+      });
+    } else { // 'full_year'
+      tempTransactions = tempTransactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getFullYear() === selectedYear;
+      });
+    }
+
+    // Apply other filters
     if (searchTerm) {
       tempTransactions = tempTransactions.filter(t =>
         (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -119,6 +137,7 @@ export default function TransactionsPage() {
       tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
 
+    // Apply sorting
     if (sortConfig.key) {
       tempTransactions.sort((a, b) => {
         let aValue, bValue;
@@ -150,7 +169,7 @@ export default function TransactionsPage() {
     }
 
     setFilteredTransactions(tempTransactions);
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, sortConfig]);
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, sortConfig, selectedMonth, selectedYear, viewMode]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -162,7 +181,7 @@ export default function TransactionsPage() {
 
 
   const handleTransactionUpdateOrAdd = () => {
-    fetchData();
+    fetchData(); // Refetch all data to ensure consistency
     setEditingTransaction(null);
   };
 
@@ -171,7 +190,7 @@ export default function TransactionsPage() {
     try {
       await deleteTransaction(transactionId);
       toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
-      fetchData();
+      fetchData(); // Refetch data after delete
     } catch (error) {
       console.error("Failed to delete transaction:", error);
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
@@ -223,6 +242,13 @@ export default function TransactionsPage() {
     toast({ title: "Data Exported!", description: "Your transactions have been exported to a CSV file." });
   };
 
+  const currentPeriodText = useMemo(() => {
+    if (viewMode === 'selected_month') {
+      return `${monthNamesList[selectedMonth]} ${selectedYear}`;
+    }
+    return `Year ${selectedYear}`;
+  }, [viewMode, selectedMonth, selectedYear, monthNamesList]);
+
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div
@@ -238,6 +264,7 @@ export default function TransactionsPage() {
             </CardTitle>
             <CardDescription className="text-muted-foreground">
               View and manage all your financial entries. Filters available below.
+              Currently viewing: <strong className="text-accent">{currentPeriodText}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -249,7 +276,14 @@ export default function TransactionsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70"
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
+                  <SelectContent className="bg-card border-primary/60 text-foreground">
+                    <SelectItem value="selected_month">Selected Month ({monthNamesList[selectedMonth]} {selectedYear})</SelectItem>
+                    <SelectItem value="full_year">Full Year ({selectedYear})</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={filterType} onValueChange={(value) => setFilterType(value as string | 'all')}>
                   <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
@@ -285,7 +319,7 @@ export default function TransactionsPage() {
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <List className="mr-2 h-5 w-5 text-primary" />
-                  <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s)</span>
+                  <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s) for <strong className="text-accent">{currentPeriodText}</strong></span>
                 </div>
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Sigma className="mr-2 h-5 w-5 text-primary" />
@@ -394,7 +428,7 @@ export default function TransactionsPage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
-                        No transactions found. Try adjusting your filters or adding a new transaction.
+                        No transactions found for {currentPeriodText}. Try adjusting your filters or adding a new transaction.
                       </TableCell>
                     </TableRow>
                   )}
@@ -428,3 +462,6 @@ export default function TransactionsPage() {
     </main>
   );
 }
+
+
+    
