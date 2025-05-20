@@ -42,28 +42,27 @@ export default function AppSidebar() {
         <SidebarMenu className="px-2">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} passHref legacyBehavior>
-                <Tooltip>
-                  <TooltipTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* Link now renders its own <a> tag. SidebarMenuButton is its child. */}
+                  <Link href={item.href} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md">
                     <SidebarMenuButton
-                      asAnchor // Instruct SidebarMenuButton to render as <a>
                       isActive={pathname === item.href}
                       className="justify-start"
-                      // href will be passed by Link legacyBehavior
-                      // other props (onClick, etc.) from Link will also be passed
-                      // and props from TooltipTrigger asChild will be merged
+                      // Removed asChild from SidebarMenuButton invocation here
+                      // It will render as a button, which is fine inside an <a>
                     >
                       <item.icon className="h-5 w-5" />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
-                  </TooltipTrigger>
-                  {sidebarState === 'collapsed' && !isMobile && (
-                    <TooltipContent side="right" align="center">
-                      {item.label}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </Link>
+                  </Link>
+                </TooltipTrigger>
+                {sidebarState === 'collapsed' && !isMobile && (
+                  <TooltipContent side="right" align="center">
+                    {item.label}
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
