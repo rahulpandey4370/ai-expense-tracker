@@ -39,7 +39,7 @@ export default function AppSidebar() {
         <SidebarMenu className="px-2">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} legacyBehavior passHref>
+              <Link href={item.href} asChild>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === item.href}
