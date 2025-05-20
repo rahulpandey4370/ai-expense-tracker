@@ -11,10 +11,12 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  useSidebar, // Import useSidebar hook
 } from "@/components/ui/sidebar";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // Import Tooltip components
 import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle } from "lucide-react";
 
 const navItems = [
@@ -26,6 +28,7 @@ const navItems = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const { isMobile, state: sidebarState } = useSidebar(); // Get sidebar state
 
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
@@ -39,19 +42,31 @@ export default function AppSidebar() {
         <SidebarMenu className="px-2">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} asChild>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === item.href}
-                  tooltip={item.label}
-                  className="justify-start"
-                >
-                  <a> 
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </a>
-                </SidebarMenuButton>
-              </Link>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href={item.href} asChild>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      // Do NOT pass the tooltip prop here, we are handling it externally
+                      // This ensures SidebarMenuButton returns its core button/slot
+                      // which Link asChild can correctly use.
+                      className="justify-start"
+                    >
+                      <a>
+                        <item.icon className="h-5 w-5" />
+                        <span>{item.label}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </Link>
+                </TooltipTrigger>
+                {/* Conditionally render TooltipContent based on sidebar state, replicating internal logic */}
+                {sidebarState === 'collapsed' && !isMobile && (
+                  <TooltipContent side="right" align="center">
+                    {item.label}
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
