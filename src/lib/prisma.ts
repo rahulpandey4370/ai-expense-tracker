@@ -8,6 +8,8 @@ declare global {
 }
 
 const prismaClientSingleton = () => {
+  // When using Accelerate, Prisma Client uses the DATABASE_URL (Accelerate URL)
+  // from your environment variables.
   return new PrismaClient().$extends(withAccelerate());
 };
 

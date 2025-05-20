@@ -1,18 +1,15 @@
 // /prisma/schema.prisma
 datasource db {
   provider     = "postgresql"
-  // url for Prisma Client (will use Accelerate via DATABASE_URL env var)
+  // DATABASE_URL will be your Accelerate URL from Vercel env vars
   url          = env("DATABASE_URL")
-  // directUrl for migrations (must be a direct, non-pooled connection via POSTGRES_URL_NON_POOLING env var)
+  // POSTGRES_URL_NON_POOLING is your direct DB connection for migrations from Vercel env vars
   directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "prisma"
 }
 
 generator client {
   provider = "prisma-client-js"
-  // Default output path is node_modules/.prisma/client
-  // Using a custom output like "/app/generated/prisma-client" is generally for specific Vercel setups
-  // and not needed for standard Next.js apps. We'll stick to the default.
 }
 
 model Transaction {
