@@ -17,13 +17,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle } from "lucide-react";
-import { format, parse as parseDate } from "date-fns";
+import { format, parse as parseDateFns } from "date-fns"; // Renamed import
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/parse-transactions-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { TransactionInputSchema } from '@/lib/types'; // Moved here from actions
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
@@ -42,6 +43,7 @@ const buttonHoverTap = {
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+
 
 type BulkParsedTransaction = Partial<TransactionInput> & {
   originalRow: string;
@@ -92,19 +94,20 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const fetchDropdownData = useCallback(async () => {
     setIsFetchingDropdowns(true);
     try {
-      const [fetchedExpenseCategories, fetchedIncomeCategories, fetchedPaymentMethods] = await Promise.all([
-        getCategories('expense'),
-        getCategories('income'),
+      const [fetchedAllCategories, fetchedPaymentMethods] = await Promise.all([
+        getCategories(), // Fetch all categories
         getPaymentMethods()
       ]);
-      setExpenseCategories(fetchedExpenseCategories);
-      setIncomeCategories(fetchedIncomeCategories);
-      const allCats = [...fetchedExpenseCategories, ...fetchedIncomeCategories];
-      setAllCategories(allCats);
+      
+      setAllCategories(fetchedAllCategories);
+      setExpenseCategories(fetchedAllCategories.filter(c => c.type === 'expense'));
+      setIncomeCategories(fetchedAllCategories.filter(c => c.type === 'income'));
       setPaymentMethods(fetchedPaymentMethods);
 
+      // Set defaults only if not editing and in single tab
       if (!initialTransactionData && activeTab === 'single') {
-        setSelectedCategoryId(type === 'expense' && fetchedExpenseCategories.length > 0 ? fetchedExpenseCategories[0].id : type === 'income' && fetchedIncomeCategories.length > 0 ? fetchedIncomeCategories[0].id : undefined);
+        const currentTypeCategories = type === 'expense' ? fetchedAllCategories.filter(c => c.type === 'expense') : fetchedAllCategories.filter(c => c.type === 'income');
+        setSelectedCategoryId(currentTypeCategories.length > 0 ? currentTypeCategories[0].id : undefined);
         setSelectedPaymentMethodId(type === 'expense' && fetchedPaymentMethods.length > 0 ? fetchedPaymentMethods[0].id : undefined);
       }
     } catch (error) {
@@ -124,7 +127,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   useEffect(() => {
     if (initialTransactionData) {
-      setActiveTab('single'); // Force to single tab if editing
+      setActiveTab('single'); 
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type as AppTransactionTypeEnum);
       setDate(new Date(initialTransactionData.date));
@@ -142,30 +145,27 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setExpenseType(undefined);
       }
     } else {
-      // Reset form when not editing or when initialTransactionData is cleared
       if (activeTab === 'single') {
         setFormId(null);
-        // Don't reset type here as it might be user-selected
         setDate(new Date());
         setAmount('');
         setDescription('');
-        setExpenseType('need'); // Default for expense
-        // Set default category/payment method based on current type
+        
         if (type === 'expense') {
             setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
             setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
+            setExpenseType('need');
             setSource('');
         } else if (type === 'income') {
             setSelectedCategoryId(incomeCategories.length > 0 ? incomeCategories[0].id : undefined);
             setSelectedPaymentMethodId(undefined);
             setExpenseType(undefined);
+             setSource('');
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods]); // Removed activeTab and type from deps to avoid loops with their own setters
+  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods, activeTab, type]); 
 
-  // Effect to update default category/PM when type changes in single mode
   useEffect(() => {
     if (activeTab === 'single' && !initialTransactionData) {
         if (type === 'expense') {
@@ -177,13 +177,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             setSelectedCategoryId(incomeCategories.length > 0 ? incomeCategories[0].id : undefined);
             setSelectedPaymentMethodId(undefined);
             setExpenseType(undefined);
+            setSource('');
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, activeTab, initialTransactionData]); // Dependencies are type, activeTab, and initialTransactionData
+  }, [type, activeTab, initialTransactionData, expenseCategories, incomeCategories, paymentMethods]);
 
   const resetSingleFormFields = () => {
-    // setType('expense'); // Keep current type or default to expense? Let's keep current type.
     setDate(new Date());
     setAmount('');
     setDescription('');
@@ -192,7 +191,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
         setExpenseType('need');
         setSource('');
-    } else { // income
+    } else { 
         setSelectedCategoryId(incomeCategories.length > 0 ? incomeCategories[0].id : undefined);
         setSource('');
         setSelectedPaymentMethodId(undefined);
@@ -205,38 +204,44 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     e.preventDefault();
     setIsLoading(true);
 
-    if (!date || !amount) {
+    const transactionPayload: Partial<TransactionInput> = {
+      type: type as 'income' | 'expense',
+      date,
+      amount: parseFloat(amount),
+      description: description || undefined,
+    };
+    if (type === 'expense') {
+      transactionPayload.categoryId = selectedCategoryId;
+      transactionPayload.paymentMethodId = selectedPaymentMethodId;
+      transactionPayload.expenseType = expenseType;
+    } else { // income
+      transactionPayload.categoryId = selectedCategoryId;
+      transactionPayload.source = source;
+    }
+    
+    const validation = TransactionInputSchema.safeParse(transactionPayload);
+
+    if (!validation.success) {
+      const errorMessages = validation.error.flatten().fieldErrors;
+      const readableErrors = Object.entries(errorMessages)
+        .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+        .join('; ');
       toast({
-        title: "Missing Information!",
-        description: "Please fill in all required fields (Date, Amount).",
+        title: "Validation Error!",
+        description: readableErrors || "Please check the form fields.",
         variant: "destructive",
       });
       setIsLoading(false);
       return;
     }
 
-    const transactionPayload: TransactionInput = {
-      type: type as 'income' | 'expense',
-      date,
-      amount: parseFloat(amount),
-      description: description || undefined,
-      ...(type === 'expense' && {
-        categoryId: selectedCategoryId,
-        paymentMethodId: selectedPaymentMethodId,
-        expenseType: expenseType
-      }),
-      ...(type === 'income' && {
-        source: source,
-        categoryId: selectedCategoryId,
-      }),
-    };
 
     try {
       if (formId) {
-        await updateTransaction(formId, transactionPayload);
+        await updateTransaction(formId, validation.data);
         toast({ title: "Transaction Updated!", description: "Your transaction has been successfully modified." });
       } else {
-        await addTransaction(transactionPayload);
+        await addTransaction(validation.data);
         toast({ title: "Transaction Added!", description: "New transaction recorded successfully." });
       }
 
@@ -259,7 +264,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
 
-
   const handleProcessBulk = () => {
     setIsProcessingBulk(true);
     const lines = bulkText.trim().split('\n');
@@ -267,52 +271,63 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       const values = line.split('\t'); // Assuming Tab-separated
       const errors: string[] = [];
       
-      // Expected: Date (YYYY-MM-DD or MM/DD/YYYY), Description, Amount, Type (income/expense), Category, Payment Method, Expense Type/Source
-      if (values.length < 4) {
-        errors.push("Not enough columns. Expected at least: Date, Description, Amount, Type.");
-        return { originalRow: line, rowIndex: index, errors };
+      // Expected: Description, Category Name, Amount (₹XX.XX), Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method Name
+      if (values.length < 7) { // Need at least 7 columns
+        errors.push("Not enough columns. Expected: Description, Category, Amount, Total Amount, Date, Expense Type, Payment Method.");
+        return { originalRow: line, rowIndex: index, errors, type: 'expense' }; // Default to expense
       }
 
+      const desc = values[0]?.trim();
+      const catName = values[1]?.trim();
+      const amountStr = values[2]?.trim();
+      // values[3] is Total Amount, ignored for now
+      const dateStr = values[4]?.trim();
+      const expTypeStr = values[5]?.trim().toLowerCase();
+      const pmName = values[6]?.trim();
+      
       let parsedDate: Date | undefined;
       try {
-        // Try common formats, be more specific if needed
-        parsedDate = parseDate(values[0], 'yyyy-MM-dd', new Date());
-        if (isNaN(parsedDate.getTime())) {
-          parsedDate = parseDate(values[0], 'MM/dd/yyyy', new Date());
+        if (dateStr) {
+            parsedDate = parseDateFns(dateStr, 'dd/MM/yyyy', new Date());
+            if (isNaN(parsedDate.getTime())) throw new Error("Invalid date format. Use DD/MM/YYYY.");
+        } else {
+            errors.push("Date is missing.");
         }
-        if (isNaN(parsedDate.getTime())) throw new Error("Invalid date format. Use YYYY-MM-DD or MM/DD/YYYY.");
       } catch (e: any) { errors.push(e.message); }
 
-      const desc = values[1]?.trim();
-      const amt = parseFloat(values[2]?.trim());
-      const txTypeStr = values[3]?.trim().toLowerCase();
-      const catName = values[4]?.trim();
-      const pmName = values[5]?.trim();
-      const expTypeOrSrc = values[6]?.trim();
+      let amt: number | undefined;
+      try {
+          if (amountStr) {
+            const cleanedAmountStr = amountStr.replace(/[₹,]/g, '');
+            amt = parseFloat(cleanedAmountStr);
+            if (isNaN(amt) || amt <= 0) throw new Error("Amount must be a positive number.");
+          } else {
+            errors.push("Amount is missing.");
+          }
+      } catch (e: any) { errors.push(e.message); }
+
 
       if (!desc) errors.push("Description is missing.");
-      if (isNaN(amt) || amt <=0) errors.push("Amount must be a positive number.");
-      if (txTypeStr !== 'income' && txTypeStr !== 'expense') errors.push("Type must be 'income' or 'expense'.");
+      if (!catName) errors.push("Category Name is missing.");
+      
+      const validExpenseTypes = ['need', 'want', 'investment_expense'];
+      if (!expTypeStr || !validExpenseTypes.includes(expTypeStr)) {
+          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment_Expense'. Found: ${values[5]}`);
+      }
+      if (!pmName) errors.push("Payment Method Name is missing.");
+
 
       const result: BulkParsedTransaction = {
         date: parsedDate,
         description: desc,
-        amount: isNaN(amt) ? undefined : amt,
-        type: txTypeStr === 'income' ? 'income' : txTypeStr === 'expense' ? 'expense' : undefined,
+        amount: amt,
+        type: 'expense', // All bulk entries are expenses based on format
         categoryName: catName,
         paymentMethodName: pmName,
+        expenseType: expTypeStr as AppExpenseTypeEnum,
         originalRow: line,
         rowIndex: index,
       };
-
-      if (result.type === 'expense') {
-        result.expenseType = expTypeOrSrc as AppExpenseTypeEnum; // Basic validation
-        if (expTypeOrSrc && !['need', 'want', 'investment_expense'].includes(expTypeOrSrc.toLowerCase())) {
-            errors.push("Invalid Expense Type. Use 'need', 'want', or 'investment_expense'.");
-        }
-      } else if (result.type === 'income') {
-        result.source = expTypeOrSrc;
-      }
       
       result.errors = errors.length > 0 ? errors : undefined;
       return result;
@@ -337,35 +352,43 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             errorCount++;
             continue;
         }
-        if (!pt.date || !pt.amount || !pt.type || !pt.description) {
-            errorCount++; // Should have been caught by errors array, but double check
+        if (!pt.date || pt.amount === undefined || !pt.type || !pt.description || !pt.categoryName || !pt.paymentMethodName || !pt.expenseType) {
+            errorCount++; 
+            pt.errors = [...(pt.errors || []), "Missing critical parsed information for submission."];
             continue;
         }
 
-        const category = pt.categoryName ? allCategories.find(c => c.name.toLowerCase() === pt.categoryName?.toLowerCase() && c.type === pt.type) : undefined;
-        const paymentMethod = pt.paymentMethodName && pt.type === 'expense' ? paymentMethods.find(pm => pm.name.toLowerCase() === pt.paymentMethodName?.toLowerCase()) : undefined;
+        const category = expenseCategories.find(c => c.name.toLowerCase() === pt.categoryName?.toLowerCase());
+        const paymentMethod = paymentMethods.find(pm => pm.name.toLowerCase() === pt.paymentMethodName?.toLowerCase());
 
+        if (!category) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown category "${pt.categoryName}"`]; continue; }
+        if (!paymentMethod) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown payment method "${pt.paymentMethodName}"`]; continue; }
+        
         const transactionInput: TransactionInput = {
             date: pt.date,
             amount: pt.amount,
-            type: pt.type,
+            type: 'expense', // Hardcoded as all bulk are expenses
             description: pt.description,
+            categoryId: category.id,
+            paymentMethodId: paymentMethod.id,
+            expenseType: pt.expenseType,
         };
-
-        if (pt.type === 'expense') {
-            if (!category) { errorCount++; toast({title: `Row ${pt.rowIndex+1}: Unknown category "${pt.categoryName}" for expense.`}); continue; }
-            if (!paymentMethod) { errorCount++; toast({title: `Row ${pt.rowIndex+1}: Unknown payment method "${pt.paymentMethodName}" for expense.`}); continue; }
-            if (!pt.expenseType || !['need','want','investment_expense'].includes(pt.expenseType)) { errorCount++; toast({title: `Row ${pt.rowIndex+1}: Invalid expense type "${pt.expenseType}".`}); continue; }
-            transactionInput.categoryId = category.id;
-            transactionInput.paymentMethodId = paymentMethod.id;
-            transactionInput.expenseType = pt.expenseType as AppExpenseTypeEnum;
-        } else { // Income
-            if (!category) { errorCount++; toast({title: `Row ${pt.rowIndex+1}: Unknown category "${pt.categoryName}" for income.`}); continue; }
-            transactionInput.categoryId = category.id;
-            transactionInput.source = pt.source;
+        
+        const validation = TransactionInputSchema.safeParse(transactionInput);
+        if(!validation.success) {
+            errorCount++;
+            const readableErrors = Object.entries(validation.error.flatten().fieldErrors)
+              .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+              .join('; ');
+            pt.errors = [...(pt.errors || []), `Validation: ${readableErrors || "Invalid data."}`];
+            continue;
         }
-        transactionsToSubmit.push(transactionInput);
+        transactionsToSubmit.push(validation.data);
     }
+    
+    // Update parsedBulkTransactions to show any new validation errors
+    setParsedBulkTransactions([...parsedBulkTransactions]);
+
 
     if(transactionsToSubmit.length === 0 && errorCount > 0) {
         toast({ title: "Submission Failed", description: "No valid transactions to submit after review.", variant: "destructive" });
@@ -378,11 +401,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         return;
     }
 
-
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
     results.forEach(result => {
         if (result.status === 'fulfilled') successCount++;
-        else errorCount++;
+        else {
+            errorCount++;
+            console.error("Bulk addTransaction error:", result.reason);
+        }
     });
 
     toast({
@@ -407,7 +432,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setParsedAITransactions([]);
     setAiReviewTransactions([]);
     try {
-      // Prepare category and payment method names for the AI
       const categoryNamesForAI = allCategories.map(c => ({id: c.id, name: c.name, type: c.type}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({id: p.id, name: p.name }));
 
@@ -434,45 +458,55 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const handleAIReviewChange = (index: number, field: keyof TransactionInput, value: any) => {
     const updated = [...aiReviewTransactions];
-    if (!updated[index]) updated[index] = {} as TransactionInput; // Initialize if not exists
+    if (!updated[index]) updated[index] = {} as TransactionInput; 
     (updated[index] as any)[field] = value;
 
-    // If type changes, reset related fields
     if (field === 'type') {
         if (value === 'income') {
             updated[index].paymentMethodId = undefined;
             updated[index].expenseType = undefined;
-            const incomeCat = incomeCategories.find(c => c.name === parsedAITransactions[index]?.categoryNameGuess) || incomeCategories[0];
+            const incomeCat = incomeCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (incomeCategories.length > 0 ? incomeCategories[0] : undefined);
             if (incomeCat) updated[index].categoryId = incomeCat.id;
 
-        } else { // expense
+        } else { 
             updated[index].source = undefined;
-            const expenseCat = expenseCategories.find(c => c.name === parsedAITransactions[index]?.categoryNameGuess) || expenseCategories[0];
+            const expenseCat = expenseCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (expenseCategories.length > 0 ? expenseCategories[0] : undefined);
              if (expenseCat) updated[index].categoryId = expenseCat.id;
 
-            const pm = paymentMethods.find(p => p.name === parsedAITransactions[index]?.paymentMethodNameGuess) || paymentMethods[0];
+            const pm = paymentMethods.find(p => p.name.toLowerCase() === parsedAITransactions[index]?.paymentMethodNameGuess?.toLowerCase()) || (paymentMethods.length > 0 ? paymentMethods[0] : undefined);
             if (pm) updated[index].paymentMethodId = pm.id;
 
             updated[index].expenseType = parsedAITransactions[index]?.expenseTypeNameGuess || 'need';
         }
     }
+    if (field === 'date' && value instanceof Date) {
+      updated[index].date = value;
+    }
     setAiReviewTransactions(updated);
   };
 
-  // Effect to populate aiReviewTransactions from parsedAITransactions
   useEffect(() => {
     if (parsedAITransactions.length > 0) {
       const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
         let catId, pmId;
+        let transactionDate = new Date(); // Default to today
+        try {
+            if(aiTx.date) {
+                const parsed = parseDateFns(aiTx.date, 'yyyy-MM-dd', new Date());
+                if(!isNaN(parsed.getTime())) transactionDate = parsed;
+            }
+        } catch (e) { console.warn("AI returned invalid date string:", aiTx.date); }
+
+
         if (aiTx.type === 'expense') {
           catId = expenseCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
           pmId = paymentMethods.find(p => p.name.toLowerCase() === aiTx.paymentMethodNameGuess?.toLowerCase())?.id;
-        } else { // income
+        } else { 
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
 
         return {
-          date: aiTx.date ? parseDate(aiTx.date, 'yyyy-MM-dd', new Date()) : new Date(),
+          date: transactionDate,
           description: aiTx.description || "AI Parsed Transaction",
           amount: aiTx.amount || 0,
           type: aiTx.type || 'expense',
@@ -481,7 +515,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           expenseType: aiTx.type === 'expense' ? (aiTx.expenseTypeNameGuess || 'need') : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
-      }).filter(tx => tx.amount > 0); // Basic filter for valid transactions
+      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
       setAiReviewTransactions(initialReviewItems);
     } else {
       setAiReviewTransactions([]);
@@ -493,15 +527,27 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     let successCount = 0;
     let errorCount = 0;
     
-    const validTransactions = aiReviewTransactions.filter(tx => tx.amount && tx.date && tx.type && tx.description);
+    const transactionsToSubmit: TransactionInput[] = [];
+    for(const reviewItem of aiReviewTransactions) {
+        const validation = TransactionInputSchema.safeParse(reviewItem);
+        if (validation.success) {
+            transactionsToSubmit.push(validation.data);
+        } else {
+            errorCount++;
+            const readableErrors = Object.entries(validation.error.flatten().fieldErrors)
+                .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+                .join('; ');
+            toast({title: "AI Review Item Invalid", description: `Item "${reviewItem.description?.substring(0,20)}...": ${readableErrors}`, variant: "destructive"});
+        }
+    }
 
-    if (validTransactions.length === 0) {
-        toast({ title: "No Transactions to Submit", description: "Please review and confirm AI suggestions or ensure they are valid.", variant: "destructive"});
+    if (transactionsToSubmit.length === 0) {
+        toast({ title: "No Valid Transactions to Submit", description: "Please review and confirm AI suggestions, ensuring all required fields are valid.", variant: "destructive"});
         setIsLoading(false);
         return;
     }
     
-    const results = await Promise.allSettled(validTransactions.map(tx => addTransaction(tx)));
+    const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
     results.forEach(result => {
         if (result.status === 'fulfilled') successCount++;
         else {
@@ -526,17 +572,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
 
   const cardTitleText = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
-  const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
+  const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly using one of the methods below.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData && activeTab === 'single') {
-    return null;
+    return <div className="p-6"><Skeleton className="h-64 w-full" /></div>; // Basic skeleton for SSR/initial load
   }
 
   const FormWrapperComponent = initialTransactionData ? motion.div : Card;
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
-    : { className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card") };
+    : { className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card") }; //glowClass removed from here
   
   const labelClasses = "text-foreground/90 dark:text-foreground/80";
   const inputClasses = "bg-background/70 dark:bg-input/20 border-border/70 dark:border-border/40 text-foreground placeholder:text-muted-foreground/70 focus:border-primary dark:focus:border-accent focus:ring-primary dark:focus:ring-accent";
@@ -553,11 +599,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         <RadioGroup value={type} onValueChange={(value) => setType(value as 'income' | 'expense')} className="flex space-x-4 mt-1">
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="income" id={`income-${formId || 'new'}`} className={cn("border-primary text-primary focus:ring-primary", type === 'income' ? "data-[state=checked]:border-green-600 data-[state=checked]:bg-green-500 data-[state=checked]:text-primary-foreground" : "")} />
-            <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-foreground", type === 'income' && "text-green-600 font-medium")}>Income (₹)</Label>
+            <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-foreground", type === 'income' && "text-green-600 font-medium")}>Income</Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="expense" id={`expense-${formId || 'new'}`} className={cn("border-primary text-primary focus:ring-primary", type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-primary-foreground" : "")} />
-            <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-foreground", type === 'expense' && "text-red-600 font-medium")}>Expense (₹)</Label>
+            <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-foreground", type === 'expense' && "text-red-600 font-medium")}>Expense</Label>
           </div>
         </RadioGroup>
       </div>
@@ -602,7 +648,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             </div>
           </div>
           <div>
-            <Label className={labelClasses}>Expense Type (Need, Want, or Investment)</Label>
+            <Label className={labelClasses}>Expense Type</Label>
             <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseTypeEnum)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
               {[{ value: 'need', label: 'Need' }, { value: 'want', label: 'Want' }, { value: 'investment_expense', label: 'Investment' }].map(et => (
                 <div key={et.value} className="flex items-center space-x-2">
@@ -624,15 +670,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             </Select>
           </div>
           <div>
-            <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source Description (Optional)</Label>
+            <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source (Optional)</Label>
             <Input id={`source-${formId || 'new'}`} placeholder="e.g., Client Project X, Bonus Q2" value={source} onChange={(e) => setSource(e.target.value)} className={cn("mt-1", inputClasses)} disabled={isFetchingDropdowns} />
           </div>
         </div>
       )}
-      {isFetchingDropdowns && (<div className="flex items-center justify-center space-x-2 text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Loading form options...</span></div>)}
+      {isFetchingDropdowns && (<div className="flex items-center justify-center space-x-2 text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Loading options...</span></div>)}
       <div className="flex flex-col sm:flex-row gap-3 pt-3">
         <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
-          <Button type="submit" disabled={isLoading || isFetchingDropdowns} className={cn("w-full font-semibold text-white", isLoading ? "bg-muted hover:bg-muted text-muted-foreground" : type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700")}>
+           <Button type="submit" disabled={isLoading || isFetchingDropdowns} className={cn("w-full font-semibold text-white", 
+                isLoading ? "bg-muted hover:bg-muted text-muted-foreground" : 
+                type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : 
+                                   "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700")}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
             {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
           </Button>
@@ -644,44 +693,44 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   
   const renderBulkPasteForm = () => (
     <div className="space-y-4">
-      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Date, Description, Amount, Type, Category, Payment Method, Expense Type/Source)</Label>
+      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
       <Textarea
         id="bulk-input"
         value={bulkText}
         onChange={(e) => setBulkText(e.target.value)}
-        placeholder="E.g.&#10;2024-07-15	Lunch	500	expense	Food and Dining	Credit Card HDFC	want&#10;2024-07-16	Salary	75000	income	Salary		Company XYZ"
+        placeholder="E.g.&#10;Rent	Rent	₹32,000.00	₹32,000.00	01/05/2025	Need	UPI (HDFC)&#10;Corner House Ice cream	Food and Dining	₹94.50	₹189.00	01/05/2025	Want	Credit Card YES 2106"
         rows={8}
         className={inputClasses}
         disabled={isProcessingBulk || isLoading}
       />
-      <Button onClick={handleProcessBulk} disabled={isProcessingBulk || isLoading || !bulkText.trim()} className="w-full" withMotion>
+      <Button onClick={handleProcessBulk} disabled={isProcessingBulk || isLoading || !bulkText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
         {isProcessingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
         Process Pasted Data
       </Button>
       {parsedBulkTransactions.length > 0 && (
         <div className="space-y-3">
           <h4 className="text-md font-semibold text-primary">Review Parsed Transactions ({parsedBulkTransactions.filter(t => !t.errors || t.errors.length ===0).length} valid)</h4>
-           <Alert variant="default" className="text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Review Carefully!</AlertTitle>
-              <AlertDescription>
-                Ensure categories and payment methods match exactly with your existing setup. Correct any errors before submitting. Invalid rows will be skipped.
+           <Alert variant="default" className="text-sm border-primary/30 bg-background">
+              <AlertTriangle className="h-4 w-4 text-primary" />
+              <AlertTitle className="text-primary">Review Carefully!</AlertTitle>
+              <AlertDescription className="text-muted-foreground">
+                Ensure categories and payment methods match exactly with your existing setup. Correct any errors before submitting. Invalid rows will be skipped. All transactions here are assumed to be expenses.
               </AlertDescription>
             </Alert>
           <ScrollArea className="h-[300px] border rounded-md p-2 bg-background/50">
             <Table>
-              <TableHeader><TableRow><TableHead>Row</TableHead><TableHead>Date</TableHead><TableHead>Desc</TableHead><TableHead>Amt</TableHead><TableHead>Type</TableHead><TableHead>Cat/Src</TableHead><TableHead>PM/ExpType</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Row</TableHead><TableHead>Date</TableHead><TableHead>Desc</TableHead><TableHead>Amt</TableHead><TableHead>Cat</TableHead><TableHead>PM</TableHead><TableHead>ExpType</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {parsedBulkTransactions.map((pt, i) => (
-                  <TableRow key={i} className={pt.errors && pt.errors.length > 0 ? "bg-red-500/10" : "hover:bg-accent/5"}>
-                    <TableCell>{pt.rowIndex + 1}</TableCell>
-                    <TableCell>{pt.date ? format(pt.date, 'yyyy-MM-dd') : 'N/A'}</TableCell>
-                    <TableCell className="max-w-[150px] truncate">{pt.description || 'N/A'}</TableCell>
-                    <TableCell>₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
-                    <TableCell>{pt.type || 'N/A'}</TableCell>
-                    <TableCell className="max-w-[120px] truncate">{pt.categoryName || (pt.type === 'income' ? pt.source : 'N/A')}</TableCell>
-                    <TableCell className="max-w-[120px] truncate">{pt.type === 'expense' ? `${pt.paymentMethodName || 'N/A'} (${pt.expenseType || 'N/A'})` : 'N/A'}</TableCell>
-                    <TableCell>{pt.errors && pt.errors.length > 0 ? <span className="text-red-500 text-xs">{pt.errors.join(', ')}</span> : <span className="text-green-500 text-xs">Valid</span>}</TableCell>
+                  <TableRow key={i} className={pt.errors && pt.errors.length > 0 ? "bg-destructive/10" : "hover:bg-accent/5"}>
+                    <TableCell className="text-xs">{pt.rowIndex + 1}</TableCell>
+                    <TableCell className="text-xs">{pt.date ? format(pt.date, 'dd/MM/yy') : 'N/A'}</TableCell>
+                    <TableCell className="text-xs max-w-[150px] truncate" title={pt.description}>{pt.description || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
+                    <TableCell className="text-xs max-w-[100px] truncate" title={pt.categoryName}>{pt.categoryName}</TableCell>
+                    <TableCell className="text-xs max-w-[100px] truncate" title={pt.paymentMethodName}>{pt.paymentMethodName}</TableCell>
+                    <TableCell className="text-xs">{pt.expenseType}</TableCell>
+                    <TableCell className="text-xs">{pt.errors && pt.errors.length > 0 ? <span className="text-red-500">{pt.errors.join(', ')}</span> : <span className="text-green-500">Valid</span>}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -708,16 +757,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         className={inputClasses}
         disabled={isProcessingAI || isLoading}
       />
-      <Button onClick={handleProcessAI} disabled={isProcessingAI || isLoading || !aiText.trim()} className="w-full" withMotion>
+      <Button onClick={handleProcessAI} disabled={isProcessingAI || isLoading || !aiText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
         {isProcessingAI ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
         Process with AI
       </Button>
 
       {isProcessingAI && (
          <div className="space-y-2 pt-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-8 w-full bg-muted/50" />
+            <Skeleton className="h-8 w-full bg-muted/50" />
+            <Skeleton className="h-8 w-3/4 bg-muted/50" />
             <p className="text-center text-muted-foreground text-sm">AI is thinking...</p>
         </div>
       )}
@@ -735,7 +784,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           <ScrollArea className="h-[400px] border rounded-md p-0 bg-background/50">
             <div className="space-y-4 p-3">
             {aiReviewTransactions.map((tx, index) => (
-              <Card key={index} className="p-3 space-y-2 bg-card/80 shadow-sm">
+              <Card key={index} className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <Label className={cn(labelClasses, "text-xs")}>Date</Label>
@@ -743,20 +792,20 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <PopoverTrigger asChild>
                         <Button variant={"outline"} size="sm" className={cn(popoverButtonClasses, "text-xs h-8 mt-0.5")} >
                             <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-accent" />
-                            {tx.date ? format(tx.date, "PPP") : <span>Pick date</span>}
+                            {tx.date ? format(new Date(tx.date), "PPP") : <span>Pick date</span>}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={tx.date} onSelect={(d) => handleAIReviewChange(index, 'date', d)} initialFocus className={calendarClasses} /></PopoverContent>
+                        <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={tx.date instanceof Date ? tx.date : new Date(tx.date)} onSelect={(d) => handleAIReviewChange(index, 'date', d)} initialFocus className={calendarClasses} /></PopoverContent>
                     </Popover>
                   </div>
                   <div>
                     <Label className={cn(labelClasses, "text-xs")}>Amount (₹)</Label>
-                    <Input type="number" value={tx.amount} onChange={(e) => handleAIReviewChange(index, 'amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                    <Input type="number" value={tx.amount?.toString() || ''} onChange={(e) => handleAIReviewChange(index, 'amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
                   </div>
                 </div>
                 <div>
                   <Label className={cn(labelClasses, "text-xs")}>Description</Label>
-                  <Input value={tx.description} onChange={(e) => handleAIReviewChange(index, 'description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                  <Input value={tx.description || ''} onChange={(e) => handleAIReviewChange(index, 'description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
                 </div>
                  <div>
                     <Label className={cn(labelClasses, "text-xs")}>Type</Label>
@@ -810,7 +859,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         </div>
                     </div>
                 )}
-                {parsedAITransactions[index]?.confidenceScore && (
+                {parsedAITransactions[index]?.confidenceScore !== undefined && (
                     <p className="text-xs text-muted-foreground">AI Confidence: {(parsedAITransactions[index].confidenceScore! * 100).toFixed(0)}%</p>
                 )}
                 {parsedAITransactions[index]?.error && (
@@ -839,8 +888,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           <CardDescription className="text-muted-foreground">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={initialTransactionData ? 'p-0' : 'p-6'}>
-        {initialTransactionData ? ( // If editing, only show single form
+      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6', "bg-card rounded-b-xl")}> {/* Added bg-card here */}
+        {initialTransactionData ? ( 
             renderSingleTransactionForm()
         ) : (
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai')} className="w-full">
