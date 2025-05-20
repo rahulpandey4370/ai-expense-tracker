@@ -1,65 +1,42 @@
 generator client {
   provider = "prisma-client-js"
-  // As per PRD, using @prisma/client/edge for Accelerate, --no-engine for generate
-  // Default output location works with `@prisma/client/edge` import.
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL") // This will be your Accelerate URL for runtime
-  directUrl = env("POSTGRES_URL_NON_POOLING") // For migrations, needs direct DB access
-  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL") // Optional, if using shadow DB for migrations
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // For Prisma Client with Accelerate
+  directUrl = env("POSTGRES_URL_NON_POOLING") // For migrations
 }
 
 model Category {
   id           String        @id @default(cuid())
-  name         String        @unique // Category names should be unique
-  type         String // "income" or "expense" - consider an Enum if DB supports it or validate in code
+  name         String        @unique // Assuming category names should be unique
+  type         String // "income" or "expense"
   transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
 }
 
 model PaymentMethod {
   id           String        @id @default(cuid())
-  name         String        @unique // Payment method names should be unique
-  type         String // e.g., "Credit Card", "UPI", "Cash" - consider an Enum or validate
+  name         String        @unique // Assuming payment method names should be unique
+  type         String // e.g., "Credit Card", "UPI", "Cash"
   transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
 }
 
 model Transaction {
-  id              String    @id @default(uuid())
-  type            String // "income" or "expense" - consider TransactionType Enum
+  id              String    @id @default(cuid()) // Changed to cuid for consistency
+  type            String // "income" or "expense"
   date            DateTime
   amount          Float // Prisma maps Float to double precision in Postgres
   description     String?
-  source          String? // For income: "Salary", "Freelance". Nullable for expenses.
-  expenseType     String? // For expenses: "need", "want", "investment_expense". Nullable for income.
+  categoryId      String?
+  paymentMethodId String?
+  source          String?   // For income source, if category isn't detailed enough
+  expenseType     String? // "need", "want", "investment_expense" for expenses
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // Relations
-  categoryId      String?
-  category        Category? @relation(fields: [categoryId], references: [id])
-
-  paymentMethodId String?
-  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
 
   @@index([date])
-  @@index([categoryId])
-  @@index([paymentMethodId])
 }
-
-// It's good practice to define enums if your DB supports them or validate these string values in your application logic
-// enum TransactionType {
-//   income
-//   expense
-// }
-
-// enum ExpenseCategoryType {
-//   need
-//   want
-//   investment_expense
-// }
