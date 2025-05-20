@@ -25,7 +25,7 @@ import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/
 import { parseReceiptImage, type ParsedReceiptTransaction } from '@/ai/flows/parse-receipt-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { TransactionInputSchema } from '@/lib/types';
+import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransactionSchema } from '@/lib/types'; // Import from lib/types
 import Image from 'next/image';
 
 
@@ -104,10 +104,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsFetchingDropdowns(true);
     try {
       const [fetchedAllCategories, fetchedPaymentMethods] = await Promise.all([
-        getCategories(), 
+        getCategories(),
         getPaymentMethods()
       ]);
-      
+
       setAllCategories(fetchedAllCategories);
       setExpenseCategories(fetchedAllCategories.filter(c => c.type === 'expense'));
       setIncomeCategories(fetchedAllCategories.filter(c => c.type === 'income'));
@@ -135,7 +135,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   useEffect(() => {
     if (initialTransactionData) {
-      setActiveTab('single'); 
+      setActiveTab('single');
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type as AppTransactionTypeEnum);
       setDate(new Date(initialTransactionData.date));
@@ -158,7 +158,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setDate(new Date());
         setAmount('');
         setDescription('');
-        
+
         if (type === 'expense') {
             setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
             setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
@@ -172,7 +172,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         }
       }
     }
-  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods, activeTab, type]); 
+  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods, activeTab, type]);
 
   useEffect(() => {
     if (activeTab === 'single' && !initialTransactionData) {
@@ -199,7 +199,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
         setExpenseType('need');
         setSource('');
-    } else { 
+    } else {
         setSelectedCategoryId(incomeCategories.length > 0 ? incomeCategories[0].id : undefined);
         setSource('');
         setSelectedPaymentMethodId(undefined);
@@ -226,7 +226,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       transactionPayload.categoryId = selectedCategoryId;
       transactionPayload.source = source;
     }
-    
+
     const validation = TransactionInputSchema.safeParse(transactionPayload);
 
     if (!validation.success) {
@@ -276,21 +276,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsProcessingBulk(true);
     const lines = bulkText.trim().split('\n');
     const parsed: BulkParsedTransaction[] = lines.map((line, index) => {
-      const values = line.split('\t'); 
+      const values = line.split('\t');
       const errors: string[] = [];
-      
+
+      // Expected: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method
       if (values.length < 7) {
-        errors.push("Expected 7 columns: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method.");
+        errors.push("Expected 7 columns: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method.");
         return { originalRow: line, rowIndex: index, errors, type: 'expense' };
       }
 
       const desc = values[0]?.trim();
       const catName = values[1]?.trim();
       const amountStr = values[2]?.trim();
+      // values[3] is ignored (Total Amount)
       const dateStr = values[4]?.trim();
       const expTypeStr = values[5]?.trim().toLowerCase();
       const pmName = values[6]?.trim();
-      
+
       let parsedDate: Date | undefined;
       try {
         if (dateStr) {
@@ -310,7 +312,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
-      
+
       const validExpenseTypes = ['need', 'want', 'investment_expense'];
       if (!expTypeStr || !validExpenseTypes.includes(expTypeStr)) {
           errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment_Expense'. Found: ${values[5]}`);
@@ -321,14 +323,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         date: parsedDate,
         description: desc,
         amount: amt,
-        type: 'expense', 
+        type: 'expense',
         categoryName: catName,
         paymentMethodName: pmName,
         expenseType: expTypeStr as AppExpenseTypeEnum,
         originalRow: line,
         rowIndex: index,
       };
-      
+
       result.errors = errors.length > 0 ? errors : undefined;
       return result;
     });
@@ -353,7 +355,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             continue;
         }
         if (!pt.date || pt.amount === undefined || !pt.type || !pt.description || !pt.categoryName || !pt.paymentMethodName || !pt.expenseType) {
-            errorCount++; 
+            errorCount++;
             pt.errors = [...(pt.errors || []), "Missing critical parsed information for submission."];
             continue;
         }
@@ -363,17 +365,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
         if (!category) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown category "${pt.categoryName}"`]; continue; }
         if (!paymentMethod) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown payment method "${pt.paymentMethodName}"`]; continue; }
-        
+
         const transactionInput: TransactionInput = {
             date: pt.date,
             amount: pt.amount,
-            type: 'expense', 
+            type: 'expense',
             description: pt.description,
             categoryId: category.id,
             paymentMethodId: paymentMethod.id,
             expenseType: pt.expenseType,
         };
-        
+
         const validation = TransactionInputSchema.safeParse(transactionInput);
         if(!validation.success) {
             errorCount++;
@@ -385,7 +387,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         }
         transactionsToSubmit.push(validation.data);
     }
-    
+
     setParsedBulkTransactions([...parsedBulkTransactions]);
 
     if(transactionsToSubmit.length === 0 && errorCount > 0) {
@@ -431,7 +433,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setAiReviewTransactions([]);
     setAiProcessingError(null);
     try {
-      const categoryNamesForAI = allCategories.map(c => ({id: c.id, name: c.name, type: c.type}));
+      const categoryNamesForAI = allCategories.map(c => ({id: c.id, name: c.name, type: c.type as 'income' | 'expense'}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({id: p.id, name: p.name }));
 
       const result = await parseTransactionsFromText({
@@ -439,7 +441,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
       });
-      
+
       setParsedAITransactions(result.parsedTransactions);
       if (result.parsedTransactions.length > 0) {
         toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
@@ -459,7 +461,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const handleAIReviewChange = (index: number, field: keyof TransactionInput, value: any) => {
     const updated = [...aiReviewTransactions];
-    if (!updated[index]) updated[index] = {} as TransactionInput; 
+    if (!updated[index]) updated[index] = {} as TransactionInput;
     (updated[index] as any)[field] = value;
 
     if (field === 'type') {
@@ -469,7 +471,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             const incomeCat = incomeCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (incomeCategories.length > 0 ? incomeCategories[0] : undefined);
             if (incomeCat) updated[index].categoryId = incomeCat.id;
 
-        } else { 
+        } else {
             updated[index].source = undefined;
             const expenseCat = expenseCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (expenseCategories.length > 0 ? expenseCategories[0] : undefined);
              if (expenseCat) updated[index].categoryId = expenseCat.id;
@@ -490,7 +492,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (parsedAITransactions.length > 0) {
       const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
         let catId, pmId;
-        let transactionDate = new Date(); 
+        let transactionDate = new Date();
         try {
             if(aiTx.date) {
                 const parsed = parseDateFns(aiTx.date, 'yyyy-MM-dd', new Date());
@@ -502,7 +504,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         if (aiTx.type === 'expense') {
           catId = expenseCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
           pmId = paymentMethods.find(p => p.name.toLowerCase() === aiTx.paymentMethodNameGuess?.toLowerCase())?.id;
-        } else { 
+        } else {
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
 
@@ -516,7 +518,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           expenseType: aiTx.type === 'expense' ? (aiTx.expenseTypeNameGuess || 'need') : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
-      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
+      }).filter(tx => tx.amount && tx.amount > 0 && tx.description);
       setAiReviewTransactions(initialReviewItems);
     } else {
       setAiReviewTransactions([]);
@@ -527,7 +529,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
-    
+
     const transactionsToSubmit: TransactionInput[] = [];
     for(const reviewItem of aiReviewTransactions) {
         const validation = TransactionInputSchema.safeParse(reviewItem);
@@ -547,7 +549,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setIsLoading(false);
         return;
     }
-    
+
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
     results.forEach(result => {
         if (result.status === 'fulfilled') successCount++;
@@ -601,7 +603,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setAiReceiptError(null);
 
     try {
-      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type }));
+      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({ id: p.id, name: p.name }));
 
       const result = await parseReceiptImage({
@@ -621,8 +623,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             }
         } catch (e) { console.warn("AI receipt returned invalid date string:", result.parsedTransaction.date); }
 
-        catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction.categoryNameGuess?.toLowerCase())?.id;
-        pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction.paymentMethodNameGuess?.toLowerCase())?.id;
+        catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction?.categoryNameGuess?.toLowerCase())?.id;
+        pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction?.paymentMethodNameGuess?.toLowerCase())?.id;
 
         setAiReceiptReviewTransaction({
           date: transactionDate,
@@ -647,7 +649,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setIsProcessingAIReceipt(false);
     }
   };
-  
+
   const handleAIReceiptReviewChange = (field: keyof TransactionInput, value: any) => {
     setAiReceiptReviewTransaction(prev => {
       if (!prev) return null;
@@ -698,14 +700,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData && activeTab === 'single') {
-    return <div className="p-6"><Skeleton className="h-64 w-full" /></div>; 
+    return <div className="p-6"><Skeleton className="h-64 w-full" /></div>;
   }
 
   const FormWrapperComponent = initialTransactionData ? motion.div : Card;
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
-    : { className: cn("p-0 sm:p-0 bg-card") }; 
-  
+    : { className: cn("p-0 sm:p-0 bg-card") };
+
   const labelClasses = "text-foreground/90 dark:text-foreground/80";
   const inputClasses = "bg-background/70 dark:bg-input/20 border-border/70 dark:border-border/40 text-foreground placeholder:text-muted-foreground/70 focus:border-primary dark:focus:border-accent focus:ring-primary dark:focus:ring-accent";
   const popoverButtonClasses = cn("w-full justify-start text-left font-normal mt-1", inputClasses, !date && "text-muted-foreground/70");
@@ -800,9 +802,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       {isFetchingDropdowns && (<div className="flex items-center justify-center space-x-2 text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Loading options...</span></div>)}
       <div className="flex flex-col sm:flex-row gap-3 pt-3">
         <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
-           <Button type="submit" disabled={isLoading || isFetchingDropdowns} className={cn("w-full font-semibold text-white", 
-                isLoading ? "bg-muted hover:bg-muted text-muted-foreground" : 
-                type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : 
+           <Button type="submit" disabled={isLoading || isFetchingDropdowns} className={cn("w-full font-semibold text-white",
+                isLoading ? "bg-muted hover:bg-muted text-muted-foreground" :
+                type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" :
                                    "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700")}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
             {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
@@ -812,7 +814,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       </div>
     </form>
   );
-  
+
   const renderBulkPasteForm = () => (
     <div className="space-y-4">
       <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
@@ -1135,7 +1137,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         </CardHeader>
       )}
       <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6', "bg-card rounded-b-xl")}>
-        {initialTransactionData ? ( 
+        {initialTransactionData ? (
             renderSingleTransactionForm()
         ) : (
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai_text' | 'ai_receipt')} className="w-full">

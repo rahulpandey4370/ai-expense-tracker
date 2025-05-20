@@ -4,7 +4,6 @@
  * @fileOverview AI flow for parsing receipt images into structured transaction data.
  *
  * - parseReceiptImage - A function that uses AI to extract transaction details from a receipt image.
- * - ParsedReceiptTransactionSchema - Zod schema for the structure of a single transaction parsed by AI (exported for type use).
  * - ParsedReceiptTransaction - The type for the structure of a single transaction parsed by AI.
  * - ParseReceiptImageOutput - The return type for the flow.
  */
@@ -13,11 +12,12 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
+import { ParsedReceiptTransactionSchema } from '@/lib/types'; // Import from lib/types
 
 const CategorySchemaForAI = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(['income', 'expense']), 
+  type: z.enum(['income', 'expense']),
 });
 type CategoryForAI = z.infer<typeof CategorySchemaForAI>;
 
@@ -37,17 +37,6 @@ const ParseReceiptImageInputSchema = z.object({
 });
 type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchema>;
 
-// Exported Zod schema for use in transaction-form.tsx
-export const ParsedReceiptTransactionSchema = z.object({
-  date: z.string().optional().describe("The transaction date from the receipt in YYYY-MM-DD format. If unidentifiable, leave blank."),
-  description: z.string().optional().describe("The merchant name or a concise description of the transaction from the receipt. If unidentifiable, leave blank."),
-  amount: z.number().positive().optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
-  categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
-  paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', or 'investment_expense'. If not clearly identifiable, leave blank."),
-  confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
-  error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
-});
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
 
 const ParseReceiptImageOutputSchema = z.object({
@@ -137,30 +126,29 @@ const parseReceiptImageFlow = ai.defineFlow(
       console.error("AI model returned no or invalid output structure for receipt parsing.");
       return { parsedTransaction: { error: "AI model failed to return a valid output structure for receipt parsing." } };
     }
-    
+
     let finalDate = outputFromAI.parsedTransaction.date;
     if (outputFromAI.parsedTransaction.date) {
         try {
             const parsedD = parseDateFns(outputFromAI.parsedTransaction.date, 'yyyy-MM-dd', new Date());
             if (isNaN(parsedD.getTime())) {
-                finalDate = format(new Date(), 'yyyy-MM-dd'); 
+                finalDate = format(new Date(), 'yyyy-MM-dd');
             } else {
                 finalDate = outputFromAI.parsedTransaction.date;
             }
         } catch (e) {
-            finalDate = format(new Date(), 'yyyy-MM-dd'); 
+            finalDate = format(new Date(), 'yyyy-MM-dd');
         }
     } else {
-        finalDate = format(new Date(), 'yyyy-MM-dd'); 
+        finalDate = format(new Date(), 'yyyy-MM-dd');
     }
 
     return {
         parsedTransaction: {
             ...outputFromAI.parsedTransaction,
             date: finalDate,
-            amount: outputFromAI.parsedTransaction.amount && outputFromAI.parsedTransaction.amount > 0 ? outputFromAI.parsedTransaction.amount : undefined, 
+            amount: outputFromAI.parsedTransaction.amount && outputFromAI.parsedTransaction.amount > 0 ? outputFromAI.parsedTransaction.amount : undefined,
         }
     };
   }
 );
-    
