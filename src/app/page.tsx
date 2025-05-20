@@ -174,11 +174,13 @@ export default function DashboardPage() {
         </motion.div>
       )}
       
+      {/* TransactionForm now takes full width */}
       <Card className={cn("shadow-xl rounded-xl", glowClass, "bg-card")}>
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
       </Card>
 
 
+      {/* AI Insights and Chatbot side-by-side */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
         variants={containerVariants}
@@ -198,10 +200,12 @@ export default function DashboardPage() {
         </motion.div>
       </motion.div>
 
+      {/* Recent Transactions List - Full width */}
       <motion.div variants={sectionVariants} initial="hidden" animate="visible">
         <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
       </motion.div>
 
+      {/* Charts Section - Full width grid */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
         variants={containerVariants}

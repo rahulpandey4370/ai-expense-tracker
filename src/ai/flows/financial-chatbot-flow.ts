@@ -16,6 +16,7 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
 // Zod schema for transactions to be passed to the AI model
 // Aligned with AppTransaction structure (relations will be denormalized for AI)
+// Not Exported
 const AITransactionSchema = z.object({
   id: z.string(),
   type: z.string(), // "income" | "expense"
@@ -29,12 +30,14 @@ const AITransactionSchema = z.object({
 });
 type AITransaction = z.infer<typeof AITransactionSchema>;
 
+// Not Exported
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
+// Not Exported
 const FinancialChatbotInputSchema = z.object({
   query: z.string().describe("The user's current financial question or request."),
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
@@ -42,6 +45,7 @@ const FinancialChatbotInputSchema = z.object({
 });
 export type FinancialChatbotInput = z.infer<typeof FinancialChatbotInputSchema>;
 
+// Not Exported
 const FinancialChatbotOutputSchema = z.object({
   response: z.string().describe("The AI's response to the user's query."),
 });
@@ -84,7 +88,7 @@ When mentioning categories or payment methods, use the names provided (categoryN
 
 Transaction Data (potentially filtered by user's current view, e.g., for a specific month):
 \`\`\`json
-${JSON.stringify(transactions.slice(0, 100), null, 2)} 
+${JSON.stringify(transactions.slice(0, 100), null, 2)}
 \`\`\`
 ${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more transactions not shown to save space)` : ''}
 `; // Truncate transactions if too long for the prompt
@@ -98,12 +102,12 @@ ${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more trans
       });
     }
     messages.push({ role: 'user', content: query });
-    
+
     const llmResponse = await retryableAIGeneration(() => ai.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:', // Construct prompt string
-      model: 'googleai/gemini-2.0-flash', 
+      model: 'googleai/gemini-2.0-flash',
       config: {
-        temperature: 0.3, 
+        temperature: 0.3,
         maxOutputTokens: 500,
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -113,7 +117,7 @@ ${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more trans
         ],
       },
        // Explicitly pass the tools if any are defined and relevant for this flow.
-       // tools: [/* your tools here if needed */] 
+       // tools: [/* your tools here if needed */]
     }));
 
     const responseText = llmResponse.text;

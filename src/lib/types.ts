@@ -1,6 +1,7 @@
+
 import { z } from 'zod';
 
-// Base types for data stored in Blob
+// Base types for data stored in Blob / used by app
 export interface Category {
   id: string;
   name: string;
@@ -20,7 +21,7 @@ export interface RawTransaction {
   type: 'income' | 'expense';
   date: string; // ISO string
   amount: number;
-  description?: string;
+  description: string;
   categoryId?: string;
   paymentMethodId?: string;
   source?: string;
@@ -40,11 +41,12 @@ export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'pay
 }
 
 // Zod schema for validating transaction input for Server Actions
+// This is for single transaction entry and for the final validated data from bulk/AI
 export const TransactionInputSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date(),
   amount: z.number().positive("Amount must be a positive number."),
-  description: z.string().optional(), // Made optional, can be blank
+  description: z.string().min(1, "Description is required."),
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
@@ -56,11 +58,10 @@ export const TransactionInputSchema = z.object({
   return true;
 }, {
   message: "For expenses, Category, Payment Method, and Expense Type are required.",
-  path: ['type'], // Path to the field that triggers the error
+  path: ['type'],
 }).refine(data => {
   if (data.type === 'income') {
-    return !!data.categoryId; // For income, category is required (e.g. "Salary")
-    // Source text input is separate
+    return !!data.categoryId;
   }
   return true;
 }, {

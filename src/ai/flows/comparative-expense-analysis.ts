@@ -9,10 +9,11 @@
  * - ComparativeExpenseAnalysisOutput - The return type for the comparativeExpenseAnalysis function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {ai}from '@/ai/genkit';
+import {z}from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
+// Not exported:
 const ComparativeExpenseAnalysisInputSchema = z.object({
   currentMonth: z.string().describe('The current month for expense analysis (e.g., "January").'),
   previousMonth: z.string().describe('The previous month for expense comparison (e.g., "December").'),
@@ -23,6 +24,7 @@ const ComparativeExpenseAnalysisInputSchema = z.object({
 });
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 
+// Not exported:
 const ComparativeExpenseAnalysisOutputSchema = z.object({
   analysis: z.string().describe('A detailed comparative analysis of expenses between the current and previous months, including trends and potential savings areas.'),
 });
@@ -48,7 +50,7 @@ Current Period Expense Categories: {{expenseCategoriesCurrent}}
 Previous Period Expense Categories: {{expenseCategoriesPrevious}}
 
 Provide a detailed comparative analysis. Focus on identifying specific categories where spending has increased or decreased significantly. Offer suggestions for potential savings or areas where the user could adjust their spending habits.
-`, 
+`,
 });
 
 const comparativeExpenseAnalysisFlow = ai.defineFlow(

@@ -1,0 +1,175 @@
+
+'use server';
+/**
+ * @fileOverview AI flow for parsing natural language text into structured transaction data.
+ *
+ * - parseTransactionsFromText - A function that uses AI to extract transaction details from text.
+ * - ParseTransactionTextInput - The input type for the flow (internal).
+ * - ParseTransactionTextOutput - The return type for the flow.
+ * - ParsedAITransaction - The structure of a single transaction parsed by AI (exported type).
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+import { format, parse as parseDateFns } from 'date-fns'; // Renamed import to avoid conflict
+
+// Simplified schemas for providing context to the AI - Not Exported
+const CategorySchemaForAI = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['income', 'expense']),
+});
+type CategoryForAI = z.infer<typeof CategorySchemaForAI>;
+
+const PaymentMethodSchemaForAI = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+type PaymentMethodForAI = z.infer<typeof PaymentMethodSchemaForAI>;
+
+// Not Exported:
+const ParseTransactionTextInputSchema = z.object({
+  naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
+  categories: z.array(CategorySchemaForAI).describe("A list of available categories (name, id, type) to help with mapping."),
+  paymentMethods: z.array(PaymentMethodSchemaForAI).describe("A list of available payment methods (name, id) to help with mapping."),
+  currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
+});
+// Exported Type only:
+export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchema>;
+
+
+// Not Exported:
+const ParsedAITransactionSchema = z.object({
+  date: z.string().describe("The transaction date in YYYY-MM-DD format. Infer based on text and current date if relative (e.g., 'yesterday')."),
+  description: z.string().describe("A concise description of the transaction."),
+  amount: z.number().positive().describe("The transaction amount as a positive number."),
+  type: z.enum(['income', 'expense']).describe("The type of transaction."),
+  categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
+  paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment_expense'. If not clearly identifiable or income, leave blank."),
+  sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
+  confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
+  error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
+});
+// Exported Type only:
+export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
+
+// Not Exported:
+const ParseTransactionTextOutputSchema = z.object({
+  parsedTransactions: z.array(ParsedAITransactionSchema).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
+  summaryMessage: z.string().optional().describe("A brief overall summary or any general notes about the parsing process."),
+});
+// Exported Type only:
+export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchema>;
+
+// Exported wrapper function
+export async function parseTransactionsFromText(
+  input: {
+    naturalLanguageText: string;
+    categories: CategoryForAI[]; // Expecting internal type here
+    paymentMethods: PaymentMethodForAI[]; // Expecting internal type here
+  }
+): Promise<ParseTransactionTextOutput> {
+  const currentDate = format(new Date(), 'yyyy-MM-dd');
+  return parseTransactionsFlow({ ...input, currentDate });
+}
+
+
+const parseTransactionsPrompt = ai.definePrompt({
+  name: 'parseTransactionsPrompt',
+  input: { schema: ParseTransactionTextInputSchema },
+  output: { schema: ParseTransactionTextOutputSchema },
+  prompt: `You are an expert financial assistant. Your task is to parse the following natural language text and extract individual financial transactions.
+The current date is {{currentDate}}. Use this to resolve relative dates like "yesterday", "last Tuesday", "next Friday", etc., into YYYY-MM-DD format.
+
+Available Expense Categories:
+{{#each categories}}
+{{#if (eq this.type "expense")}}- {{this.name}} (ID: {{this.id}}){{/if}}
+{{/each}}
+
+Available Income Categories:
+{{#each categories}}
+{{#if (eq this.type "income")}}- {{this.name}} (ID: {{this.id}}){{/if}}
+{{/each}}
+
+Available Payment Methods (for expenses):
+{{#each paymentMethods}}- {{this.name}} (ID: {{this.id}}){{/each}}
+
+For each transaction identified in the text, provide the following details:
+- date: Transaction date in YYYY-MM-DD format.
+- description: A clear description of the transaction.
+- amount: The numeric amount (always positive).
+- type: 'income' or 'expense'.
+- categoryNameGuess: (Optional) If you can map it to one of the provided category names, state the name. If it's clearly a category not on the list but makes sense, state it. If unsure, use "Others" or leave blank.
+- paymentMethodNameGuess: (Optional, for expenses only) If you can map it to one of the provided payment method names, state the name. If unsure or not applicable, leave blank.
+- expenseTypeNameGuess: (Optional, for expenses only) Classify as 'need', 'want', or 'investment_expense'. If unsure or income, leave blank.
+- sourceGuess: (Optional, for income only) Briefly describe the source of income. If unsure or expense, leave blank.
+- confidenceScore: Your confidence (0.0 to 1.0) that you parsed this specific transaction correctly.
+- error: (Optional) If a part of the text seems like a transaction but is unparseable or missing critical info (like amount or clear type), note the error for that part.
+
+Input Text:
+\`\`\`
+{{{naturalLanguageText}}}
+\`\`\`
+
+Parse the text and return an array of structured transaction objects. If no transactions are found, return an empty array for parsedTransactions.
+Provide amounts in Indian Rupees (INR or ₹). Ensure amounts are always positive numbers.
+If a category or payment method in the text does not exactly match the provided lists but is very similar (e.g., "HDFC CC" vs "CC HDFC 7950"), try to map it to the closest one from the list for categoryNameGuess or paymentMethodNameGuess.
+For descriptions, be concise. E.g., "Dinner with friends at RestaurantX" can be "Dinner at RestaurantX".
+If text mentions "salary for July", and current month is August, assume it's last month's salary.
+Interpret currency symbols like ₹, INR, Rs. correctly for the amount.
+`,
+});
+
+
+const parseTransactionsFlow = ai.defineFlow(
+  {
+    name: 'parseTransactionsFlow',
+    inputSchema: ParseTransactionTextInputSchema,
+    outputSchema: ParseTransactionTextOutputSchema,
+  },
+  async (input) => {
+    // Basic input validation
+    if (!input.naturalLanguageText.trim()) {
+        return { parsedTransactions: [], summaryMessage: "Input text was empty." };
+    }
+    if (input.categories.length === 0) {
+        return { parsedTransactions: [], summaryMessage: "Category list was empty, AI may struggle to map categories." };
+    }
+
+    const { output } = await retryableAIGeneration(() => parseTransactionsPrompt(input), 3, 1500);
+
+    if (!output) {
+      throw new Error("AI model failed to return a valid output structure for transaction parsing.");
+    }
+    // Post-processing: Validate dates and amounts from AI output
+    const validatedTransactions = output.parsedTransactions.map(tx => {
+      let finalDate = tx.date;
+      try {
+        if (tx.date) {
+          const parsedD = parseDateFns(tx.date, 'yyyy-MM-dd', new Date()); // Use renamed import
+          if (isNaN(parsedD.getTime())) {
+            finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to today if AI gives invalid date string
+          } else {
+            finalDate = tx.date; // Keep AI's valid YYYY-MM-DD
+          }
+        } else {
+           finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to today if AI gives no date
+        }
+      } catch (e) {
+        finalDate = format(new Date(), 'yyyy-MM-dd'); // Default on any parsing error
+      }
+      return {
+        ...tx,
+        date: finalDate,
+        amount: tx.amount && tx.amount > 0 ? tx.amount : 0, // Ensure amount is positive, default to 0 if not
+      };
+    });
+
+    return {
+        parsedTransactions: validatedTransactions,
+        summaryMessage: output.summaryMessage || "Processing complete."
+    };
+  }
+);
