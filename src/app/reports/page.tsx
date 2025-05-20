@@ -62,7 +62,7 @@ export default function ReportsPage() {
       console.error("Failed to fetch transactions for reports:", error);
       toast({
         title: "Error Loading Report Data",
-        description: "Could not fetch transaction data for reports.",
+        description: "Could not fetch transaction data for reports. Please check server logs on Vercel for detailed Blob errors.",
         variant: "destructive",
       });
       setAllTransactions([]);
@@ -289,7 +289,7 @@ export default function ReportsPage() {
                   <p className="ml-4 text-primary">Loading report data...</p>
                 </div>
               ) : filteredTransactionsForPeriod.length === 0 && !isLoadingData ? (
-                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
+                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 dark:border-yellow-500/70 shadow-md">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                   <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for this Period</AlertTitle>
                   <AlertDescription>
@@ -298,8 +298,8 @@ export default function ReportsPage() {
                 </Alert>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-                    <motion.div variants={cardVariants} className="lg:col-span-3">
+                  <div className="grid grid-cols-1 gap-6">
+                    <motion.div variants={cardVariants}>
                         <ExpenseCategoryChart 
                             transactions={filteredTransactionsForPeriod} 
                             selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
@@ -307,7 +307,7 @@ export default function ReportsPage() {
                             chartHeightClass="max-h-[400px] min-h-[350px] md:min-h-[400px]"
                         />
                     </motion.div>
-                    <motion.div variants={cardVariants} className="lg:col-span-2">
+                    <motion.div variants={cardVariants}>
                         <ExpensePaymentMethodChart 
                             transactions={filteredTransactionsForPeriod} 
                             selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
