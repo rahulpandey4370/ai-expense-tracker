@@ -13,6 +13,7 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
 import type { MonthlySummary } from "@/app/yearly-overview/page"
