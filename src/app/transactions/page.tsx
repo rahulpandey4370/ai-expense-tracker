@@ -83,7 +83,7 @@ export default function TransactionsPage() {
       setAllPaymentMethodsState(fetchedPaymentMethods); 
     } catch (error) {
       console.error("Failed to fetch initial data:", error);
-      toast({ title: "Error Fetching Data", description: "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
+      toast({ title: "Error Fetching Data", description: error instanceof Error ? error.message : "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
       setAllTransactions([]);
       setAllCategoriesState([]);
       setAllPaymentMethodsState([]);
@@ -265,7 +265,7 @@ export default function TransactionsPage() {
                   </SelectContent>
                 </Select>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent-foreground">
+                  <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground">
                     <Download className="mr-2 h-4 w-4" />
                     Export to CSV
                   </Button>
