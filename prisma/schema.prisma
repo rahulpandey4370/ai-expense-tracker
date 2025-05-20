@@ -1,15 +1,19 @@
 // /prisma/schema.prisma
+
+// Datasource block configured to use DATABASE_URL,
+// which Vercel's "Prisma Postgres" integration should set to your Accelerate URL.
+// Vercel's build environment is expected to handle migrations with this URL.
 datasource db {
   provider     = "postgresql"
-  // DATABASE_URL will be your Accelerate URL from Vercel env vars
-  url          = env("DATABASE_URL")
-  // POSTGRES_URL_NON_POOLING is your direct DB connection for migrations from Vercel env vars
-  directUrl    = env("POSTGRES_URL_NON_POOLING")
+  url          = env("DATABASE_URL") // Set by Vercel's Prisma Postgres integration
   relationMode = "prisma"
 }
 
 generator client {
   provider = "prisma-client-js"
+  // Output path defaults to node_modules/.prisma/client
+  // The Vercel example output: "/app/generated/prisma-client" is for specific build environments,
+  // sticking to default is safer unless known to be required.
 }
 
 model Transaction {
