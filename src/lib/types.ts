@@ -1,28 +1,54 @@
-import type { Category as PrismaCategory, PaymentMethod as PrismaPaymentMethod, Transaction as PrismaTransaction } from '@prisma/client';
 import { z } from 'zod';
 
-// Re-export Prisma generated types if they are sufficient
-export type Category = PrismaCategory;
-export type PaymentMethod = PrismaPaymentMethod;
-// export type Transaction = PrismaTransaction; // Using extended below
+// Base types for data stored in Blob
+export interface Category {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+}
 
-// Custom Transaction type if we need to transform Prisma's Decimal to number for frontend
-// Prisma returns `Decimal` for `Float` fields, which needs conversion for JS `number` type.
-export interface Transaction extends Omit<PrismaTransaction, 'amount'> {
-  amount: number; // Ensure amount is treated as number in the app
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  type: string; // e.g., 'Credit Card', 'UPI', 'Cash'
+}
+
+// This is the raw transaction structure as it might be stored in a blob
+// It uses IDs for category and paymentMethod
+export interface RawTransaction {
+  id: string;
+  type: 'income' | 'expense';
+  date: string; // ISO string
+  amount: number;
+  description?: string;
+  categoryId?: string;
+  paymentMethodId?: string;
+  source?: string;
+  expenseType?: 'need' | 'want' | 'investment_expense';
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+// This is the "hydrated" transaction type used by the frontend,
+// where category and paymentMethod are populated objects.
+export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'paymentMethodId' | 'date' | 'createdAt' | 'updatedAt'> {
+  date: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  category?: Category;
+  paymentMethod?: PaymentMethod;
 }
 
 // Zod schema for validating transaction input for Server Actions
-// This should align with the Prisma model for Transaction
 export const TransactionInputSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date(),
   amount: z.number().positive("Amount must be a positive number."),
-  description: z.string().min(1, "Description is required.").optional(),
-  categoryId: z.string().optional(), // For expenses, will be required by refine
-  paymentMethodId: z.string().optional(), // For expenses, will be required by refine
-  source: z.string().optional(), // For income, will be required by refine
-  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(), // For expenses
+  description: z.string().optional(), // Made optional, can be blank
+  categoryId: z.string().optional(),
+  paymentMethodId: z.string().optional(),
+  source: z.string().optional(),
+  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -30,21 +56,20 @@ export const TransactionInputSchema = z.object({
   return true;
 }, {
   message: "For expenses, Category, Payment Method, and Expense Type are required.",
-  path: ['type'],
+  path: ['type'], // Path to the field that triggers the error
 }).refine(data => {
   if (data.type === 'income') {
-    // For income, categoryId might be used to associate with an income category.
-    // Source field stores the text description like "Salary", "Freelance".
-    return !!data.source && !!data.categoryId;
+    return !!data.categoryId; // For income, category is required (e.g. "Salary")
+    // Source text input is separate
   }
   return true;
 }, {
-  message: "For income, Source and Category are required.",
+  message: "For income, a Category (e.g., Salary) is required.",
   path: ['type'],
 });
 
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 // Derived types for UI convenience, if needed
-export type TransactionType = PrismaTransaction['type']; // "income" | "expense"
-export type ExpenseType = Exclude<PrismaTransaction['expenseType'], null | undefined>; // "need" | "want" | "investment_expense"
+export type TransactionType = 'income' | 'expense';
+export type ExpenseType = 'need' | 'want' | 'investment_expense';

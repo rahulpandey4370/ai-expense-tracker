@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'picsum.photos',
+        hostname: 'placehold.co', // Added for placeholder images
         port: '',
         pathname: '/**',
       },
@@ -23,11 +23,6 @@ const nextConfig: NextConfig = {
       }
     ],
   },
-  // Experimental server actions are enabled by default in newer Next.js versions,
-  // but explicitly stating it can be good for clarity or older versions.
-  // experimental: {
-  //   serverActions: true,
-  // }
 };
 
 export default nextConfig;

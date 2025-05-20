@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Transaction as AppTransaction, TransactionType, ExpenseType } from '@/lib/types';
-import type { Category, PaymentMethod } from '@prisma/client';
+import type { AppTransaction, Category, PaymentMethod } from '@/lib/types'; // Using AppTransaction
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2 } from "lucide-react";
@@ -52,11 +51,11 @@ const tableRowVariants = {
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<AppTransaction[]>([]);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
-  const [allPaymentMethods, setAllPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [allCategories, setAllCategoriesState] = useState<Category[]>([]); // Renamed to avoid conflict
+  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]); // Renamed
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<string | 'all'>('all'); // string to match Prisma model
+  const [filterType, setFilterType] = useState<string | 'all'>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
   const [filterPaymentMethodId, setFilterPaymentMethodId] = useState<string | 'all'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: keyof AppTransaction | 'categoryName' | 'paymentMethodName' | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
@@ -66,7 +65,7 @@ export default function TransactionsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast } = useToast();
-  const { selectedMonth, selectedYear, monthNamesList } = useDateSelection(); 
+  // useDateSelection is not used here, so it can be removed if not needed elsewhere on this page.
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -76,15 +75,15 @@ export default function TransactionsPage() {
         getCategories(),
         getPaymentMethods()
       ]);
-      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); // Ensure date is Date object
-      setAllCategories(fetchedCategories);
-      setAllPaymentMethods(fetchedPaymentMethods);
+      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
+      setAllCategoriesState(fetchedCategories); // Use renamed state setter
+      setAllPaymentMethodsState(fetchedPaymentMethods); // Use renamed state setter
     } catch (error) {
       console.error("Failed to fetch initial data:", error);
       toast({ title: "Error Fetching Data", description: "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
       setAllTransactions([]);
-      setAllCategories([]);
-      setAllPaymentMethods([]);
+      setAllCategoriesState([]);
+      setAllPaymentMethodsState([]);
     } finally {
       setIsLoading(false);
     }
@@ -110,11 +109,13 @@ export default function TransactionsPage() {
     }
 
     if (filterCategoryId !== 'all') {
-      tempTransactions = tempTransactions.filter(t => t.categoryId === filterCategoryId);
+      // Assuming AppTransaction has category.id
+      tempTransactions = tempTransactions.filter(t => t.category?.id === filterCategoryId);
     }
 
     if (filterPaymentMethodId !== 'all') {
-      tempTransactions = tempTransactions.filter(t => t.paymentMethodId === filterPaymentMethodId);
+       // Assuming AppTransaction has paymentMethod.id
+      tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
     
     if (sortConfig.key) {
@@ -252,14 +253,14 @@ export default function TransactionsPage() {
                   <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
                     <SelectItem value="all">All Categories/Sources</SelectItem>
-                    {allCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
+                    {allCategoriesState.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={filterPaymentMethodId} onValueChange={setFilterPaymentMethodId}>
                   <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
                     <SelectItem value="all">All Payment Methods</SelectItem>
-                    {allPaymentMethods.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}
+                    {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
@@ -391,16 +392,7 @@ export default function TransactionsPage() {
               <div className="py-4">
                 <TransactionForm 
                   onTransactionAdded={handleTransactionUpdateOrAdd} 
-                  initialTransactionData={editingTransaction ? {
-                      ...editingTransaction,
-                      // Ensure date is passed as Date or string, not potentially null from Prisma type
-                      date: editingTransaction.date ? new Date(editingTransaction.date) : new Date(),
-                      description: editingTransaction.description ?? '',
-                      categoryId: editingTransaction.categoryId ?? undefined,
-                      paymentMethodId: editingTransaction.paymentMethodId ?? undefined,
-                      source: editingTransaction.source ?? undefined,
-                      expenseType: editingTransaction.expenseType ?? undefined,
-                  } : null}
+                  initialTransactionData={editingTransaction} // Pass the whole AppTransaction object
                   onCancel={() => setEditingTransaction(null)}
                 />
               </div>

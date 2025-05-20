@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Zap } from "lucide-react";
 import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spending-insights";
-import type { Transaction } from "@/lib/types";
+import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
 
 interface SpendingInsightsProps {
-  currentMonthTransactions: Transaction[];
+  currentMonthTransactions: AppTransaction[];
   lastMonthTotalSpending: number; 
   selectedMonthName: string;
   selectedYear: number;
@@ -42,9 +42,9 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
   const getTopCategory = useCallback(() => {
     const categorySpending: Record<string, number> = {};
     currentMonthTransactions
-      .filter(t => t.type === 'expense' && t.category)
+      .filter(t => t.type === 'expense' && t.category && t.category.name) // Ensure category and name exist
       .forEach(t => {
-        categorySpending[t.category!] = (categorySpending[t.category!] || 0) + t.amount;
+        categorySpending[t.category!.name] = (categorySpending[t.category!.name] || 0) + t.amount;
       });
     
     if (Object.keys(categorySpending).length === 0) return { name: 'N/A', amount: 0 };
@@ -95,7 +95,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear, currentMonthTransactions.length]); // Added currentMonthTransactions.length
+  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear, currentMonthTransactions.length, generateInsights]); // Added generateInsights
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">

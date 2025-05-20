@@ -15,12 +15,12 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import type { Transaction as AppTransaction } from "@/lib/types" // Changed to AppTransaction
-import { subMonths, getMonth, getYear } from "date-fns"; // format removed as it's not used
+import type { AppTransaction } from "@/lib/types" 
+import { subMonths, getMonth, getYear } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface MonthlySpendingTrendChartProps {
-  transactions: AppTransaction[]; // Use AppTransaction
+  transactions: AppTransaction[]; 
   numberOfMonths?: number;
 }
 
@@ -37,9 +37,11 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
       const month = getMonth(targetDate);
       const year = getYear(targetDate);
 
-      // Ensure date objects are being compared correctly
       const monthlySpending = transactions
-        .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === month && new Date(t.date).getFullYear() === year)
+        .filter(t => {
+            const transactionDate = new Date(t.date);
+            return t.type === 'expense' && transactionDate.getMonth() === month && transactionDate.getFullYear() === year;
+        })
         .reduce((sum, t) => sum + t.amount, 0);
       
       data.push({

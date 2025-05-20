@@ -15,11 +15,11 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import type { Transaction } from "@/lib/types"
+import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { cn } from "@/lib/utils"
 
 interface ExpensePaymentMethodChartProps {
-  transactions: Transaction[]; // Should be pre-filtered for the selected month/year
+  transactions: AppTransaction[]; 
   selectedMonthName: string;
   selectedYear: number;
 }
@@ -27,11 +27,11 @@ interface ExpensePaymentMethodChartProps {
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear }: ExpensePaymentMethodChartProps) {
- const expenseData = transactions // Already filtered
-    .filter(t => t.type === 'expense' && t.paymentMethod)
+ const expenseData = transactions 
+    .filter(t => t.type === 'expense' && t.paymentMethod && t.paymentMethod.name) // ensure paymentMethod and name exist
     .reduce((acc, curr) => {
-      const paymentMethod = curr.paymentMethod!;
-      acc[paymentMethod] = (acc[paymentMethod] || 0) + curr.amount;
+      const paymentMethodName = curr.paymentMethod!.name; // Safe due to filter
+      acc[paymentMethodName] = (acc[paymentMethodName] || 0) + curr.amount;
       return acc;
     }, {} as Record<string, number>);
 
@@ -80,8 +80,8 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
               tickMargin={10}
               axisLine={false}
               tickFormatter={(value) => value.length > 15 ? `${value.slice(0,12)}...` : value}
-              className="text-xs fill-foreground" // Added fill for light mode
-              width={100} // Adjust width if labels are long
+              className="text-xs fill-foreground"
+              width={100} 
             />
             <ChartTooltip
               cursor={false}

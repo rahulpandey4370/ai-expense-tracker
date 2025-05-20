@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, User, SendHorizonal, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
-import type { Transaction as AppTransaction } from "@/lib/types";
+import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { cn } from '@/lib/utils';
 
 interface FinancialChatbotProps {
@@ -63,7 +63,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     try {
       const result = await askFinancialBot({
         query: userMessage.content,
-        transactions: allTransactions,
+        transactions: allTransactions, // Pass AppTransaction array
         chatHistory: messages.slice(-5),
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response };

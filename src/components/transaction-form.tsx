@@ -14,24 +14,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle } from "lucide-react";
 import { format } from "date-fns";
-import type { TransactionType as AppTransactionType, ExpenseType as AppExpenseType, TransactionInput } from "@/lib/types";
-import type { Category, PaymentMethod } from '@prisma/client';
+import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
 import { addTransaction, updateTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
-  initialTransactionData?: AppTransactionType & { // Assuming AppTransactionType includes id
-    id: string;
-    amount: number;
-    date: Date | string;
-    description?: string | null;
-    type: string;
-    categoryId?: string | null;
-    paymentMethodId?: string | null;
-    source?: string | null;
-    expenseType?: string | null;
-  } | null;
+  initialTransactionData?: AppTransaction | null; // Using AppTransaction which includes 'id'
   onCancel?: () => void;
 }
 
@@ -50,7 +39,7 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
-  const [type, setType] = useState<string>('expense');
+  const [type, setType] = useState<AppTransactionTypeEnum>('expense');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -62,13 +51,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | undefined>(undefined);
-  const [expenseType, setExpenseType] = useState<AppExpenseType | undefined>('need');
-  const [source, setSource] = useState<string | undefined>(undefined); // For income source text
+  const [expenseType, setExpenseType] = useState<AppExpenseTypeEnum | undefined>('need');
+  const [source, setSource] = useState<string | undefined>(undefined); 
 
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true);
-  const [formId, setFormId] = useState<string | null>(null);
+  const [formId, setFormId] = useState<string | null>(null); // To store ID for editing
 
   const fetchDropdownData = useCallback(async () => {
     setIsFetchingDropdowns(true);
@@ -80,14 +69,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       ]);
       setExpenseCategories(fetchedExpenseCategories);
       setIncomeCategories(fetchedIncomeCategories);
-      setAllCategories([...fetchedExpenseCategories, ...fetchedIncomeCategories]);
+      setAllCategories([...fetchedExpenseCategories, ...fetchedIncomeCategories]); // Combined for potential use
       setPaymentMethods(fetchedPaymentMethods);
 
-      // Set defaults after fetching
+      // Set defaults after fetching, only if not editing
       if (!initialTransactionData) {
         setSelectedCategoryId(fetchedExpenseCategories.length > 0 ? fetchedExpenseCategories[0].id : undefined);
         setSelectedPaymentMethodId(fetchedPaymentMethods.length > 0 ? fetchedPaymentMethods[0].id : undefined);
-        setSource(fetchedIncomeCategories.length > 0 ? fetchedIncomeCategories[0].name : undefined); // Default source name
+        // Source is a text field, so no default ID. Default text for income category might be set in useEffect below.
       }
 
     } catch (error) {
@@ -109,19 +98,19 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (initialTransactionData) {
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type);
-      setDate(new Date(initialTransactionData.date));
+      setDate(new Date(initialTransactionData.date)); // Ensure date is a Date object
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description || '');
       if (initialTransactionData.type === 'expense') {
-        setSelectedCategoryId(initialTransactionData.categoryId || undefined);
-        setSelectedPaymentMethodId(initialTransactionData.paymentMethodId || undefined);
-        setExpenseType((initialTransactionData.expenseType as AppExpenseType) || 'need');
+        setSelectedCategoryId(initialTransactionData.category?.id || undefined);
+        setSelectedPaymentMethodId(initialTransactionData.paymentMethod?.id || undefined);
+        setExpenseType(initialTransactionData.expenseType || 'need');
         setSource(undefined);
       } else { // income
-        setSelectedCategoryId(initialTransactionData.categoryId || undefined); // Income uses categoryId for its type
-        setSource(initialTransactionData.source || undefined);
-        setSelectedPaymentMethodId(undefined);
-        setExpenseType(undefined);
+        setSelectedCategoryId(initialTransactionData.category?.id || undefined);
+        setSource(initialTransactionData.source || ''); // Source is text description from transaction itself
+        setSelectedPaymentMethodId(undefined); // No PM for income
+        setExpenseType(undefined); // No expense type for income
       }
     } else {
         // Defaults for new transaction form (set after dropdowns are fetched)
@@ -131,19 +120,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setAmount('');
         setDescription('');
         setExpenseType('need');
-        // Default categoryId, paymentMethodId, source are set in fetchDropdownData
+        // Default categoryId, paymentMethodId are set in fetchDropdownData
+        // Default source for new income transaction
+        if (type === 'income' && incomeCategories.length > 0 && !source) {
+             // Don't auto-set source text based on category, user types it
+        }
     }
-  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods]);
+  }, [initialTransactionData, type, incomeCategories, source]); // Added dependencies
 
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!date || !amount || (!description && type === 'expense') ) { // description optional for income if source is primary
+    if (!date || !amount ) { 
       toast({
         title: "Missing Information!",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields (Date, Amount).",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -154,23 +147,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       type: type as 'income' | 'expense',
       date,
       amount: parseFloat(amount),
-      description: description || undefined, // Allow empty string to become undefined
+      description: description || undefined, 
       ...(type === 'expense' && {
         categoryId: selectedCategoryId,
         paymentMethodId: selectedPaymentMethodId,
         expenseType: expenseType
       }),
       ...(type === 'income' && {
-        source: source, // Text source for income
-        categoryId: selectedCategoryId, // Income category ID
+        source: source, 
+        categoryId: selectedCategoryId, 
       }),
     };
     
     try {
-      if (formId) {
+      if (formId) { // Editing existing transaction
         await updateTransaction(formId, transactionPayload);
         toast({ title: "Transaction Updated!", description: "Your transaction has been successfully modified." });
-      } else {
+      } else { // Adding new transaction
         await addTransaction(transactionPayload);
         toast({ title: "Transaction Added!", description: "New transaction recorded successfully." });
       }
@@ -181,13 +174,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setDate(new Date());
         setAmount('');
         setDescription('');
-        setType('expense'); // Default back to expense
+        setType('expense'); 
         setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
         setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
         setExpenseType('need');
-        setSource(incomeCategories.length > 0 ? incomeCategories[0].name : undefined);
+        setSource(''); // Clear source text for income
       }
-      if (onCancel && formId) onCancel(); // Call cancel if it was an edit
+      if (onCancel && formId) onCancel(); 
 
     } catch (error) {
       console.error("Transaction form error:", error);
@@ -205,7 +198,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
-  if (!isClient && !initialTransactionData) {
+  if (!isClient && !initialTransactionData) { // Avoid rendering form server-side if not editing, until client hydration
+    // You might want a skeleton loader here for initialTransactionData case
     return null; 
   }
 
@@ -213,7 +207,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
     : {
-        className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card"), // Ensure bg-card for consistency
+        className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card"),
         variants: formCardVariants,
         initial: "hidden",
         animate: "visible"
@@ -233,8 +227,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
 
   return (
+    // Conditional wrapper removed, direct FormWrapperComponent usage
     <FormWrapperComponent {...formWrapperProps}>
-      {!initialTransactionData && (
+      {!initialTransactionData && ( // Only show header for new transaction form
         <CardHeader className="p-6 pb-4">
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
             <FilePlus className="h-6 w-6 text-accent" /> {cardTitleText}
@@ -280,6 +275,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                   <Button
                     variant={"outline"}
                     className={popoverButtonClasses}
+                    disabled={isFetchingDropdowns}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-accent" />
                     {date ? format(date, "PPP") : <span>Pick a date</span>}
@@ -292,7 +288,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     onSelect={setDate}
                     initialFocus
                     className={calendarClasses}
-                    disabled={isFetchingDropdowns}
                   />
                 </PopoverContent>
               </Popover>
@@ -336,7 +331,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </div>
               <div>
                 <Label className={labelClasses}>Expense Type (Need, Want, or Investment)</Label>
-                <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
+                <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseTypeEnum)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                   {[
                     { value: 'need', label: 'Need' },
                     { value: 'want', label: 'Want' },
@@ -373,8 +368,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                   </Select>
               </div>
                <div>
-                <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source Description</Label>
-                <Input id={`source-${formId || 'new'}`} placeholder="e.g., Client Project X, Bonus Q2" value={source} onChange={(e) => setSource(e.target.value)} className={cn("mt-1", inputClasses)} required disabled={isFetchingDropdowns}/>
+                <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source Description (Optional)</Label>
+                <Input id={`source-${formId || 'new'}`} placeholder="e.g., Client Project X, Bonus Q2" value={source} onChange={(e) => setSource(e.target.value)} className={cn("mt-1", inputClasses)} disabled={isFetchingDropdowns}/>
               </div>
             </div>
           )}
@@ -394,8 +389,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 className={cn(
                   "w-full font-semibold text-primary-foreground",
                   isLoading ? "bg-muted hover:bg-muted text-muted-foreground" :
-                  type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : // Explicit dark mode colors
-                  "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700" // Explicit dark mode colors
+                  type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : 
+                  "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700" 
                 )}
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}

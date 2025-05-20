@@ -6,10 +6,10 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { Transaction as AppTransaction } from '@/lib/types';
+import type { AppTransaction } from '@/lib/types'; // Using AppTransaction
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen } from 'lucide-react'; // Removed BarChart, PieChartIcon
+import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen } from 'lucide-react';
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
@@ -55,7 +55,6 @@ export default function ReportsPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-      // Ensure date is Date object
       setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); 
     } catch (error) {
       console.error("Failed to fetch transactions for reports:", error);
@@ -81,16 +80,17 @@ export default function ReportsPage() {
   };
 
   const handleMonthChangeInternal = (monthValue: string) => {
-    setReportMonth(parseInt(monthValue, 10)); // -1 for annual
-    if (parseInt(monthValue, 10) !== -1) { // Only sync with context if a specific month is chosen
+    setReportMonth(parseInt(monthValue, 10));
+    if (parseInt(monthValue, 10) !== -1) { 
       contextHandleMonthChange(monthValue); 
     }
   };
 
   const filteredTransactionsForPeriod = useMemo(() => {
     return allTransactions.filter(t => {
-      const transactionYear = new Date(t.date).getFullYear();
-      const transactionMonth = new Date(t.date).getMonth();
+      const transactionDate = new Date(t.date);
+      const transactionYear = transactionDate.getFullYear();
+      const transactionMonth = transactionDate.getMonth();
       if (reportMonth === -1) { // Annual report
         return transactionYear === reportYear;
       }
@@ -104,21 +104,22 @@ export default function ReportsPage() {
 
   const previousPeriodExpensesTotal = useMemo(() => {
     let prevPeriodYear = reportYear;
-    let prevPeriodMonth = reportMonth -1; // Can be -1 or -2 if reportMonth is 0 or -1
+    let prevPeriodMonth = reportMonth -1; 
 
-    if (reportMonth === 0) { // Current is January, previous is December of last year
+    if (reportMonth === 0) { 
       prevPeriodMonth = 11;
       prevPeriodYear = reportYear - 1;
-    } else if (reportMonth === -1) { // Current is Annual, previous is previous Annual
+    } else if (reportMonth === -1) { 
       prevPeriodYear = reportYear - 1;
-      prevPeriodMonth = -1; // Indicate annual for previous period
+      prevPeriodMonth = -1; 
     }
-    // For other months, prevPeriodMonth is simply reportMonth - 1
+    
 
     return allTransactions.filter(t => { 
-      const transactionYear = new Date(t.date).getFullYear();
-      const transactionMonth = new Date(t.date).getMonth();
-      if (prevPeriodMonth === -1) { // Previous period is annual
+      const transactionDate = new Date(t.date);
+      const transactionYear = transactionDate.getFullYear();
+      const transactionMonth = transactionDate.getMonth();
+      if (prevPeriodMonth === -1) { 
         return transactionYear === prevPeriodYear && t.type === 'expense';
       }
       return transactionYear === prevPeriodYear && transactionMonth === prevPeriodMonth && t.type === 'expense';
@@ -129,7 +130,10 @@ export default function ReportsPage() {
     const expenses = trans.filter(t => t.type === 'expense' && t.category);
     const categoryMap: Record<string, number> = {};
     expenses.forEach(t => {
-      categoryMap[t.category!.name] = (categoryMap[t.category!.name] || 0) + t.amount;
+      // Null check for category and category.name
+      if (t.category && t.category.name) {
+         categoryMap[t.category.name] = (categoryMap[t.category.name] || 0) + t.amount;
+      }
     });
     return Object.entries(categoryMap).map(([catName, amt]) => `${catName}: ₹${amt.toFixed(2)}`).join(', ') || 'No expenses in this period.';
   };
@@ -148,8 +152,9 @@ export default function ReportsPage() {
     else previousPeriodName = `${monthNamesList[reportMonth-1]} ${reportYear}`;
 
     const previousPeriodTransactions = allTransactions.filter(t => {
-        const transactionYear = new Date(t.date).getFullYear();
-        const transactionMonth = new Date(t.date).getMonth();
+        const transactionDate = new Date(t.date);
+        const transactionYear = transactionDate.getFullYear();
+        const transactionMonth = transactionDate.getMonth();
         let prevTargetYear = reportYear;
         let prevTargetMonth = reportMonth -1;
         if (reportMonth === 0) { prevTargetMonth = 11; prevTargetYear = reportYear - 1; }
@@ -195,7 +200,7 @@ export default function ReportsPage() {
         scale: 2, 
         useCORS: true, 
         logging: true,
-        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim(), // Get actual background color
+        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim(),
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
@@ -214,7 +219,7 @@ export default function ReportsPage() {
       const newImgHeight = imgHeight * ratio * 0.95;
 
       const x = (pdfWidth - newImgWidth) / 2;
-      const y = (pdfHeight - newImgHeight) / 2; // Center image on page
+      const y = (pdfHeight - newImgHeight) / 2; 
 
 
       pdf.addImage(imgData, 'PNG', x, y, newImgWidth, newImgHeight);
@@ -272,7 +277,7 @@ export default function ReportsPage() {
           
             <motion.div 
               id="report-content-area" 
-              className="space-y-6 p-4 bg-background rounded-lg" // Added padding and background for PDF export
+              className="space-y-6 p-4 bg-background rounded-lg"
               variants={cardVariants}
               initial="hidden"
               animate="visible"

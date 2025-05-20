@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import type { Transaction } from "@/lib/types";
+import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface RecentTransactionsListProps {
-  transactions: Transaction[];
+  transactions: AppTransaction[];
   count?: number;
 }
 
@@ -35,7 +35,7 @@ const listItemVariants = {
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function RecentTransactionsList({ transactions, count = 5 }: RecentTransactionsListProps) {
-  const recentTransactions = [...transactions]
+  const recentTransactions = [...transactions] // transactions are already AppTransaction[]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, count);
 
@@ -81,7 +81,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                         <p className="font-medium text-sm text-foreground">{transaction.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {format(new Date(transaction.date), "MMM d, yyyy")}
-                          {transaction.type === 'expense' && transaction.category && ` • ${transaction.category}`}
+                          {transaction.type === 'expense' && transaction.category && ` • ${transaction.category.name}`} 
                           {transaction.type === 'income' && transaction.source && ` • ${transaction.source}`}
                         </p>
                       </div>

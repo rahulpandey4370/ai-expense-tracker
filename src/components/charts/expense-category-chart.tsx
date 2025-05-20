@@ -17,11 +17,11 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import type { Transaction } from "@/lib/types"
+import type { AppTransaction } from "@/lib/types" // Using AppTransaction
 import { cn } from "@/lib/utils"
 
 interface ExpenseCategoryChartProps {
-  transactions: Transaction[]; // Should be pre-filtered for the selected month/year
+  transactions: AppTransaction[]; 
   selectedMonthName: string;
   selectedYear: number;
 }
@@ -40,11 +40,11 @@ const CHART_COLORS = [
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear }: ExpenseCategoryChartProps) {
-  const expenseData = transactions // Already filtered for the selected period
-    .filter(t => t.type === 'expense' && t.category)
+  const expenseData = transactions
+    .filter(t => t.type === 'expense' && t.category && t.category.name) // ensure category and name exist
     .reduce((acc, curr) => {
-      const category = curr.category!;
-      acc[category] = (acc[category] || 0) + curr.amount;
+      const categoryName = curr.category!.name; // Safe due to filter
+      acc[categoryName] = (acc[categoryName] || 0) + curr.amount;
       return acc;
     }, {} as Record<string, number>);
 

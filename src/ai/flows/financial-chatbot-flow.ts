@@ -11,10 +11,10 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Transaction as AppTransaction } from '@/lib/types'; // Using our app's Transaction type
+import type { AppTransaction } from '@/lib/types'; // Using our app's Transaction type
 
 // Zod schema for transactions to be passed to the AI model
-// Aligned with Prisma model structure (relations will be denormalized for AI)
+// Aligned with AppTransaction structure (relations will be denormalized for AI)
 const AITransactionSchema = z.object({
   id: z.string(),
   type: z.string(), // "income" | "expense"
@@ -50,7 +50,7 @@ export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema
 // Exported wrapper function
 export async function askFinancialBot(input: {
   query: string;
-  transactions: AppTransaction[]; // Expecting our app's Transaction type which includes relations
+  transactions: AppTransaction[]; // Expecting our app's AppTransaction type which includes relations
   chatHistory?: ChatMessage[];
 }): Promise<FinancialChatbotOutput> {
   // Convert AppTransaction[] to AITransaction[] (flattening relations for AI)
@@ -98,7 +98,7 @@ ${JSON.stringify(transactions, null, 2)}
 
     const llmResponse = await ai.generate({
       prompt: prompt,
-      model: 'googleai/gemini-2.0-flash',
+      model: 'googleai/gemini-2.0-flash', // Ensure this model is appropriate for your Genkit config
       config: {
         temperature: 0.4, 
         safetySettings: [

@@ -12,13 +12,13 @@ import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
-import type { Transaction as AppTransaction, TransactionInput } from '@/lib/types';
-import { getTransactions } from '@/lib/actions/transactions'; // Server action
+import type { AppTransaction } from '@/lib/types'; // Using AppTransaction
+import { getTransactions } from '@/lib/actions/transactions'; 
 import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
-import { Card } from '@/components/ui/card';
+import { Card } from '@/components/ui/card'; // Ensure Card is imported if used for TransactionForm wrapper
 import { cn } from '@/lib/utils';
 
 const containerVariants = {
@@ -63,7 +63,6 @@ export default function DashboardPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-       // Ensure date is Date object
       setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
     } catch (error) {
       console.error("Failed to fetch transactions for dashboard:", error);
@@ -83,9 +82,9 @@ export default function DashboardPage() {
     fetchAndSetTransactions();
   }, [fetchAndSetTransactions]);
 
-  const handleAddTransactionCallback = async () => { // No need for newTransactionData param if re-fetching
+  const handleAddTransactionCallback = async () => { 
     try {
-        await fetchAndSetTransactions(); // Re-fetch all transactions to update the UI
+        await fetchAndSetTransactions(); 
     } catch (error) {
         console.error("Error after attempting to add/update transaction:", error);
         toast({ title: "Data Sync Error", description: "Could not refresh data after the last operation.", variant: "destructive" });
@@ -94,7 +93,10 @@ export default function DashboardPage() {
 
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
-      t => new Date(t.date).getMonth() === selectedMonth && new Date(t.date).getFullYear() === selectedYear
+      t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
+      }
     );
   }, [transactions, selectedMonth, selectedYear]);
 
@@ -119,7 +121,10 @@ export default function DashboardPage() {
     const yearForLastMonth = prevMonthDate.getFullYear();
 
     return transactions
-      .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === lastMonth && new Date(t.date).getFullYear() === yearForLastMonth)
+      .filter(t => {
+        const transactionDate = new Date(t.date);
+        return t.type === 'expense' && transactionDate.getMonth() === lastMonth && transactionDate.getFullYear() === yearForLastMonth;
+      })
       .reduce((sum, t) => sum + t.amount, 0) || 0;
   }, [transactions, selectedDate]);
 
@@ -169,9 +174,8 @@ export default function DashboardPage() {
         </motion.div>
       )}
       
-      <motion.div variants={sectionVariants} initial="hidden" animate="visible" className={cn("bg-card rounded-xl p-6", glowClass)}>
-         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
-      </motion.div>
+      {/* TransactionForm is now directly used, its internal Card will handle styling & glow */}
+      <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
 
 
       <motion.div
