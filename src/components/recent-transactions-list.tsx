@@ -32,7 +32,7 @@ const listItemVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 110 } },
 };
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function RecentTransactionsList({ transactions, count = 5 }: RecentTransactionsListProps) {
   const recentTransactions = [...transactions]
@@ -78,7 +78,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                         <ArrowDownCircle className="h-6 w-6 text-red-500" />
                       )}
                       <div>
-                        <p className="font-medium text-sm">{transaction.description}</p>
+                        <p className="font-medium text-sm text-foreground">{transaction.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {format(new Date(transaction.date), "MMM d, yyyy")}
                           {transaction.type === 'expense' && transaction.category && ` • ${transaction.category}`}
@@ -87,7 +87,10 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className={cn(
+                        "font-semibold text-sm",
+                        transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      )}>
                         {transaction.type === 'income' ? '+' : '-'} ₹{transaction.amount.toFixed(2)}
                       </p>
                       {transaction.type === 'expense' && transaction.expenseType && (

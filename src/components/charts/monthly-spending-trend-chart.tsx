@@ -25,7 +25,7 @@ interface MonthlySpendingTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: MonthlySpendingTrendChartProps) {
   const chartData = useMemo(() => {
@@ -94,6 +94,7 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
                 axisLine={false}
                 tickMargin={8}
                 tickFormatter={(value) => value.slice(0, 6)} // Shorten month name if needed
+                className="fill-foreground" // Added fill for light mode
               />
               <YAxis
                 tickFormatter={(value) => `₹${value / 1000}k`}
@@ -101,6 +102,7 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
                 axisLine={false}
                 tickMargin={8}
                 width={50}
+                className="fill-foreground" // Added fill for light mode
               />
               <ChartTooltip
                 cursor={false}

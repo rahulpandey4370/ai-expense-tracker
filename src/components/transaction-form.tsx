@@ -35,7 +35,7 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
@@ -160,38 +160,53 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
 
-  const cardTitle = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
-  const cardDescription = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
+  const cardTitleText = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
+  const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData) {
-    return null;
+    return null; 
   }
 
   const FormWrapperComponent = initialTransactionData ? motion.div : motion(Card);
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
     : {
-        className: `shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl ${glowClass}`,
+        className: cn("shadow-xl rounded-xl bg-card p-6", glowClass), // Use bg-card for light mode, p-6 for internal padding
         variants: formCardVariants,
         initial: "hidden",
         animate: "visible"
       };
+  
+  const labelClasses = "text-foreground dark:text-purple-300/90";
+  const inputClasses = "bg-background/70 dark:bg-purple-800/30 border-border dark:border-purple-500/50 text-foreground dark:text-purple-100 placeholder:text-muted-foreground dark:placeholder:text-purple-400/60 focus:border-accent dark:focus:border-yellow-400 focus:ring-accent dark:focus:ring-yellow-400";
+  const popoverButtonClasses = cn(
+    "w-full justify-start text-left font-normal mt-1",
+    "bg-background/70 dark:bg-purple-800/30 border-border dark:border-purple-500/50",
+    "text-foreground dark:text-purple-100 hover:bg-muted dark:hover:bg-purple-700/40",
+    "focus:border-accent dark:focus:border-yellow-400 focus:ring-accent dark:focus:ring-yellow-400",
+    !date && "text-muted-foreground dark:text-purple-400/70"
+  );
+  const popoverContentClasses = "w-auto p-0 bg-popover dark:bg-purple-900 border-border dark:border-purple-500/70 text-popover-foreground dark:text-purple-100";
+  const calendarClasses = "[&_button]:text-popover-foreground dark:[&_button]:text-purple-200 [&_.rdp-button_span]:text-popover-foreground dark:[&_.rdp-button_span]:text-purple-200 [&_.rdp-button:hover]:bg-accent/10 dark:[&_.rdp-button:hover]:bg-purple-700/50 [&_.rdp-day_selected]:bg-primary dark:[&_.rdp-day_selected]:bg-yellow-500 [&_.rdp-day_selected]:text-primary-foreground dark:[&_.rdp-day_selected]:text-purple-950";
+  const selectTriggerClasses = cn("w-full mt-1", inputClasses);
+  const selectContentClasses = "bg-popover dark:bg-purple-900 border-border dark:border-purple-500/70 text-popover-foreground dark:text-purple-100 [&_.item]:focus:bg-accent/10 dark:[&_.item]:focus:bg-yellow-500/20";
+
 
   return (
     <FormWrapperComponent {...formWrapperProps}>
       {!initialTransactionData && (
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl text-purple-300">
-            <FilePlus className="h-6 w-6 text-yellow-400" /> {cardTitle}
+        <CardHeader className="p-0 pb-6">
+          <CardTitle className="flex items-center gap-2 text-xl text-primary dark:text-purple-300">
+            <FilePlus className="h-6 w-6 text-accent dark:text-yellow-400" /> {cardTitleText}
           </CardTitle>
-          <CardDescription className="text-purple-400/80">{cardDescription}</CardDescription>
+          <CardDescription className="text-muted-foreground dark:text-purple-400/80">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={initialTransactionData ? 'pt-0' : 'pt-6'}>
+      <CardContent className={initialTransactionData ? 'p-0' : 'p-0'}>
         <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
           <div>
-            <Label className="text-purple-300/90">Transaction Type</Label>
+            <Label className={labelClasses}>Transaction Type</Label>
             <RadioGroup value={type} onValueChange={(value) => setType(value as TransactionEnumType)} className="flex space-x-4 mt-1">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem
@@ -202,7 +217,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     "data-[state=checked]:border-green-600 data-[state=checked]:bg-green-500 data-[state=checked]:text-green-50"
                   )}
                 />
-                <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-purple-200/90", type === 'income' && "text-green-300")}>Income (₹)</Label>
+                <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", type === 'income' && "text-green-600 dark:text-green-300 font-medium")}>Income (₹)</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem
@@ -213,77 +228,74 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
                   )}
                 />
-                <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-purple-200/90", type === 'expense' && "text-red-300")}>Expense (₹)</Label>
+                <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", type === 'expense' && "text-red-600 dark:text-red-300 font-medium")}>Expense (₹)</Label>
               </div>
             </RadioGroup>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor={`date-${formId || 'new'}`} className="text-purple-300/90">Date of Transaction</Label>
+              <Label htmlFor={`date-${formId || 'new'}`} className={labelClasses}>Date of Transaction</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1 bg-purple-800/30 border-purple-500/50 hover:bg-purple-700/40 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400",
-                      !date && "text-purple-400/70"
-                    )}
+                    className={popoverButtonClasses}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-yellow-400" />
+                    <CalendarIcon className="mr-2 h-4 w-4 text-accent dark:text-yellow-400" />
                     {date ? format(date, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-purple-900 border-purple-500/70 text-purple-100">
+                <PopoverContent className={popoverContentClasses}>
                   <Calendar
                     mode="single"
                     selected={date}
                     onSelect={setDate}
                     initialFocus
-                    className="[&_button]:text-purple-200 [&_.rdp-button_span]:text-purple-200 [&_.rdp-button:hover]:bg-purple-700/50 [&_.rdp-day_selected]:bg-yellow-500 [&_.rdp-day_selected]:text-purple-950"
+                    className={calendarClasses}
                   />
                 </PopoverContent>
               </Popover>
             </div>
             <div>
-              <Label htmlFor={`amount-${formId || 'new'}`} className="text-purple-300/90">Amount (₹)</Label>
-              <Input id={`amount-${formId || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 placeholder:text-purple-400/60 focus:border-yellow-400 focus:ring-yellow-400" required />
+              <Label htmlFor={`amount-${formId || 'new'}`} className={labelClasses}>Amount (₹)</Label>
+              <Input id={`amount-${formId || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className={cn("mt-1", inputClasses)} required />
             </div>
           </div>
 
           <div>
-            <Label htmlFor={`description-${formId || 'new'}`} className="text-purple-300/90">Description</Label>
-            <Input id={`description-${formId || 'new'}`} placeholder="e.g., Groceries, Dinner out" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 placeholder:text-purple-400/60 focus:border-yellow-400 focus:ring-yellow-400" required />
+            <Label htmlFor={`description-${formId || 'new'}`} className={labelClasses}>Description</Label>
+            <Input id={`description-${formId || 'new'}`} placeholder="e.g., Groceries, Dinner out" value={description} onChange={(e) => setDescription(e.target.value)} className={cn("mt-1", inputClasses)} required />
           </div>
 
           {type === 'expense' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor={`category-${formId || 'new'}`} className="text-purple-300/90">Category</Label>
+                  <Label htmlFor={`category-${formId || 'new'}`} className={labelClasses}>Category</Label>
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger id={`category-${formId || 'new'}`} className="w-full mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400">
+                    <SelectTrigger id={`category-${formId || 'new'}`} className={selectTriggerClasses}>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent className="bg-purple-900 border-purple-500/70 text-purple-100 [&_.item]:focus:bg-yellow-500/20">
+                    <SelectContent className={selectContentClasses}>
                       {expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor={`paymentMethod-${formId || 'new'}`} className="text-purple-300/90">Payment Method</Label>
+                  <Label htmlFor={`paymentMethod-${formId || 'new'}`} className={labelClasses}>Payment Method</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger id={`paymentMethod-${formId || 'new'}`} className="w-full mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400">
+                    <SelectTrigger id={`paymentMethod-${formId || 'new'}`} className={selectTriggerClasses}>
                       <SelectValue placeholder="Select payment method" />
                     </SelectTrigger>
-                    <SelectContent className="bg-purple-900 border-purple-500/70 text-purple-100 [&_.item]:focus:bg-yellow-500/20">
+                    <SelectContent className={selectContentClasses}>
                       {paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.name}>{pm.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div>
-                <Label className="text-purple-300/90">Expense Type (Need, Want, or Investment)</Label>
+                <Label className={labelClasses}>Expense Type (Need, Want, or Investment)</Label>
                 <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as ExpenseEnumType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                   {[
                     { value: 'need', label: 'Need' },
@@ -295,11 +307,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                        className={cn(
                           "border-primary text-primary focus:ring-primary",
                           expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
-                                            : "data-[state=checked]:border-yellow-600 data-[state=checked]:bg-yellow-500 data-[state=checked]:text-yellow-50"
+                                            : "data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
 
                        )}
                       />
-                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-purple-200/90", expenseType === et.value && type === 'expense' ? "text-red-300" : "text-yellow-300" )}>{et.label}</Label>
+                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", expenseType === et.value && type === 'expense' ? "text-red-600 dark:text-red-300 font-medium" : "text-accent dark:text-yellow-300 font-medium" )}>{et.label}</Label>
                     </div>
                   ))}
                 </RadioGroup>
@@ -309,12 +321,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
           {type === 'income' && (
             <div>
-              <Label htmlFor={`source-${formId || 'new'}`} className="text-purple-300/90">Source of Income</Label>
+              <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source of Income</Label>
               <Select value={source} onValueChange={setSource}>
-                <SelectTrigger id={`source-${formId || 'new'}`} className="w-full mt-1 bg-purple-800/30 border-purple-500/50 text-purple-100 focus:border-yellow-400 focus:ring-yellow-400">
+                <SelectTrigger id={`source-${formId || 'new'}`} className={selectTriggerClasses}>
                   <SelectValue placeholder="Select source" />
                 </SelectTrigger>
-                <SelectContent className="bg-purple-900 border-purple-500/70 text-purple-100 [&_.item]:focus:bg-yellow-500/20">
+                <SelectContent className={selectContentClasses}>
                   {incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -339,7 +351,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             </motion.div>
             {initialTransactionData && onCancel && (
               <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
-                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full border-purple-500/70 text-purple-300 hover:bg-purple-700/30 hover:text-purple-100">
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full border-border dark:border-purple-500/70 text-foreground dark:text-purple-300 hover:bg-muted dark:hover:bg-purple-700/30 dark:hover:text-purple-100">
                   <XCircle className="mr-2 h-4 w-4"/>
                   Cancel Edit
                 </Button>
@@ -351,3 +363,4 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
+

@@ -37,7 +37,7 @@ const CHART_COLORS = [
   "hsl(var(--accent))",
 ];
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear }: ExpenseCategoryChartProps) {
   const expenseData = transactions // Already filtered for the selected period
@@ -107,7 +107,7 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
         </ChartContainer>
       </CardContent>
        <CardFooter className="flex-col gap-2 text-sm mt-auto">
-        <div className="flex items-center gap-2 font-medium leading-none">
+        <div className="flex items-center gap-2 font-medium leading-none text-foreground">
           Total Expenses: ₹{totalExpenses.toLocaleString()}
         </div>
         <div className="leading-none text-muted-foreground">

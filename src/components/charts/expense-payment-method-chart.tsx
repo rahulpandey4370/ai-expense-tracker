@@ -24,7 +24,7 @@ interface ExpensePaymentMethodChartProps {
   selectedYear: number;
 }
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear }: ExpensePaymentMethodChartProps) {
  const expenseData = transactions // Already filtered
@@ -80,7 +80,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
               tickMargin={10}
               axisLine={false}
               tickFormatter={(value) => value.length > 15 ? `${value.slice(0,12)}...` : value}
-              className="text-xs"
+              className="text-xs fill-foreground" // Added fill for light mode
               width={100} // Adjust width if labels are long
             />
             <ChartTooltip

@@ -13,7 +13,7 @@ interface KpiCardProps {
   valueClassName?: string;
 }
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function KpiCard({ title, value, icon: Icon, description, className, valueClassName }: KpiCardProps) {
   return (

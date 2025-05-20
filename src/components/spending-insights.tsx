@@ -28,7 +28,7 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedYear }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
@@ -95,38 +95,40 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear]); 
+  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear, currentMonthTransactions.length]); // Added currentMonthTransactions.length
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
-      <Card className={cn("shadow-lg", glowClass)}>
+      <Card className={cn("shadow-lg flex flex-col h-[500px]", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights
           </CardTitle>
           <CardDescription>Insights for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading && (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {insights && !isLoading && (
-            <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
-              {insights.split('\n').map((line, index) => (
-                <p key={index} className="text-foreground">{line.replace(/^- /, '• ')}</p>
-              ))}
-            </div>
-          )}
-          {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
-            <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
-          )}
+        <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
+          <div className="flex-grow overflow-auto pr-2">
+            {isLoading && (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            {insights && !isLoading && (
+              <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
+                {insights.split('\n').map((line, index) => (
+                  <p key={index} className="text-foreground">{line.replace(/^- /, '• ')}</p>
+                ))}
+              </div>
+            )}
+            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
+              <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
+            )}
+          </div>
           <motion.div {...buttonHoverTap}>
-            <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+            <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-4">
               <Zap className="mr-2 h-4 w-4" />
               {isLoading ? "Generating..." : "Refresh Insights"}
             </Button>

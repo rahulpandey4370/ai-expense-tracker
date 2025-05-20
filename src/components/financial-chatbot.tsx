@@ -28,7 +28,7 @@ const messageVariants = {
   visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
 };
 
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

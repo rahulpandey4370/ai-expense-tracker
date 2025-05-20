@@ -27,7 +27,7 @@ interface IncomeExpenseTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: IncomeExpenseTrendChartProps) {
   const chartData = useMemo(() => {
@@ -98,6 +98,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 tickMargin={10}
                 axisLine={false}
                 tickFormatter={(value) => value.slice(0, 6)}
+                className="fill-foreground" // Added fill for light mode
               />
               <YAxis 
                 tickFormatter={(value) => `₹${value / 1000}k`} 
@@ -105,6 +106,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 axisLine={false}
                 tickMargin={8}
                 width={50}
+                className="fill-foreground" // Added fill for light mode
               />
               <ChartTooltip
                 cursor={false}
