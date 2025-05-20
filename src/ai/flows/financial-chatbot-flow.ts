@@ -9,9 +9,10 @@
  * - ChatMessage - Type for chat history messages.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {ai}from '@/ai/genkit';
+import {z}from 'genkit';
 import type { AppTransaction } from '@/lib/types'; // Using our app's Transaction type
+import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
 // Zod schema for transactions to be passed to the AI model
 // Aligned with AppTransaction structure (relations will be denormalized for AI)
@@ -76,37 +77,44 @@ const financialChatbotFlow = ai.defineFlow(
     outputSchema: FinancialChatbotOutputSchema,
   },
   async ({ query, transactions, chatHistory }) => {
-    let prompt = `You are an AI Financial Assistant, an expert in analyzing personal finance data in Indian Rupees (INR).
+    let systemPrompt = `You are an AI Financial Assistant, an expert in analyzing personal finance data in Indian Rupees (INR).
 The user has provided their transaction data. Your task is to answer the user's questions based on this data and any provided conversation history.
 Be concise and helpful. If the data doesn't support an answer, clearly state that. Refer to amounts in INR (e.g., ₹1000).
 When mentioning categories or payment methods, use the names provided (categoryName, paymentMethodName).
 
 Transaction Data (potentially filtered by user's current view, e.g., for a specific month):
 \`\`\`json
-${JSON.stringify(transactions, null, 2)}
+${JSON.stringify(transactions.slice(0, 100), null, 2)} 
 \`\`\`
-`;
+${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more transactions not shown to save space)` : ''}
+`; // Truncate transactions if too long for the prompt
+
+    const messages: { role: 'user' | 'assistant' | 'system', content: string }[] = [];
+    messages.push({ role: 'system', content: systemPrompt });
 
     if (chatHistory && chatHistory.length > 0) {
-      prompt += "\n\nConversation History:\n";
-      chatHistory.forEach(msg => {
-        prompt += `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}\n`;
+      chatHistory.slice(-5).forEach(msg => { // Take last 5 messages from history
+        messages.push({ role: msg.role, content: msg.content });
       });
     }
-
-    prompt += `\nUser's current question: ${query}\nAI Response:`;
-
-    const llmResponse = await ai.generate({
-      prompt: prompt,
+    messages.push({ role: 'user', content: query });
+    
+    const llmResponse = await retryableAIGeneration(() => ai.generate({
+      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:', // Construct prompt string
       model: 'googleai/gemini-2.0-flash', 
       config: {
-        temperature: 0.4, 
+        temperature: 0.3, 
+        maxOutputTokens: 500,
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         ],
       },
-    });
+       // Explicitly pass the tools if any are defined and relevant for this flow.
+       // tools: [/* your tools here if needed */] 
+    }));
 
     const responseText = llmResponse.text;
     if (!responseText) {

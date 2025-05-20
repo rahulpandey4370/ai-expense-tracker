@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
 const SpendingInsightsInputSchema = z.object({
   monthlySpending: z
@@ -65,7 +66,7 @@ const spendingInsightsFlow = ai.defineFlow(
     outputSchema: SpendingInsightsOutputSchema,
   },
   async input => {
-    const {output} = await spendingInsightsPrompt(input);
+    const {output} = await retryableAIGeneration(() => spendingInsightsPrompt(input));
     return output!;
   }
 );

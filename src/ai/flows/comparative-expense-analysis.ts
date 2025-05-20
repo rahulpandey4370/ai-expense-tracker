@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
 const ComparativeExpenseAnalysisInputSchema = z.object({
   currentMonth: z.string().describe('The current month for expense analysis (e.g., "January").'),
@@ -57,7 +58,7 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
     outputSchema: ComparativeExpenseAnalysisOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    const {output} = await retryableAIGeneration(() => prompt(input));
     return output!;
   }
 );
