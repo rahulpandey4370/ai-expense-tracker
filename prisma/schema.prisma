@@ -1,10 +1,13 @@
 // /prisma/schema.prisma
+// This schema is configured based on Vercel's "Prisma Postgres" integration documentation.
+// It assumes Vercel's build environment can handle 'prisma migrate deploy'
+// using the DATABASE_URL (which is your Prisma Accelerate URL) provided by this specific integration.
+
 datasource db {
   provider     = "postgresql"
-  // url is used by Prisma Client, potentially with Accelerate
+  // As per Vercel's "Prisma Postgres" integration, this DATABASE_URL will be your Accelerate URL.
+  // We are relying on Vercel's build environment to handle 'prisma migrate deploy' correctly with this.
   url          = env("DATABASE_URL")
-  // directUrl is used by Prisma Migrate for schema changes
-  directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "prisma"
 }
 
