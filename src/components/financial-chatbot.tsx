@@ -83,7 +83,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
       <Card className={cn("shadow-lg flex flex-col h-[500px]", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <Bot className="h-6 w-6 text-primary" /> AI Financial Assistant
+            <Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant
           </CardTitle>
           <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
         </CardHeader>
@@ -175,3 +175,4 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     </motion.div>
   );
 }
+    

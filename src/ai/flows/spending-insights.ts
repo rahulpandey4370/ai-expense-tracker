@@ -5,7 +5,7 @@
  * @fileOverview AI-powered insights about spending habits.
  *
  * - getSpendingInsights - A function that provides insights into spending patterns.
- * - SpendingInsightsInput - The input type for the getSpendingInsights function (internal).
+ * - SpendingInsightsInput - The input type for the getSpendingInsights function.
  * - SpendingInsightsOutput - The return type for the getSpendingInsights function.
  */
 
@@ -13,7 +13,6 @@ import {ai}from '@/ai/genkit';
 import {z}from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
-// Not Exported:
 const SpendingInsightsInputSchema = z.object({
   monthlySpending: z
     .number()
@@ -33,14 +32,11 @@ const SpendingInsightsInputSchema = z.object({
       'A brief comparison of spending this month compared to last month.'
     ),
 });
-// Exported Type only:
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
 
-// Not Exported:
 const SpendingInsightsOutputSchema = z.object({
   insights: z.string().describe('AI-powered insights about spending habits.'),
 });
-// Exported Type only:
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
 export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {

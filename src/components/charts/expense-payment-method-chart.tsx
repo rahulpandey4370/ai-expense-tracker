@@ -15,22 +15,23 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
+import type { AppTransaction } from "@/lib/types"; 
 import { cn } from "@/lib/utils"
 
 interface ExpensePaymentMethodChartProps {
   transactions: AppTransaction[]; 
   selectedMonthName: string;
   selectedYear: number;
+  chartHeightClass?: string; // New prop
 }
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear }: ExpensePaymentMethodChartProps) {
+export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear, chartHeightClass = "max-h-[300px] w-full" }: ExpensePaymentMethodChartProps) {
  const expenseData = transactions 
-    .filter(t => t.type === 'expense' && t.paymentMethod && t.paymentMethod.name) // ensure paymentMethod and name exist
+    .filter(t => t.type === 'expense' && t.paymentMethod && t.paymentMethod.name) 
     .reduce((acc, curr) => {
-      const paymentMethodName = curr.paymentMethod!.name; // Safe due to filter
+      const paymentMethodName = curr.paymentMethod!.name; 
       acc[paymentMethodName] = (acc[paymentMethodName] || 0) + curr.amount;
       return acc;
     }, {} as Record<string, number>);
@@ -55,7 +56,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
           <CardTitle>Expenses by Payment Method</CardTitle>
           <CardDescription>Payment methods for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-[300px]">
+        <CardContent className={cn("flex items-center justify-center", chartHeightClass || "h-[300px]")}>
           <p className="text-muted-foreground">No expense data for {selectedMonthName} {selectedYear}.</p>
         </CardContent>
       </Card>
@@ -69,7 +70,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
         <CardDescription>Payment methods for {selectedMonthName} {selectedYear}.</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="max-h-[300px] w-full">
+        <ChartContainer config={chartConfig} className={chartHeightClass}>
           <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
             <CartesianGrid horizontal={false} />
             <XAxis type="number" dataKey="expenses" hide tickFormatter={(value) => `₹${value}`} />

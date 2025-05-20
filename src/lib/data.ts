@@ -31,6 +31,7 @@ export const defaultIncomeCategories: Category[] = [
   { id: cuid(), name: 'Bonus', type: 'income' },
   { id: cuid(), name: 'Investment Income', type: 'income' },
   { id: cuid(), name: 'Cashback', type: 'income' },
+  { id: cuid(), name: 'Dividends', type: 'income' },
   { id: cuid(), name: 'Other Income', type: 'income' }
 ];
 
@@ -48,7 +49,7 @@ export const defaultPaymentMethods: PaymentMethod[] = [
   { id: cuid(), name: 'CC AXIS 6152', type: 'Credit Card' },
   { id: cuid(), name: 'CC SBI 0616', type: 'Credit Card' },
   { id: cuid(), name: 'CC YES 2106', type: 'Credit Card' },
-  { id: cuid(), name: 'CC Tanshu', type: 'Credit Card' }, // Assuming 'Tanshu' is a placeholder
+  { id: cuid(), name: 'CC Tanshu', type: 'Credit Card' },
   { id: cuid(), name: 'Cash', type: 'Cash' },
   { id: cuid(), name: 'Others', type: 'Others' }
 ];

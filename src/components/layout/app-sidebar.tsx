@@ -16,7 +16,7 @@ import {
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties } from "lucide-react";
 
 const navItems = [
@@ -34,8 +34,8 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="Rahul's Tracker Home">
-          <AppLogo appName="Rahul's Tracker" />
+        <Link href="/" aria-label="FinWise AI Home">
+          <AppLogo appName="FinWise AI" />
         </Link>
       </SidebarHeader>
       <Separator className="mb-2" />
@@ -43,24 +43,26 @@ export default function AppSidebar() {
         <SidebarMenu className="px-2">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href={item.href} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md">
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      className="justify-start"
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </TooltipTrigger>
-                {sidebarState === 'collapsed' && !isMobile && (
-                  <TooltipContent side="right" align="center">
-                    {item.label}
-                  </TooltipContent>
-                )}
-              </Tooltip>
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href={item.href} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md block">
+                      <SidebarMenuButton
+                        isActive={pathname === item.href}
+                        className="justify-start"
+                      >
+                        <item.icon className="h-5 w-5" />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </Link>
+                  </TooltipTrigger>
+                  {sidebarState === 'collapsed' && !isMobile && (
+                    <TooltipContent side="right" align="center">
+                      {item.label}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
@@ -79,3 +81,4 @@ export default function AppSidebar() {
     </Sidebar>
   );
 }
+    

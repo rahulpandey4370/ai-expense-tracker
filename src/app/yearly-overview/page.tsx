@@ -11,6 +11,9 @@ import { getTransactions } from '@/lib/actions/transactions';
 import { Loader2, AlertTriangle, CalendarRange } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
+import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
+import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
+
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -32,18 +35,25 @@ const tableRowVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
 };
 
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.4, ease: "easeOut" } },
+};
+
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
-const cashbackAndInterestCategoryNames = ["Cashback", "Investment Income"];
+const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
-interface MonthlySummary {
+export interface MonthlySummary {
   monthIndex: number;
   monthName: string;
+  monthShortName: string; // For chart labels
+  year: number; // For chart labels
   totalSpend: number;
   totalInvestment: number;
   totalSavings: number;
-  totalCashbacksInterests: number;
+  totalCashbacksInterestsDividends: number;
   totalIncome: number;
 }
 
@@ -84,16 +94,15 @@ export default function YearlyOverviewPage() {
   }, [fetchTransactionsCallback]);
 
   useEffect(() => {
-    // Ensure selectedYear is one of the available years, default to most recent if not.
     if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
       setSelectedYear(availableYears[0]);
     }
   }, [availableYears, selectedYear]);
 
 
-  const yearlySummaryData = useMemo(() => {
+  const yearlySummaryData = useMemo((): MonthlySummary[] => {
     const summary: MonthlySummary[] = [];
-    for (let i = 0; i < 12; i++) { // Iterate through 12 months
+    for (let i = 0; i < 12; i++) { 
       const monthTransactions = allTransactions.filter(t => {
         const transactionDate = new Date(t.date);
         return transactionDate.getFullYear() === selectedYear && transactionDate.getMonth() === i;
@@ -114,9 +123,9 @@ export default function YearlyOverviewPage() {
         )
         .reduce((sum, t) => sum + t.amount, 0);
       
-      const totalCashbacksInterests = monthTransactions
+      const totalCashbacksInterestsDividends = monthTransactions
         .filter(t => t.type === 'income' &&
-                     (t.category && cashbackAndInterestCategoryNames.includes(t.category.name))
+                     (t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
         )
         .reduce((sum, t) => sum + t.amount, 0);
 
@@ -125,10 +134,12 @@ export default function YearlyOverviewPage() {
       summary.push({
         monthIndex: i,
         monthName: monthNames[i],
+        monthShortName: monthNames[i].substring(0,3),
+        year: selectedYear,
         totalSpend,
         totalInvestment,
         totalSavings,
-        totalCashbacksInterests,
+        totalCashbacksInterestsDividends,
         totalIncome,
       });
     }
@@ -140,10 +151,10 @@ export default function YearlyOverviewPage() {
       acc.totalSpend += monthData.totalSpend;
       acc.totalInvestment += monthData.totalInvestment;
       acc.totalSavings += monthData.totalSavings;
-      acc.totalCashbacksInterests += monthData.totalCashbacksInterests;
+      acc.totalCashbacksInterestsDividends += monthData.totalCashbacksInterestsDividends;
       acc.totalIncome += monthData.totalIncome;
       return acc;
-    }, { totalSpend: 0, totalInvestment: 0, totalSavings: 0, totalCashbacksInterests: 0, totalIncome: 0 });
+    }, { totalSpend: 0, totalInvestment: 0, totalSavings: 0, totalCashbacksInterestsDividends: 0, totalIncome: 0 });
   }, [yearlySummaryData]);
 
 
@@ -198,42 +209,54 @@ export default function YearlyOverviewPage() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <motion.div className="overflow-x-auto" variants={tableContainerVariants} initial="hidden" animate="visible">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-primary/5 border-b-primary/20">
-                      <TableHead className="font-semibold text-muted-foreground w-[120px]">Month</TableHead>
-                      <TableHead className="text-right font-semibold text-muted-foreground">Total Spend</TableHead>
-                      <TableHead className="text-right font-semibold text-muted-foreground">Total Investment</TableHead>
-                      <TableHead className="text-right font-semibold text-muted-foreground">Total Savings</TableHead>
-                      <TableHead className="text-right font-semibold text-muted-foreground">Cashbacks/Interests</TableHead>
-                      <TableHead className="text-right font-semibold text-muted-foreground">Total Income</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {yearlySummaryData.map((data) => (
-                      <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50">
-                        <TableCell className="font-medium text-foreground">{data.monthName}</TableCell>
-                        <TableCell className={cn("text-right", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
-                        <TableCell className={cn("text-right", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
-                        <TableCell className={cn("text-right", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
-                        <TableCell className={cn("text-right", data.totalCashbacksInterests > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterests.toFixed(2)}</TableCell>
-                        <TableCell className={cn("text-right", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
-                      </motion.tr>
-                    ))}
-                  </TableBody>
-                  <TableFooter>
-                    <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                      <TableHead className="font-bold text-primary">Total ({selectedYear})</TableHead>
-                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
-                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
-                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
-                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalCashbacksInterests > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterests.toFixed(2)}</TableHead>
-                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-              </motion.div>
+              <>
+                <motion.div 
+                    className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
+                    variants={cardVariants} 
+                    initial="hidden" 
+                    animate="visible"
+                >
+                    <MonthlyIncomeExpenseSavingsChart monthlyData={yearlySummaryData} />
+                    <SavingsTrendChart monthlyData={yearlySummaryData} />
+                </motion.div>
+
+                <motion.div className="overflow-x-auto" variants={tableContainerVariants} initial="hidden" animate="visible">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-primary/5 border-b-primary/20">
+                        <TableHead className="font-semibold text-muted-foreground w-[120px]">Month</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground">Total Income</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground">Total Spend</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground">Total Savings</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground">Total Investment</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground">Cashbacks/Interests/Dividends</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {yearlySummaryData.map((data) => (
+                        <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50">
+                          <TableCell className="font-medium text-foreground">{data.monthName}</TableCell>
+                          <TableCell className={cn("text-right", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
+                        </motion.tr>
+                      ))}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow className="bg-primary/10 border-t-2 border-primary/30">
+                        <TableHead className="font-bold text-primary">Total ({selectedYear})</TableHead>
+                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </motion.div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -241,4 +264,3 @@ export default function YearlyOverviewPage() {
     </main>
   );
 }
-

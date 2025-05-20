@@ -269,7 +269,7 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
               <motion.div {...buttonHoverTap}>
-                <Button onClick={exportReportToPDF} variant="outline" className="bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent-foreground dark:text-accent">
+                <Button onClick={exportReportToPDF} variant="outline" className="bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground">
                     <Download className="mr-2 h-4 w-4" />
                     Export to PDF
                 </Button>
@@ -298,9 +298,23 @@ export default function ReportsPage() {
                 </Alert>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <motion.div variants={cardVariants}><ExpenseCategoryChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/></motion.div>
-                    <motion.div variants={cardVariants}><ExpensePaymentMethodChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear}/></motion.div>
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+                    <motion.div variants={cardVariants} className="lg:col-span-3">
+                        <ExpenseCategoryChart 
+                            transactions={filteredTransactionsForPeriod} 
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
+                            selectedYear={reportYear}
+                            chartHeightClass="max-h-[400px] min-h-[350px] md:min-h-[400px]"
+                        />
+                    </motion.div>
+                    <motion.div variants={cardVariants} className="lg:col-span-2">
+                        <ExpensePaymentMethodChart 
+                            transactions={filteredTransactionsForPeriod} 
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
+                            selectedYear={reportYear}
+                            chartHeightClass="max-h-[400px] min-h-[350px] md:min-h-[400px]"
+                        />
+                    </motion.div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div> 
@@ -355,5 +369,3 @@ export default function ReportsPage() {
     </main>
   );
 }
-
-    

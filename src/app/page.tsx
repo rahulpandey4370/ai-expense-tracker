@@ -14,7 +14,7 @@ import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
-import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, Gift, Target, Banknote } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, Gift, Target, HandCoins } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.07, // Slightly faster stagger
+      staggerChildren: 0.07,
       delayChildren: 0.1,
     },
   },
@@ -51,6 +51,7 @@ const sectionVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
@@ -111,8 +112,8 @@ export default function DashboardPage() {
     const savings = income - spending;
     const savingsRate = income > 0 ? (savings / income) * 100 : 0;
 
-    const totalCashback = currentMonthTransactions
-      .filter(t => t.type === 'income' && t.category?.name === 'Cashback')
+    const totalCashbackInterestsDividends = currentMonthTransactions
+      .filter(t => t.type === 'income' && t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalInvestment = currentMonthTransactions
@@ -124,7 +125,7 @@ export default function DashboardPage() {
 
     const investmentPercentage = income > 0 ? (totalInvestment / income) * 100 : 0;
 
-    return { income, spending, savings, savingsRate, totalCashback, totalInvestment, investmentPercentage };
+    return { income, spending, savings, savingsRate, totalCashbackInterestsDividends, totalInvestment, investmentPercentage };
   }, [currentMonthTransactions]);
 
   const lastMonthTotalSpending = useMemo(() => {
@@ -158,7 +159,7 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
       <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" // Adjusted for 6 KPIs
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -176,7 +177,7 @@ export default function DashboardPage() {
           <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-500 dark:text-purple-400" : "text-yellow-500 dark:text-yellow-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 dark:border-purple-700/50 dark:bg-purple-900/20 dark:hover:bg-purple-800/30"/>
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard title="Total Cashback" value={`₹${monthlyMetrics.totalCashback.toFixed(2)}`} icon={Gift} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"/>
+          <KpiCard title="Cashback/Interests" value={`₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}`} icon={HandCoins} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"/>
         </motion.div>
         <motion.div variants={itemVariants}>
           <KpiCard title="Investment %" value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} icon={Target} description={`of income for ${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"/>
@@ -195,7 +196,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      <Card className={cn("shadow-xl rounded-xl bg-card", glowClass)}>
+      <Card className={cn("shadow-xl rounded-xl p-0 sm:p-0 bg-card", glowClass)}>
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
       </Card>
 

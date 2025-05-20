@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rahul's Expense Tracker",
-  description: "Track your expenses intelligently with Rahul's Expense Tracker.",
+  title: "FinWise AI - Expense Tracker",
+  description: "Track your expenses intelligently with FinWise AI.",
 };
 
 export default function RootLayout({
@@ -54,3 +54,4 @@ export default function RootLayout({
     </html>
   );
 }
+    

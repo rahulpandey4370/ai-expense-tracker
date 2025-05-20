@@ -4,22 +4,18 @@
  * @fileOverview AI-powered chatbot for answering financial questions.
  *
  * - askFinancialBot - A function that handles financial queries using AI.
- * - FinancialChatbotInput - The input type for the askFinancialBot function (internal to flow).
  * - FinancialChatbotOutput - The return type for the askFinancialBot function.
  * - ChatMessage - Type for chat history messages.
  */
 
 import {ai}from '@/ai/genkit';
 import {z}from 'genkit';
-import type { AppTransaction } from '@/lib/types'; // Using our app's Transaction type
+import type { AppTransaction } from '@/lib/types'; 
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 
-// Zod schema for transactions to be passed to the AI model
-// Aligned with AppTransaction structure (relations will be denormalized for AI)
-// Not Exported
 const AITransactionSchema = z.object({
   id: z.string(),
-  type: z.string(), // "income" | "expense"
+  type: z.string(), 
   date: z.string().describe("Date in ISO format string"),
   amount: z.number(),
   description: z.string().nullish(),
@@ -30,43 +26,38 @@ const AITransactionSchema = z.object({
 });
 type AITransaction = z.infer<typeof AITransactionSchema>;
 
-// Not Exported
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
-// Not Exported
 const FinancialChatbotInputSchema = z.object({
   query: z.string().describe("The user's current financial question or request."),
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any.")
 });
-export type FinancialChatbotInput = z.infer<typeof FinancialChatbotInputSchema>;
+type FinancialChatbotInput = z.infer<typeof FinancialChatbotInputSchema>;
 
-// Not Exported
 const FinancialChatbotOutputSchema = z.object({
   response: z.string().describe("The AI's response to the user's query."),
 });
 export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema>;
 
 
-// Exported wrapper function
 export async function askFinancialBot(input: {
   query: string;
-  transactions: AppTransaction[]; // Expecting our app's AppTransaction type which includes relations
+  transactions: AppTransaction[]; 
   chatHistory?: ChatMessage[];
 }): Promise<FinancialChatbotOutput> {
-  // Convert AppTransaction[] to AITransaction[] (flattening relations for AI)
   const aiTransactions: AITransaction[] = input.transactions.map(t => ({
     id: t.id,
     type: t.type,
     date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
     amount: t.amount,
     description: t.description,
-    categoryName: t.category?.name, // Access nested category name
-    paymentMethodName: t.paymentMethod?.name, // Access nested payment method name
+    categoryName: t.category?.name, 
+    paymentMethodName: t.paymentMethod?.name, 
     expenseType: t.expenseType,
     source: t.source,
   }));
@@ -91,20 +82,20 @@ Transaction Data (potentially filtered by user's current view, e.g., for a speci
 ${JSON.stringify(transactions.slice(0, 100), null, 2)}
 \`\`\`
 ${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more transactions not shown to save space)` : ''}
-`; // Truncate transactions if too long for the prompt
+`; 
 
     const messages: { role: 'user' | 'assistant' | 'system', content: string }[] = [];
     messages.push({ role: 'system', content: systemPrompt });
 
     if (chatHistory && chatHistory.length > 0) {
-      chatHistory.slice(-5).forEach(msg => { // Take last 5 messages from history
+      chatHistory.slice(-5).forEach(msg => { 
         messages.push({ role: msg.role, content: msg.content });
       });
     }
     messages.push({ role: 'user', content: query });
 
     const llmResponse = await retryableAIGeneration(() => ai.generate({
-      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:', // Construct prompt string
+      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:', 
       model: 'googleai/gemini-2.0-flash',
       config: {
         temperature: 0.3,
@@ -116,8 +107,6 @@ ${transactions.length > 100 ? `\n...(and ${transactions.length - 100} more trans
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         ],
       },
-       // Explicitly pass the tools if any are defined and relevant for this flow.
-       // tools: [/* your tools here if needed */]
     }));
 
     const responseText = llmResponse.text;

@@ -17,13 +17,14 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import type { AppTransaction } from "@/lib/types" // Using AppTransaction
+import type { AppTransaction } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface ExpenseCategoryChartProps {
   transactions: AppTransaction[]; 
   selectedMonthName: string;
   selectedYear: number;
+  chartHeightClass?: string; // New prop for dynamic height
 }
 
 const CHART_COLORS = [
@@ -39,11 +40,11 @@ const CHART_COLORS = [
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear }: ExpenseCategoryChartProps) {
+export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear, chartHeightClass = "max-h-[300px]" }: ExpenseCategoryChartProps) {
   const expenseData = transactions
-    .filter(t => t.type === 'expense' && t.category && t.category.name) // ensure category and name exist
+    .filter(t => t.type === 'expense' && t.category && t.category.name)
     .reduce((acc, curr) => {
-      const categoryName = curr.category!.name; // Safe due to filter
+      const categoryName = curr.category!.name; 
       acc[categoryName] = (acc[categoryName] || 0) + curr.amount;
       return acc;
     }, {} as Record<string, number>);
@@ -68,7 +69,7 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
           <CardTitle>Expenses by Category</CardTitle>
           <CardDescription>Spending distribution for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-[300px]">
+        <CardContent className={cn("flex items-center justify-center", chartHeightClass || "h-[300px]")}>
           <p className="text-muted-foreground">No expense data for {selectedMonthName} {selectedYear}.</p>
         </CardContent>
       </Card>
@@ -84,7 +85,7 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
       <CardContent className="flex-1 pb-0">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto aspect-square max-h-[300px]"
+          className={cn("mx-auto aspect-square", chartHeightClass)}
         >
           <PieChart>
             <ChartTooltip
@@ -95,8 +96,11 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
               data={chartData}
               dataKey="value"
               nameKey="name"
-              innerRadius={60}
-              strokeWidth={5}
+              innerRadius="30%" // Makes it a doughnut chart
+              outerRadius="80%" // Control size
+              strokeWidth={2}
+              labelLine={false}
+              // label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} // Example label
             >
               {chartData.map((entry, index) => (
                  <Cell key={`cell-${index}`} fill={entry.fill} />

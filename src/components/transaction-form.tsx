@@ -16,15 +16,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle } from "lucide-react";
-import { format, parse as parseDateFns } from "date-fns"; // Renamed import
+import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip } from "lucide-react";
+import { format, parse as parseDateFns } from "date-fns";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/parse-transactions-flow';
+import { parseReceiptImage, type ParsedReceiptTransaction } from '@/ai/flows/parse-receipt-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { TransactionInputSchema } from '@/lib/types'; // Moved here from actions
+import { TransactionInputSchema } from '@/lib/types';
+import Image from 'next/image';
+
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
@@ -42,9 +45,6 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
-
-
 type BulkParsedTransaction = Partial<TransactionInput> & {
   originalRow: string;
   rowIndex: number;
@@ -55,7 +55,7 @@ type BulkParsedTransaction = Partial<TransactionInput> & {
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('single');
 
   // Single Transaction State
   const [type, setType] = useState<AppTransactionTypeEnum>('expense');
@@ -83,7 +83,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [aiText, setAiText] = useState<string>('');
   const [parsedAITransactions, setParsedAITransactions] = useState<ParsedAITransaction[]>([]);
   const [aiReviewTransactions, setAiReviewTransactions] = useState<TransactionInput[]>([]);
-  const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [isProcessingAIText, setIsProcessingAIText] = useState(false);
+  const [aiProcessingError, setAiProcessingError] = useState<string | null>(null);
+
+  // AI Receipt Input State
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [parsedReceiptTransaction, setParsedReceiptTransaction] = useState<ParsedReceiptTransaction | null>(null);
+  const [aiReceiptReviewTransaction, setAiReceiptReviewTransaction] = useState<TransactionInput | null>(null);
+  const [isProcessingAIReceipt, setIsProcessingAIReceipt] = useState(false);
+  const [aiReceiptError, setAiReceiptError] = useState<string | null>(null);
 
 
   const [isClient, setIsClient] = useState(false);
@@ -95,7 +104,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsFetchingDropdowns(true);
     try {
       const [fetchedAllCategories, fetchedPaymentMethods] = await Promise.all([
-        getCategories(), // Fetch all categories
+        getCategories(), 
         getPaymentMethods()
       ]);
       
@@ -104,7 +113,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setIncomeCategories(fetchedAllCategories.filter(c => c.type === 'income'));
       setPaymentMethods(fetchedPaymentMethods);
 
-      // Set defaults only if not editing and in single tab
       if (!initialTransactionData && activeTab === 'single') {
         const currentTypeCategories = type === 'expense' ? fetchedAllCategories.filter(c => c.type === 'expense') : fetchedAllCategories.filter(c => c.type === 'income');
         setSelectedCategoryId(currentTypeCategories.length > 0 ? currentTypeCategories[0].id : undefined);
@@ -268,19 +276,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsProcessingBulk(true);
     const lines = bulkText.trim().split('\n');
     const parsed: BulkParsedTransaction[] = lines.map((line, index) => {
-      const values = line.split('\t'); // Assuming Tab-separated
+      const values = line.split('\t'); 
       const errors: string[] = [];
       
-      // Expected: Description, Category Name, Amount (₹XX.XX), Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method Name
-      if (values.length < 7) { // Need at least 7 columns
-        errors.push("Not enough columns. Expected: Description, Category, Amount, Total Amount, Date, Expense Type, Payment Method.");
-        return { originalRow: line, rowIndex: index, errors, type: 'expense' }; // Default to expense
+      if (values.length < 7) {
+        errors.push("Expected 7 columns: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method.");
+        return { originalRow: line, rowIndex: index, errors, type: 'expense' };
       }
 
       const desc = values[0]?.trim();
       const catName = values[1]?.trim();
       const amountStr = values[2]?.trim();
-      // values[3] is Total Amount, ignored for now
       const dateStr = values[4]?.trim();
       const expTypeStr = values[5]?.trim().toLowerCase();
       const pmName = values[6]?.trim();
@@ -290,9 +296,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         if (dateStr) {
             parsedDate = parseDateFns(dateStr, 'dd/MM/yyyy', new Date());
             if (isNaN(parsedDate.getTime())) throw new Error("Invalid date format. Use DD/MM/YYYY.");
-        } else {
-            errors.push("Date is missing.");
-        }
+        } else { errors.push("Date is missing."); }
       } catch (e: any) { errors.push(e.message); }
 
       let amt: number | undefined;
@@ -301,11 +305,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             const cleanedAmountStr = amountStr.replace(/[₹,]/g, '');
             amt = parseFloat(cleanedAmountStr);
             if (isNaN(amt) || amt <= 0) throw new Error("Amount must be a positive number.");
-          } else {
-            errors.push("Amount is missing.");
-          }
+          } else { errors.push("Amount is missing."); }
       } catch (e: any) { errors.push(e.message); }
-
 
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
@@ -316,12 +317,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       }
       if (!pmName) errors.push("Payment Method Name is missing.");
 
-
       const result: BulkParsedTransaction = {
         date: parsedDate,
         description: desc,
         amount: amt,
-        type: 'expense', // All bulk entries are expenses based on format
+        type: 'expense', 
         categoryName: catName,
         paymentMethodName: pmName,
         expenseType: expTypeStr as AppExpenseTypeEnum,
@@ -367,7 +367,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         const transactionInput: TransactionInput = {
             date: pt.date,
             amount: pt.amount,
-            type: 'expense', // Hardcoded as all bulk are expenses
+            type: 'expense', 
             description: pt.description,
             categoryId: category.id,
             paymentMethodId: paymentMethod.id,
@@ -386,9 +386,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         transactionsToSubmit.push(validation.data);
     }
     
-    // Update parsedBulkTransactions to show any new validation errors
     setParsedBulkTransactions([...parsedBulkTransactions]);
-
 
     if(transactionsToSubmit.length === 0 && errorCount > 0) {
         toast({ title: "Submission Failed", description: "No valid transactions to submit after review.", variant: "destructive" });
@@ -423,14 +421,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(false);
   };
 
-  const handleProcessAI = async () => {
+  const handleProcessAIText = async () => {
     if (!aiText.trim()) {
       toast({ title: "Input Required", description: "Please enter some text for the AI to process.", variant: "destructive"});
       return;
     }
-    setIsProcessingAI(true);
+    setIsProcessingAIText(true);
     setParsedAITransactions([]);
     setAiReviewTransactions([]);
+    setAiProcessingError(null);
     try {
       const categoryNamesForAI = allCategories.map(c => ({id: c.id, name: c.name, type: c.type}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({id: p.id, name: p.name }));
@@ -445,14 +444,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (result.parsedTransactions.length > 0) {
         toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
       } else {
-         toast({ title: "AI Processing Complete", description: "The AI could not identify any clear transactions in the text." });
+         toast({ title: "AI Processing Complete", description: result.summaryMessage || "The AI could not identify any clear transactions in the text." });
       }
 
     } catch (error: any) {
-      console.error("AI processing error:", error);
-      toast({ title: "AI Error", description: error.message || "Failed to process text with AI.", variant: "destructive" });
+      console.error("AI text processing error in component:", error);
+      const message = error.message || "Failed to process text with AI due to an unexpected error.";
+      setAiProcessingError(message);
+      toast({ title: "AI Error", description: message, variant: "destructive" });
     } finally {
-      setIsProcessingAI(false);
+      setIsProcessingAIText(false);
     }
   };
 
@@ -489,7 +490,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (parsedAITransactions.length > 0) {
       const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
         let catId, pmId;
-        let transactionDate = new Date(); // Default to today
+        let transactionDate = new Date(); 
         try {
             if(aiTx.date) {
                 const parsed = parseDateFns(aiTx.date, 'yyyy-MM-dd', new Date());
@@ -522,7 +523,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   }, [parsedAITransactions, expenseCategories, incomeCategories, paymentMethods]);
 
-  const handleSubmitAI = async () => {
+  const handleSubmitAIText = async () => {
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
@@ -570,19 +571,140 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(false);
   };
 
+  const handleReceiptFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setReceiptFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReceiptPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setParsedReceiptTransaction(null); // Clear previous AI results
+      setAiReceiptReviewTransaction(null);
+      setAiReceiptError(null);
+    }
+  };
+
+  const handleProcessAIReceipt = async () => {
+    if (!receiptFile) {
+      toast({ title: "No Receipt File", description: "Please upload a receipt image first.", variant: "destructive" });
+      return;
+    }
+    if (!receiptPreview) { // Should not happen if receiptFile is set, but good check
+        toast({ title: "File Error", description: "Could not read the receipt file for preview.", variant: "destructive"});
+        return;
+    }
+    setIsProcessingAIReceipt(true);
+    setParsedReceiptTransaction(null);
+    setAiReceiptReviewTransaction(null);
+    setAiReceiptError(null);
+
+    try {
+      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type }));
+      const paymentMethodNamesForAI = paymentMethods.map(p => ({ id: p.id, name: p.name }));
+
+      const result = await parseReceiptImage({
+        receiptImageUri: receiptPreview, // receiptPreview is the data URI
+        categories: categoryNamesForAI,
+        paymentMethods: paymentMethodNamesForAI,
+      });
+      setParsedReceiptTransaction(result.parsedTransaction);
+
+      if (result.parsedTransaction && result.parsedTransaction.amount && result.parsedTransaction.description) {
+        let catId, pmId;
+        let transactionDate = new Date();
+        try {
+            if(result.parsedTransaction.date) {
+                const parsed = parseDateFns(result.parsedTransaction.date, 'yyyy-MM-dd', new Date());
+                if(!isNaN(parsed.getTime())) transactionDate = parsed;
+            }
+        } catch (e) { console.warn("AI receipt returned invalid date string:", result.parsedTransaction.date); }
+
+        catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction.categoryNameGuess?.toLowerCase())?.id;
+        pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction.paymentMethodNameGuess?.toLowerCase())?.id;
+
+        setAiReceiptReviewTransaction({
+          date: transactionDate,
+          description: result.parsedTransaction.description,
+          amount: result.parsedTransaction.amount,
+          type: 'expense', // Receipts are generally expenses
+          categoryId: catId,
+          paymentMethodId: pmId,
+          expenseType: result.parsedTransaction.expenseTypeNameGuess || 'need',
+        });
+        toast({ title: "AI Receipt Scan Complete", description: "Review the extracted details below." });
+      } else {
+        setAiReceiptError(result.parsedTransaction?.error || "AI could not extract sufficient details from the receipt.");
+        toast({ title: "AI Receipt Scan Issue", description: result.parsedTransaction?.error || "Could not extract clear transaction details.", variant: "default" });
+      }
+    } catch (error: any) {
+      console.error("AI receipt processing error in component:", error);
+      const message = error.message || "Failed to process receipt with AI.";
+      setAiReceiptError(message);
+      toast({ title: "AI Receipt Error", description: message, variant: "destructive" });
+    } finally {
+      setIsProcessingAIReceipt(false);
+    }
+  };
+  
+  const handleAIReceiptReviewChange = (field: keyof TransactionInput, value: any) => {
+    setAiReceiptReviewTransaction(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, [field]: value };
+      if (field === 'date' && value instanceof Date) {
+        updated.date = value;
+      }
+      return updated;
+    });
+  };
+
+  const handleSubmitAIReceipt = async () => {
+    if (!aiReceiptReviewTransaction) {
+      toast({ title: "No Data", description: "No transaction data to submit.", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    const validation = TransactionInputSchema.safeParse(aiReceiptReviewTransaction);
+    if (!validation.success) {
+      const readableErrors = Object.entries(validation.error.flatten().fieldErrors)
+        .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+        .join('; ');
+      toast({ title: "Validation Error", description: `Correct the details: ${readableErrors}`, variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      await addTransaction(validation.data);
+      toast({ title: "Transaction Added!", description: "Receipt transaction recorded successfully." });
+      onTransactionAdded?.();
+      setReceiptFile(null);
+      setReceiptPreview(null);
+      setParsedReceiptTransaction(null);
+      setAiReceiptReviewTransaction(null);
+      setAiReceiptError(null);
+    } catch (error: any) {
+      console.error("AI receipt submission error:", error);
+      toast({ title: "Submission Error", description: error.message || "Could not save transaction.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const cardTitleText = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
   const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly using one of the methods below.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData && activeTab === 'single') {
-    return <div className="p-6"><Skeleton className="h-64 w-full" /></div>; // Basic skeleton for SSR/initial load
+    return <div className="p-6"><Skeleton className="h-64 w-full" /></div>; 
   }
 
   const FormWrapperComponent = initialTransactionData ? motion.div : Card;
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
-    : { className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card") }; //glowClass removed from here
+    : { className: cn("p-0 sm:p-0 bg-card") }; 
   
   const labelClasses = "text-foreground/90 dark:text-foreground/80";
   const inputClasses = "bg-background/70 dark:bg-input/20 border-border/70 dark:border-border/40 text-foreground placeholder:text-muted-foreground/70 focus:border-primary dark:focus:border-accent focus:ring-primary dark:focus:ring-accent";
@@ -693,12 +815,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   
   const renderBulkPasteForm = () => (
     <div className="space-y-4">
-      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
+      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
       <Textarea
         id="bulk-input"
         value={bulkText}
         onChange={(e) => setBulkText(e.target.value)}
-        placeholder="E.g.&#10;Rent	Rent	₹32,000.00	₹32,000.00	01/05/2025	Need	UPI (HDFC)&#10;Corner House Ice cream	Food and Dining	₹94.50	₹189.00	01/05/2025	Want	Credit Card YES 2106"
+        placeholder="E.g.&#10;Rent	Rent	₹32,000.00	₹32,000.00	01/05/2025	Need	UPI (HDFC)&#10;Ice cream	Food and Dining	₹94.50	₹189.00	01/05/2025	Want	Credit Card YES 2106"
         rows={8}
         className={inputClasses}
         disabled={isProcessingBulk || isLoading}
@@ -755,14 +877,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         placeholder="e.g., Dinner with friends ₹1200 using HDFC credit card yesterday. Received ₹50000 salary last Monday. Groceries for ₹2500 via UPI two days ago."
         rows={5}
         className={inputClasses}
-        disabled={isProcessingAI || isLoading}
+        disabled={isProcessingAIText || isLoading}
       />
-      <Button onClick={handleProcessAI} disabled={isProcessingAI || isLoading || !aiText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
-        {isProcessingAI ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+      <Button onClick={handleProcessAIText} disabled={isProcessingAIText || isLoading || !aiText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
+        {isProcessingAIText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
         Process with AI
       </Button>
 
-      {isProcessingAI && (
+      {isProcessingAIText && (
          <div className="space-y-2 pt-4">
             <Skeleton className="h-8 w-full bg-muted/50" />
             <Skeleton className="h-8 w-full bg-muted/50" />
@@ -770,8 +892,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <p className="text-center text-muted-foreground text-sm">AI is thinking...</p>
         </div>
       )}
+      {aiProcessingError && !isProcessingAIText && (
+          <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>AI Processing Error</AlertTitle>
+              <AlertDescription>{aiProcessingError}</AlertDescription>
+          </Alert>
+      )}
 
-      {aiReviewTransactions.length > 0 && !isProcessingAI && (
+      {aiReviewTransactions.length > 0 && !isProcessingAIText && !aiProcessingError && (
         <div className="space-y-3">
           <h4 className="text-md font-semibold text-primary">Review AI Suggestions ({aiReviewTransactions.length} potential transactions)</h4>
            <Alert variant="destructive" className="text-sm">
@@ -869,7 +998,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             ))}
             </div>
           </ScrollArea>
-          <Button onClick={handleSubmitAI} disabled={isLoading || aiReviewTransactions.length === 0} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
+          <Button onClick={handleSubmitAIText} disabled={isLoading || aiReviewTransactions.length === 0} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
             Submit Reviewed Transactions
           </Button>
@@ -878,25 +1007,143 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </div>
   );
 
+  const renderAIReceiptForm = () => (
+    <div className="space-y-4">
+        <Label htmlFor="ai-receipt-input" className={labelClasses}>Upload Receipt Image</Label>
+        <div className="flex items-center gap-3">
+            <Input
+                id="ai-receipt-input"
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                onChange={handleReceiptFileChange}
+                className={cn("block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20", inputClasses)}
+                disabled={isProcessingAIReceipt || isLoading}
+            />
+             <Button onClick={handleProcessAIReceipt} disabled={isProcessingAIReceipt || isLoading || !receiptFile} className="bg-primary text-primary-foreground whitespace-nowrap" withMotion>
+                {isProcessingAIReceipt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileImage className="mr-2 h-4 w-4" />}
+                Scan with AI
+            </Button>
+        </div>
+
+        {receiptPreview && (
+            <div className="mt-2 border rounded-md p-2 bg-background/50 flex flex-col items-center">
+                <p className="text-sm text-muted-foreground mb-1">Receipt Preview:</p>
+                <Image src={receiptPreview} alt="Receipt preview" width={200} height={300} className="max-w-full max-h-[250px] object-contain rounded-md border" />
+            </div>
+        )}
+
+        {isProcessingAIReceipt && (
+            <div className="space-y-2 pt-4">
+                <Skeleton className="h-8 w-full bg-muted/50" />
+                <Skeleton className="h-8 w-full bg-muted/50" />
+                <Skeleton className="h-8 w-3/4 bg-muted/50" />
+                <p className="text-center text-muted-foreground text-sm">AI is scanning your receipt...</p>
+            </div>
+        )}
+
+        {aiReceiptError && !isProcessingAIReceipt && (
+            <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>AI Receipt Processing Error</AlertTitle>
+                <AlertDescription>{aiReceiptError}</AlertDescription>
+            </Alert>
+        )}
+
+        {aiReceiptReviewTransaction && !isProcessingAIReceipt && !aiReceiptError && (
+            <div className="space-y-3 pt-3">
+                <h4 className="text-md font-semibold text-primary">Review AI Receipt Suggestion</h4>
+                <Alert variant="destructive" className="text-sm">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>AI is not perfect!</AlertTitle>
+                    <AlertDescription>
+                        Carefully review the extracted details, especially the date, amount, and category. Make corrections as needed.
+                    </AlertDescription>
+                </Alert>
+                <Card className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <Label className={cn(labelClasses, "text-xs")}>Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button variant={"outline"} size="sm" className={cn(popoverButtonClasses, "text-xs h-8 mt-0.5")} >
+                                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-accent" />
+                                    {aiReceiptReviewTransaction.date ? format(new Date(aiReceiptReviewTransaction.date), "PPP") : <span>Pick date</span>}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={aiReceiptReviewTransaction.date instanceof Date ? aiReceiptReviewTransaction.date : new Date(aiReceiptReviewTransaction.date)} onSelect={(d) => handleAIReceiptReviewChange('date', d)} initialFocus className={calendarClasses} /></PopoverContent>
+                            </Popover>
+                        </div>
+                        <div>
+                            <Label className={cn(labelClasses, "text-xs")}>Amount (₹)</Label>
+                            <Input type="number" value={aiReceiptReviewTransaction.amount?.toString() || ''} onChange={(e) => handleAIReceiptReviewChange('amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                        </div>
+                    </div>
+                    <div>
+                        <Label className={cn(labelClasses, "text-xs")}>Description (Merchant)</Label>
+                        <Input value={aiReceiptReviewTransaction.description || ''} onChange={(e) => handleAIReceiptReviewChange('description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <Label className={cn(labelClasses, "text-xs")}>Category</Label>
+                            <Select value={aiReceiptReviewTransaction.categoryId} onValueChange={(val) => handleAIReceiptReviewChange('categoryId', val)}>
+                                <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Category" /></SelectTrigger>
+                                <SelectContent className={selectContentClasses}>{expenseCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className={cn(labelClasses, "text-xs")}>Payment Method</Label>
+                            <Select value={aiReceiptReviewTransaction.paymentMethodId} onValueChange={(val) => handleAIReceiptReviewChange('paymentMethodId', val)}>
+                                <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Payment Method" /></SelectTrigger>
+                                <SelectContent className={selectContentClasses}>{paymentMethods.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div>
+                        <Label className={cn(labelClasses, "text-xs")}>Expense Type</Label>
+                        <Select value={aiReceiptReviewTransaction.expenseType} onValueChange={(val) => handleAIReceiptReviewChange('expenseType', val as AppExpenseTypeEnum)}>
+                            <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Expense Type" /></SelectTrigger>
+                            <SelectContent className={selectContentClasses}>
+                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment_expense">Investment</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {parsedReceiptTransaction?.confidenceScore !== undefined && (
+                        <p className="text-xs text-muted-foreground">AI Confidence: {(parsedReceiptTransaction.confidenceScore * 100).toFixed(0)}%</p>
+                    )}
+                    {parsedReceiptTransaction?.error && (
+                        <p className="text-xs text-red-500">AI Note: {parsedReceiptTransaction.error}</p>
+                    )}
+                </Card>
+                 <Button onClick={handleSubmitAIReceipt} disabled={isLoading || !aiReceiptReviewTransaction} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
+                    Submit Reviewed Receipt Transaction
+                </Button>
+            </div>
+        )}
+    </div>
+  );
+
+
   return (
     <FormWrapperComponent {...formWrapperProps}>
       {!initialTransactionData && (
         <CardHeader className="p-6 pb-4">
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
-            <FilePlus className="h-6 w-6 text-accent" /> {cardTitleText}
+            <Paperclip className="h-6 w-6 text-accent" /> {cardTitleText}
           </CardTitle>
           <CardDescription className="text-muted-foreground">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6', "bg-card rounded-b-xl")}> {/* Added bg-card here */}
+      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6', "bg-card rounded-b-xl")}>
         {initialTransactionData ? ( 
             renderSingleTransactionForm()
         ) : (
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai')} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-4">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai_text' | 'ai_receipt')} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
                     <TabsTrigger value="single">Single Entry</TabsTrigger>
                     <TabsTrigger value="bulk">Bulk Paste</TabsTrigger>
-                    <TabsTrigger value="ai">AI Text Input</TabsTrigger>
+                    <TabsTrigger value="ai_text">AI Text Input</TabsTrigger>
+                    <TabsTrigger value="ai_receipt">AI Receipt Scan</TabsTrigger>
                 </TabsList>
                 <TabsContent value="single">
                     {renderSingleTransactionForm()}
@@ -904,8 +1151,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 <TabsContent value="bulk">
                     {renderBulkPasteForm()}
                 </TabsContent>
-                <TabsContent value="ai">
+                <TabsContent value="ai_text">
                     {renderAITextInputForm()}
+                </TabsContent>
+                 <TabsContent value="ai_receipt">
+                    {renderAIReceiptForm()}
                 </TabsContent>
             </Tabs>
         )}
