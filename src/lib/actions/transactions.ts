@@ -1,14 +1,15 @@
+
 'use server';
 
 import prisma from '@/lib/prisma';
-import type { Transaction as AppTransaction, TransactionInput as AppTransactionInput } from '@/lib/types';
+import type { Transaction as AppTransaction, TransactionInput as AppTransactionInput, Category, PaymentMethod } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types'; // Zod schema
-import type { Category, PaymentMethod } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { Prisma } from '@prisma/client'; // Import Prisma for Decimal type
 
 // Helper function to convert Prisma Decimal to number for all transactions
-function convertDecimalToNumber(transaction: any): AppTransaction {
+// Prisma Float fields are returned as Decimal, convert to number for frontend.
+function convertTransactionAmounts(transaction: any): AppTransaction {
   return {
     ...transaction,
     amount: transaction.amount instanceof Prisma.Decimal ? transaction.amount.toNumber() : Number(transaction.amount),
@@ -23,9 +24,9 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
       orderBy: { name: 'asc' },
     });
     return categories;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch categories:', error);
-    throw new Error('Database query failed: Could not fetch categories.');
+    throw new Error(`Database query failed: Could not fetch categories. Ensure migrations ran successfully. Original error: ${error.message}`);
   }
 }
 
@@ -36,9 +37,9 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
       orderBy: { name: 'asc' },
     });
     return paymentMethods;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch payment methods:', error);
-    throw new Error('Database query failed: Could not fetch payment methods.');
+    throw new Error(`Database query failed: Could not fetch payment methods. Ensure migrations ran successfully. Original error: ${error.message}`);
   }
 }
 
@@ -52,10 +53,10 @@ export async function getTransactions(): Promise<AppTransaction[]> {
         paymentMethod: true,
       },
     });
-    return transactionsFromDb.map(convertDecimalToNumber);
-  } catch (error) {
+    return transactionsFromDb.map(convertTransactionAmounts);
+  } catch (error: any) {
     console.error('Failed to fetch transactions:', error);
-    throw new Error('Database query failed: Could not fetch transactions. Please check server logs on Vercel for detailed Prisma errors. Ensure migrations ran successfully.');
+    throw new Error(`Database query failed: Could not fetch transactions. Ensure migrations ran successfully. Original error: ${error.message}`);
   }
 }
 
@@ -71,11 +72,14 @@ export async function addTransaction(data: AppTransactionInput): Promise<AppTran
   }
 
   try {
+    // Use Prisma.Decimal for amount
+    const amountAsDecimal = new Prisma.Decimal(validation.data.amount);
+
     const newTransactionFromDb = await prisma.transaction.create({
       data: {
         type: validation.data.type,
         date: validation.data.date,
-        amount: new Prisma.Decimal(validation.data.amount),
+        amount: amountAsDecimal, // Store as Decimal
         description: validation.data.description,
         categoryId: validation.data.categoryId,
         paymentMethodId: validation.data.paymentMethodId,
@@ -91,25 +95,24 @@ export async function addTransaction(data: AppTransactionInput): Promise<AppTran
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
-    return convertDecimalToNumber(newTransactionFromDb);
-  } catch (error) {
+    return convertTransactionAmounts(newTransactionFromDb);
+  } catch (error: any) {
     console.error('Failed to add transaction:', error);
-    throw new Error('Could not add transaction to the database.');
+    throw new Error(`Could not add transaction to the database. Original error: ${error.message}`);
   }
 }
 
 export async function updateTransaction(id: string, data: Partial<AppTransactionInput>): Promise<AppTransaction> {
-   // For partial updates, we still validate the parts that are present.
    // A more robust approach might use a partial Zod schema for updates.
   if (data.amount !== undefined && (typeof data.amount !== 'number' || data.amount <= 0)) {
     throw new Error("Invalid amount for update.");
   }
-  if (data.description !== undefined && data.description !== null && data.description.trim() === "") {
-     throw new Error("Description cannot be empty for update.");
+  if (data.description !== undefined && data.description !== null && data.description.trim() === "" && data.type === "expense") { // Description is optional for income if source is provided
+     throw new Error("Description cannot be empty for expense update.");
   }
   
   // Construct data for Prisma update, handling Decimal conversion for amount
-  const prismaUpdateData: Prisma.TransactionUpdateInput = { ...data };
+  const prismaUpdateData: Prisma.TransactionUncheckedUpdateInput = { ...data };
   if (data.amount !== undefined) {
     prismaUpdateData.amount = new Prisma.Decimal(data.amount);
   }
@@ -131,13 +134,13 @@ export async function updateTransaction(id: string, data: Partial<AppTransaction
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
-    return convertDecimalToNumber(updatedTransactionFromDb);
-  } catch (error) {
+    return convertTransactionAmounts(updatedTransactionFromDb);
+  } catch (error: any) {
     console.error('Failed to update transaction:', error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error('Transaction not found for update.');
     }
-    throw new Error('Could not update transaction in the database.');
+    throw new Error(`Could not update transaction in the database. Original error: ${error.message}`);
   }
 }
 
@@ -151,11 +154,11 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     revalidatePath('/transactions');
     revalidatePath('/reports');
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to delete transaction:', error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new Error('Transaction not found for deletion.');
     }
-    throw new Error('Could not delete transaction from the database.');
+    throw new Error(`Could not delete transaction from the database. Original error: ${error.message}`);
   }
 }
