@@ -21,8 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
-  initialTransactionData?: Transaction | null; 
-  onCancel?: () => void; 
+  initialTransactionData?: Transaction | null;
+  onCancel?: () => void;
 }
 
 const formCardVariants = {
@@ -34,6 +34,8 @@ const buttonHoverTap = {
   whileHover: { scale: 1.03, transition: { duration: 0.15 } },
   whileTap: { scale: 0.97 },
 };
+
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
@@ -55,7 +57,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (initialTransactionData) {
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type);
-      setDate(new Date(initialTransactionData.date)); 
+      setDate(new Date(initialTransactionData.date));
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description);
       if (initialTransactionData.type === 'expense') {
@@ -96,22 +98,22 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setIsLoading(false);
       return;
     }
-    
+
     const transactionPayload: TransactionInput = {
       type,
       date,
       amount: parseFloat(amount),
       description,
-      ...(type === 'expense' && { 
+      ...(type === 'expense' && {
         category: category || '',
-        paymentMethod: paymentMethod || '', 
+        paymentMethod: paymentMethod || '',
         expenseType: expenseType || 'need'
       }),
-      ...(type === 'income' && { 
+      ...(type === 'income' && {
         source: source || ''
       }),
     };
-    
+
     if (type === 'expense' && (!transactionPayload.category || !transactionPayload.paymentMethod || !transactionPayload.expenseType)) {
         toast({ title: "Expense Details Missing", description: "Category, Payment Method, and Expense Type are required for expenses.", variant: "destructive" });
         setIsLoading(false);
@@ -131,7 +133,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         await addTransaction(transactionPayload);
         toast({ title: "Transaction Added!", description: "New transaction recorded successfully." });
       }
-      
+
       onTransactionAdded?.();
 
       if (!initialTransactionData) {
@@ -157,23 +159,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setIsLoading(false);
     }
   };
-  
+
   const cardTitle = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
   const cardDescription = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
-  if (!isClient && !initialTransactionData) { 
-    return null; 
+  if (!isClient && !initialTransactionData) {
+    return null;
   }
-  
+
   const FormWrapperComponent = initialTransactionData ? motion.div : motion(Card);
-  const formWrapperProps = initialTransactionData 
-    ? { variants: formCardVariants, initial: "hidden", animate: "visible" } 
-    : { 
-        className: "shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl",
-        variants: formCardVariants, 
-        initial: "hidden", 
-        animate: "visible" 
+  const formWrapperProps = initialTransactionData
+    ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
+    : {
+        className: `shadow-xl border-purple-500/30 bg-purple-900/10 rounded-xl ${glowClass}`,
+        variants: formCardVariants,
+        initial: "hidden",
+        animate: "visible"
       };
 
   return (
@@ -192,12 +194,26 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <Label className="text-purple-300/90">Transaction Type</Label>
             <RadioGroup value={type} onValueChange={(value) => setType(value as TransactionEnumType)} className="flex space-x-4 mt-1">
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="income" id={`income-${formId || 'new'}`} className="border-yellow-400 text-yellow-400 focus:ring-yellow-500 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-600"/>
-                <Label htmlFor={`income-${formId || 'new'}`} className="text-purple-200/90">Income (₹)</Label>
+                <RadioGroupItem
+                  value="income"
+                  id={`income-${formId || 'new'}`}
+                  className={cn(
+                    "border-primary text-primary focus:ring-primary",
+                    "data-[state=checked]:border-green-600 data-[state=checked]:bg-green-500 data-[state=checked]:text-green-50"
+                  )}
+                />
+                <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-purple-200/90", type === 'income' && "text-green-300")}>Income (₹)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="expense" id={`expense-${formId || 'new'}`} className="border-red-400 text-red-400 focus:ring-red-500 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600"/>
-                <Label htmlFor={`expense-${formId || 'new'}`} className="text-purple-200/90">Expense (₹)</Label>
+                <RadioGroupItem
+                  value="expense"
+                  id={`expense-${formId || 'new'}`}
+                  className={cn(
+                    "border-primary text-primary focus:ring-primary",
+                    "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
+                  )}
+                />
+                <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-purple-200/90", type === 'expense' && "text-red-300")}>Expense (₹)</Label>
               </div>
             </RadioGroup>
           </div>
@@ -275,8 +291,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     { value: 'investment_expense', label: 'Investment' }
                   ].map(et => (
                     <div key={et.value} className="flex items-center space-x-2">
-                      <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`} className="border-yellow-400 text-yellow-400 focus:ring-yellow-500 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-600"/>
-                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className="text-purple-200/90">{et.label}</Label>
+                      <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`}
+                       className={cn(
+                          "border-primary text-primary focus:ring-primary",
+                          expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
+                                            : "data-[state=checked]:border-yellow-600 data-[state=checked]:bg-yellow-500 data-[state=checked]:text-yellow-50"
+
+                       )}
+                      />
+                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-purple-200/90", expenseType === et.value && type === 'expense' ? "text-red-300" : "text-yellow-300" )}>{et.label}</Label>
                     </div>
                   ))}
                 </RadioGroup>
@@ -300,7 +323,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
           <div className="flex flex-col sm:flex-row gap-3 pt-3">
             <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
-              <Button type="submit" disabled={isLoading} className="w-full bg-yellow-500 hover:bg-yellow-600 text-purple-950 font-bold">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className={cn(
+                  "w-full font-bold text-white",
+                  isLoading ? "bg-muted hover:bg-muted text-muted-foreground" :
+                  type === 'income' ? "bg-green-500 hover:bg-green-600" :
+                  "bg-red-500 hover:bg-red-600"
+                )}
+              >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}
                 {isLoading ? (formId ? "Updating..." : "Adding...") : submitButtonText}
               </Button>

@@ -19,7 +19,7 @@ import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
-import { Card } from '@/components/ui/card'; // Import Card for TransactionForm wrapper
+import { Card } from '@/components/ui/card';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  
+
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
 
@@ -81,10 +81,10 @@ export default function DashboardPage() {
     setIsClient(true);
     fetchAndSetTransactions();
   }, [fetchAndSetTransactions]);
-  
+
   const handleAddTransactionCallback = async (newTransactionData: TransactionInput) => {
     try {
-        await fetchAndSetTransactions(); 
+        await fetchAndSetTransactions();
     } catch (error) {
         console.error("Error after attempting to add transaction:", error);
     }
@@ -107,12 +107,12 @@ export default function DashboardPage() {
     const savingsRate = income > 0 ? (savings / income) * 100 : 0;
     return { income, spending, savings, savingsRate };
   }, [currentMonthTransactions]);
-  
+
   const lastMonthTotalSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1); 
-    prevMonthDate.setMonth(selectedDate.getMonth() - 1); 
-    
+    prevMonthDate.setDate(1);
+    prevMonthDate.setMonth(selectedDate.getMonth() - 1);
+
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
@@ -129,9 +129,11 @@ export default function DashboardPage() {
           {[...Array(4)].map((_, i) => <div key={i} className={`h-32 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>)}
         </div>
         <div className={`h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
-        <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+           <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        </div>
         <div className={`h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
-        <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
             <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
@@ -142,7 +144,7 @@ export default function DashboardPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
-      <motion.div 
+      <motion.div
         className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
         variants={containerVariants}
         initial="hidden"
@@ -174,33 +176,39 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      <motion.div 
-        variants={sectionVariants} 
-        initial="hidden" 
-        animate="visible" 
-        className={`rounded-xl border-2 border-primary/20 bg-card/80 p-6 ${glowClass}`}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        animate="visible"
+        className={`rounded-xl border-2 border-primary/20 bg-card/80 p-0 sm:p-0 ${glowClass}`}
       >
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
       </motion.div>
-      
-      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-        <SpendingInsights 
-          currentMonthTransactions={currentMonthTransactions} 
-          lastMonthTotalSpending={lastMonthTotalSpending}
-          selectedMonthName={monthNamesList[selectedMonth]}
-          selectedYear={selectedYear}
-        />
-      </motion.div>
 
-      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-        <FinancialChatbot allTransactions={transactions} />
+      <motion.div
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants}>
+          <SpendingInsights
+            currentMonthTransactions={currentMonthTransactions}
+            lastMonthTotalSpending={lastMonthTotalSpending}
+            selectedMonthName={monthNamesList[selectedMonth]}
+            selectedYear={selectedYear}
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <FinancialChatbot allTransactions={transactions} />
+        </motion.div>
       </motion.div>
 
       <motion.div variants={sectionVariants} initial="hidden" animate="visible">
         <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
       </motion.div>
-      
-      <motion.div 
+
+      <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
         variants={containerVariants}
         initial="hidden"
