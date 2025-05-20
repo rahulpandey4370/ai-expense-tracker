@@ -20,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -36,6 +37,7 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export default function ReportsPage() {
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
@@ -235,7 +237,7 @@ export default function ReportsPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
-        <Card className="shadow-xl border-primary/30 border-2 rounded-xl bg-card/90">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
             <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
               <FileText className="w-8 h-8 text-accent transform rotate-[-3deg]" />
@@ -267,7 +269,7 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
               <motion.div {...buttonHoverTap}>
-                <Button onClick={exportReportToPDF} variant="outline" className="bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent-foreground">
+                <Button onClick={exportReportToPDF} variant="outline" className="bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent-foreground dark:text-accent">
                     <Download className="mr-2 h-4 w-4" />
                     Export to PDF
                 </Button>
@@ -287,9 +289,9 @@ export default function ReportsPage() {
                   <p className="ml-4 text-primary">Loading report data...</p>
                 </div>
               ) : filteredTransactionsForPeriod.length === 0 && !isLoadingData ? (
-                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-300 dark:text-yellow-400 shadow-md">
-                  <AlertTriangle className="h-4 w-4 text-yellow-500 dark:text-yellow-300" />
-                  <AlertTitle>No Data for this Period</AlertTitle>
+                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
+                  <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for this Period</AlertTitle>
                   <AlertDescription>
                     No transactions found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
                   </AlertDescription>
@@ -308,13 +310,13 @@ export default function ReportsPage() {
               )}
 
               <motion.div variants={cardVariants}>
-                <Card className="shadow-lg border-accent/30 bg-accent/10">
+                <Card className={cn("shadow-lg border-accent/30 bg-accent/10", glowClass)}>
                   <CardHeader>
-                    <CardTitle className="text-xl font-semibold text-accent-foreground flex items-center gap-2">
+                    <CardTitle className="text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-accent" />
                       AI Insights
                     </CardTitle>
-                    <CardDescription className="text-accent-foreground/80">
+                    <CardDescription className="text-accent/80 dark:text-accent-foreground/80">
                       AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${ reportMonth === 0 ? monthNamesList[11] + ' ' + (reportYear-1) : monthNamesList[reportMonth-1] + ' ' + reportYear}`}.
                     </CardDescription>
                   </CardHeader>
@@ -326,9 +328,9 @@ export default function ReportsPage() {
                         <Skeleton className="h-4 w-3/4 bg-accent/30" />
                       </div>
                     )}
-                    {aiError && <p className="text-sm text-red-500 dark:text-red-400">{aiError}</p>}
+                    {aiError && <p className="text-sm text-red-600 dark:text-red-400">{aiError}</p>}
                     {aiAnalysis && !isAiLoading && (
-                      <div className="text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent-foreground/90">
+                      <div className="text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
                         {aiAnalysis.split('\n').map((line, index) => (
                           <p key={index}>{line.replace(/^- /, '• ')}</p>
                         ))}
@@ -353,3 +355,5 @@ export default function ReportsPage() {
     </main>
   );
 }
+
+    

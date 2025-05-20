@@ -24,10 +24,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added missing import
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -48,6 +49,8 @@ const tableRowVariants = {
   hidden: { opacity: 0, x: -20 },
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
 };
+
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
@@ -219,7 +222,7 @@ export default function TransactionsPage() {
         initial="hidden"
         animate="visible"
       >
-        <Card className="shadow-xl border-primary/30 border-2 rounded-xl bg-card/90">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
             <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
               <BookOpen className="w-8 h-8 text-accent transform -rotate-6"/>
@@ -280,14 +283,14 @@ export default function TransactionsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-primary/10 border-b-primary/30">
-                    <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-primary/80 hover:text-accent">Date{getSortIndicator('date')}</TableHead>
-                    <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-primary/80 hover:text-accent">Description{getSortIndicator('description')}</TableHead>
-                    <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-primary/80 hover:text-accent">Type{getSortIndicator('type')}</TableHead>
-                    <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-primary/80 hover:text-accent">Amount (₹){getSortIndicator('amount')}</TableHead>
-                    <TableHead onClick={() => requestSort('categoryName')} className="cursor-pointer text-primary/80 hover:text-accent">Category/Source{getSortIndicator('categoryName')}</TableHead>
-                    <TableHead onClick={() => requestSort('paymentMethodName')} className="cursor-pointer text-primary/80 hover:text-accent">Payment Method{getSortIndicator('paymentMethodName')}</TableHead>
-                    <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-primary/80 hover:text-accent">Expense Type{getSortIndicator('expenseType')}</TableHead>
-                    <TableHead className="text-primary/80">Actions</TableHead>
+                    <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Date{getSortIndicator('date')}</TableHead>
+                    <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Description{getSortIndicator('description')}</TableHead>
+                    <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Type{getSortIndicator('type')}</TableHead>
+                    <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-muted-foreground font-semibold hover:text-accent">Amount (₹){getSortIndicator('amount')}</TableHead>
+                    <TableHead onClick={() => requestSort('categoryName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Category/Source{getSortIndicator('categoryName')}</TableHead>
+                    <TableHead onClick={() => requestSort('paymentMethodName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Payment Method{getSortIndicator('paymentMethodName')}</TableHead>
+                    <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Expense Type{getSortIndicator('expenseType')}</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <motion.tbody variants={tableContainerVariants} initial="hidden" animate="visible">
@@ -303,12 +306,16 @@ export default function TransactionsPage() {
                         <TableCell className="font-medium text-foreground">{transaction.description}</TableCell>
                         <TableCell>
                           <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'} 
-                                className={transaction.type === 'income' ? 'bg-green-600/30 text-green-200 border-green-500/50 hover:bg-green-600/40' : 'bg-red-600/30 text-red-200 border-red-500/50 hover:bg-red-600/40'}>
+                                className={cn(
+                                  transaction.type === 'income' ? 
+                                  'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' : 
+                                  'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 hover:bg-red-500/30'
+                                )}>
                             {transaction.type === 'income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
                             {transaction.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${transaction.type === 'income' ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        <TableCell className={`text-right font-semibold ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
                         </TableCell>
                         <TableCell className="text-foreground/90">{transaction.category?.name || transaction.source}</TableCell>
@@ -316,12 +323,13 @@ export default function TransactionsPage() {
                         <TableCell>
                           {transaction.type === 'expense' && transaction.expenseType && (
                             <Badge 
-                              variant={transaction.expenseType === 'need' ? 'default' : transaction.expenseType === 'want' ? 'secondary' : 'outline'}
-                              className={`capitalize ${
-                                transaction.expenseType === 'need' ? 'bg-blue-600/30 text-blue-200 border-blue-500/50' :
-                                transaction.expenseType === 'want' ? 'bg-purple-600/30 text-purple-200 border-purple-500/50' :
-                                'bg-gray-600/30 text-gray-200 border-gray-500/50'
-                              }`}
+                              variant={'outline'}
+                              className={cn(
+                                `capitalize border-opacity-50`,
+                                transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
+                                transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
+                                'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
+                              )}
                             >
                               {transaction.expenseType.replace('_expense', '')}
                             </Badge>
