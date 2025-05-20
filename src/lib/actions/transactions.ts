@@ -26,17 +26,36 @@ const TransactionInputSchema = z.object({
   return true;
 }, {
   message: "Missing required fields for the selected transaction type.",
-  path: ["type"], // General path, specific field errors would be better if refined per type
+  path: ["type"],
 });
 
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 
 function mapPrismaTransactionToApp(prismaTransaction: any): AppTransaction {
+  // Ensure prismaTransaction and its properties are not null/undefined before accessing
+  if (!prismaTransaction) {
+    // This case should ideally not happen if findMany returns valid objects or an empty array
+    console.error("mapPrismaTransactionToApp received null or undefined transaction");
+    // Depending on how you want to handle this, you might throw an error or return a default/empty object
+    // For now, let's assume valid objects are passed or an empty array, which wouldn't call this for its elements.
+    // If it's possible findMany returns [null], filter them out before mapping or handle here.
+  }
   return {
     ...prismaTransaction,
-    amount: parseFloat(prismaTransaction.amount), // Prisma returns Decimal, convert to number
-    date: new Date(prismaTransaction.date), // Ensure date is a Date object
+    // Prisma returns Decimal for 'amount', ensure it's converted to number.
+    // Check if amount is a string that needs parsing, or already a number/Decimal object.
+    // Prisma's Decimal type might need .toNumber() or similar if it's not automatically handled.
+    // For safety, explicitly handle potential null/undefined from DB if schema allows.
+    amount: prismaTransaction.amount != null ? parseFloat(prismaTransaction.amount.toString()) : 0,
+    date: prismaTransaction.date ? new Date(prismaTransaction.date) : new Date(), // Ensure date is a Date object
+    // Ensure optional fields are handled gracefully if they might be null from DB
+    category: prismaTransaction.category ?? undefined,
+    paymentMethod: prismaTransaction.paymentMethod ?? undefined,
+    expenseType: prismaTransaction.expenseType ?? undefined,
+    source: prismaTransaction.source ?? undefined,
+    createdAt: prismaTransaction.createdAt ? new Date(prismaTransaction.createdAt) : undefined,
+    updatedAt: prismaTransaction.updatedAt ? new Date(prismaTransaction.updatedAt) : undefined,
   };
 }
 
@@ -48,10 +67,19 @@ export async function getTransactions(): Promise<AppTransaction[]> {
       },
     });
     return transactions.map(mapPrismaTransactionToApp);
-  } catch (error) {
-    console.error('Failed to fetch transactions:', error);
-    // Consider throwing a more specific error or returning an error object
-    throw new Error('Database query failed: Could not fetch transactions.');
+  } catch (error: any) {
+    console.error('Detailed error in getTransactions while fetching from database:', error);
+    if (error.message) {
+      console.error('Error message:', error.message);
+    }
+    if (error.code) { // Prisma errors often have a code
+        console.error('Prisma error code:', error.code);
+    }
+    if (error.stack) {
+      console.error('Error stack:', error.stack);
+    }
+    // The generic error thrown to the client side
+    throw new Error('Database query failed: Could not fetch transactions. Please check server logs on Vercel for more details.');
   }
 }
 
@@ -66,43 +94,42 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     const newTransaction = await prisma.transaction.create({
       data: {
         ...validation.data,
-        // Prisma expects 'amount' as a number, Zod schema ensures it
+        amount: validation.data.amount, // Prisma expects Decimal, but number should work if Prisma handles conversion
       },
     });
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
     return mapPrismaTransactionToApp(newTransaction);
-  } catch (error) {
-    console.error('Failed to add transaction:', error);
-    throw new Error('Database insert failed: Could not add transaction.');
+  } catch (error: any) {
+    console.error('Detailed error in addTransaction:', error);
+    throw new Error('Database insert failed: Could not add transaction. Check server logs for details.');
   }
 }
 
 export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
-  // For partial updates, zod's .partial() can be used if needed,
-  // but here we ensure the core structure is compatible.
-  // A more specific schema for updates might be beneficial.
-  
-  // Basic validation: ensure at least one field is being updated if we want to be strict.
-  // For simplicity, Prisma will handle if data is empty.
+  // Basic validation or use a partial Zod schema for updates if needed.
+  // For Prisma, ensure amount is correctly formatted if provided.
+  const updateData: any = { ...data };
+  if (data.amount !== undefined) {
+    updateData.amount = data.amount; // Assuming amount is already a number
+  }
+  if (data.date !== undefined) {
+    updateData.date = new Date(data.date);
+  }
 
   try {
     const updatedTransaction = await prisma.transaction.update({
       where: { id },
-      data: {
-        ...data,
-        date: data.date ? new Date(data.date) : undefined, // Ensure date is Date object if provided
-        // Prisma handles 'amount' conversion if it's a number
-      },
+      data: updateData,
     });
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
     return mapPrismaTransactionToApp(updatedTransaction);
-  } catch (error) {
-    console.error('Failed to update transaction:', error);
-    throw new Error('Database update failed: Could not update transaction.');
+  } catch (error: any) {
+    console.error('Detailed error in updateTransaction:', error);
+    throw new Error('Database update failed: Could not update transaction. Check server logs for details.');
   }
 }
 
@@ -115,9 +142,8 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     revalidatePath('/transactions');
     revalidatePath('/reports');
     return { success: true };
-  } catch (error) {
-    console.error('Failed to delete transaction:', error);
-    throw new Error('Database delete failed: Could not delete transaction.');
+  } catch (error: any) {
+    console.error('Detailed error in deleteTransaction:', error);
+    throw new Error('Database delete failed: Could not delete transaction. Check server logs for details.');
   }
 }
-
