@@ -1,38 +1,65 @@
-// /prisma/schema.prisma
-// This schema is configured based on Vercel's "Prisma Postgres" integration documentation.
-// It assumes Vercel's build environment can handle 'prisma migrate deploy'
-// using the DATABASE_URL (which is your Prisma Accelerate URL) provided by this specific integration.
+generator client {
+  provider = "prisma-client-js"
+  // As per PRD, using @prisma/client/edge for Accelerate, --no-engine for generate
+  // Default output location works with `@prisma/client/edge` import.
+}
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL") // This will be your Accelerate URL for runtime
+  directUrl = env("POSTGRES_URL_NON_POOLING") // For migrations, needs direct DB access
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL") // Optional, if using shadow DB for migrations
 }
 
-generator client {
-  provider = "prisma-client-js"
+model Category {
+  id           String        @id @default(cuid())
+  name         String        @unique // Category names should be unique
+  type         String // "income" or "expense" - consider an Enum if DB supports it or validate in code
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model PaymentMethod {
+  id           String        @id @default(cuid())
+  name         String        @unique // Payment method names should be unique
+  type         String // e.g., "Credit Card", "UPI", "Cash" - consider an Enum or validate
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model Transaction {
-  id            String              @id @default(cuid())
-  type          TransactionEnumType
-  date          DateTime
-  amount        Decimal
-  description   String
-  category      String?
-  paymentMethod String?
-  expenseType   ExpenseEnumType?
-  source        String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id              String    @id @default(uuid())
+  type            String // "income" or "expense" - consider TransactionType Enum
+  date            DateTime
+  amount          Float // Prisma maps Float to double precision in Postgres
+  description     String?
+  source          String? // For income: "Salary", "Freelance". Nullable for expenses.
+  expenseType     String? // For expenses: "need", "want", "investment_expense". Nullable for income.
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id])
+
+  paymentMethodId String?
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([paymentMethodId])
 }
 
-enum TransactionEnumType {
-  income
-  expense
-}
+// It's good practice to define enums if your DB supports them or validate these string values in your application logic
+// enum TransactionType {
+//   income
+//   expense
+// }
 
-enum ExpenseEnumType {
-  need
-  want
-  investment_expense
-}
+// enum ExpenseCategoryType {
+//   need
+//   want
+//   investment_expense
+// }

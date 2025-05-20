@@ -1,61 +1,65 @@
-
 'use server';
 
-import { initialTransactions } from '@/lib/data';
-import type { Transaction as AppTransaction, TransactionEnumType, ExpenseEnumType } from '@/lib/types';
-import { z } from 'zod';
+import prisma from '@/lib/prisma';
+import type { Transaction as AppTransaction, TransactionInput as AppTransactionInput } from '@/lib/types';
+import { TransactionInputSchema } from '@/lib/types'; // Zod schema
+import type { Category, PaymentMethod } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import { Prisma } from '@prisma/client'; // Import Prisma for Decimal type
 
-// Zod schema for validating transaction input
-const TransactionInputSchema = z.object({
-  type: z.enum(['income', 'expense']),
-  date: z.date(),
-  amount: z.number().positive("Amount must be a positive number."),
-  description: z.string().min(1, "Description is required."),
-  category: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
-  source: z.string().optional(),
-}).refine(data => {
-  if (data.type === 'expense') {
-    return !!data.category && !!data.paymentMethod && !!data.expenseType;
-  }
-  return true;
-}, {
-  message: "For expenses, Category, Payment Method, and Expense Type are required.",
-  path: ['type'], 
-}).refine(data => {
-  if (data.type === 'income') {
-    return !!data.source;
-  }
-  return true;
-}, {
-  message: "For income, Source is required.",
-  path: ['type'],
-});
+// Helper function to convert Prisma Decimal to number for all transactions
+function convertDecimalToNumber(transaction: any): AppTransaction {
+  return {
+    ...transaction,
+    amount: transaction.amount instanceof Prisma.Decimal ? transaction.amount.toNumber() : Number(transaction.amount),
+  };
+}
 
-export type TransactionInput = z.infer<typeof TransactionInputSchema>;
-
-// Helper to simulate database operations on the in-memory array
-let transactionsStore: AppTransaction[] = [...initialTransactions]; // Use a mutable copy
-
-export async function getTransactions(): Promise<AppTransaction[]> {
+// --- Category Actions ---
+export async function getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
   try {
-    // Simulate fetching data by returning a copy of the current in-memory store
-    // Ensure dates are proper Date objects if they were stringified
-    return JSON.parse(JSON.stringify(transactionsStore)).map((t: AppTransaction) => ({
-        ...t,
-        date: new Date(t.date),
-        createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
-        updatedAt: t.updatedAt ? new Date(t.updatedAt) : undefined,
-    }));
+    const categories = await prisma.category.findMany({
+      where: type ? { type } : undefined,
+      orderBy: { name: 'asc' },
+    });
+    return categories;
   } catch (error) {
-    console.error('Failed to get transactions from in-memory store:', error);
-    throw new Error('Could not retrieve transactions.');
+    console.error('Failed to fetch categories:', error);
+    throw new Error('Database query failed: Could not fetch categories.');
   }
 }
 
-export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
+// --- PaymentMethod Actions ---
+export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+  try {
+    const paymentMethods = await prisma.paymentMethod.findMany({
+      orderBy: { name: 'asc' },
+    });
+    return paymentMethods;
+  } catch (error) {
+    console.error('Failed to fetch payment methods:', error);
+    throw new Error('Database query failed: Could not fetch payment methods.');
+  }
+}
+
+// --- Transaction Actions ---
+export async function getTransactions(): Promise<AppTransaction[]> {
+  try {
+    const transactionsFromDb = await prisma.transaction.findMany({
+      orderBy: { date: 'desc' },
+      include: {
+        category: true,
+        paymentMethod: true,
+      },
+    });
+    return transactionsFromDb.map(convertDecimalToNumber);
+  } catch (error) {
+    console.error('Failed to fetch transactions:', error);
+    throw new Error('Database query failed: Could not fetch transactions. Please check server logs on Vercel for detailed Prisma errors. Ensure migrations ran successfully.');
+  }
+}
+
+export async function addTransaction(data: AppTransactionInput): Promise<AppTransaction> {
   const validation = TransactionInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
@@ -67,77 +71,91 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   }
 
   try {
-    const newTransaction: AppTransaction = {
-      ...validation.data,
-      id: crypto.randomUUID(), // Generate a unique ID
-      amount: validation.data.amount,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    transactionsStore.push(newTransaction);
+    const newTransactionFromDb = await prisma.transaction.create({
+      data: {
+        type: validation.data.type,
+        date: validation.data.date,
+        amount: new Prisma.Decimal(validation.data.amount),
+        description: validation.data.description,
+        categoryId: validation.data.categoryId,
+        paymentMethodId: validation.data.paymentMethodId,
+        source: validation.data.source,
+        expenseType: validation.data.expenseType,
+      },
+      include: {
+        category: true,
+        paymentMethod: true,
+      }
+    });
     
-    // Re-assign to initialTransactions if you intend data.ts to reflect runtime changes (not truly static then)
-    // For a truly static initial set and runtime changes only in memory, operate on transactionsStore only.
-    // initialTransactions = [...transactionsStore]; // If you want to update the exported array (has side effects)
-
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
-    return JSON.parse(JSON.stringify(newTransaction)); // Return a copy
+    return convertDecimalToNumber(newTransactionFromDb);
   } catch (error) {
-    console.error('Failed to add transaction to in-memory store:', error);
-    throw new Error('Could not add transaction.');
+    console.error('Failed to add transaction:', error);
+    throw new Error('Could not add transaction to the database.');
   }
 }
 
-export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
-  // Basic validation for partial update
+export async function updateTransaction(id: string, data: Partial<AppTransactionInput>): Promise<AppTransaction> {
+   // For partial updates, we still validate the parts that are present.
+   // A more robust approach might use a partial Zod schema for updates.
   if (data.amount !== undefined && (typeof data.amount !== 'number' || data.amount <= 0)) {
     throw new Error("Invalid amount for update.");
   }
-  if (data.description !== undefined && data.description.trim() === "") {
+  if (data.description !== undefined && data.description !== null && data.description.trim() === "") {
      throw new Error("Description cannot be empty for update.");
   }
+  
+  // Construct data for Prisma update, handling Decimal conversion for amount
+  const prismaUpdateData: Prisma.TransactionUpdateInput = { ...data };
+  if (data.amount !== undefined) {
+    prismaUpdateData.amount = new Prisma.Decimal(data.amount);
+  }
+  if (data.date !== undefined) {
+    prismaUpdateData.date = new Date(data.date);
+  }
+
 
   try {
-    const transactionIndex = transactionsStore.findIndex(t => t.id === id);
-    if (transactionIndex === -1) {
-      throw new Error('Transaction not found.');
-    }
-
-    const updatedTransaction = {
-      ...transactionsStore[transactionIndex],
-      ...data,
-      date: data.date ? new Date(data.date) : transactionsStore[transactionIndex].date,
-      amount: data.amount !== undefined ? data.amount : transactionsStore[transactionIndex].amount,
-      updatedAt: new Date(),
-    };
-    transactionsStore[transactionIndex] = updatedTransaction;
+    const updatedTransactionFromDb = await prisma.transaction.update({
+      where: { id },
+      data: prismaUpdateData,
+      include: {
+        category: true,
+        paymentMethod: true,
+      }
+    });
 
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
-    return JSON.parse(JSON.stringify(updatedTransaction)); // Return a copy
+    return convertDecimalToNumber(updatedTransactionFromDb);
   } catch (error) {
-    console.error('Failed to update transaction in in-memory store:', error);
-    throw new Error('Could not update transaction.');
+    console.error('Failed to update transaction:', error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new Error('Transaction not found for update.');
+    }
+    throw new Error('Could not update transaction in the database.');
   }
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {
   try {
-    const initialLength = transactionsStore.length;
-    transactionsStore = transactionsStore.filter(t => t.id !== id);
-    if (transactionsStore.length === initialLength) {
-      throw new Error('Transaction not found for deletion.');
-    }
+    await prisma.transaction.delete({
+      where: { id },
+    });
     
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
     return { success: true };
   } catch (error) {
-    console.error('Failed to delete transaction from in-memory store:', error);
-    throw new Error('Could not delete transaction.');
+    console.error('Failed to delete transaction:', error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new Error('Transaction not found for deletion.');
+    }
+    throw new Error('Could not delete transaction from the database.');
   }
 }

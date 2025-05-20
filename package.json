@@ -6,11 +6,12 @@
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate --no-engine && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate --no-engine",
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.8.0",
@@ -70,6 +71,10 @@
     "postcss": "^8",
     "prisma": "^5.17.0",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.16.2",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

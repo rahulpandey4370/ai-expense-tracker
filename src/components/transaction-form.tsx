@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent, useEffect, useCallback } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,18 +12,29 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, PlusCircle, XCircle, FilePlus, Loader2 } from "lucide-react";
+import { CalendarIcon, FilePlus, Loader2, XCircle } from "lucide-react";
 import { format } from "date-fns";
-import type { Transaction, TransactionEnumType, ExpenseEnumType } from "@/lib/types";
-import { addTransaction, updateTransaction, type TransactionInput } from '@/lib/actions/transactions';
-import { expenseCategories, incomeCategories, paymentMethods } from "@/lib/data";
+import type { TransactionType as AppTransactionType, ExpenseType as AppExpenseType, TransactionInput } from "@/lib/types";
+import type { Category, PaymentMethod } from '@prisma/client';
+import { addTransaction, updateTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
-  initialTransactionData?: Transaction | null;
+  initialTransactionData?: AppTransactionType & { // Assuming AppTransactionType includes id
+    id: string;
+    amount: number;
+    date: Date | string;
+    description?: string | null;
+    type: string;
+    categoryId?: string | null;
+    paymentMethodId?: string | null;
+    source?: string | null;
+    expenseType?: string | null;
+  } | null;
   onCancel?: () => void;
 }
+
 
 const formCardVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -39,60 +50,100 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
-  const [type, setType] = useState<TransactionEnumType>('expense');
+  const [type, setType] = useState<string>('expense');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const [category, setCategory] = useState<string | undefined>(undefined);
-  const [paymentMethod, setPaymentMethod] = useState<string | undefined>(undefined);
-  const [expenseType, setExpenseType] = useState<ExpenseEnumType | undefined>(undefined);
-  const [source, setSource] = useState<string | undefined>(undefined);
+  
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<Category[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | undefined>(undefined);
+  const [expenseType, setExpenseType] = useState<AppExpenseType | undefined>('need');
+  const [source, setSource] = useState<string | undefined>(undefined); // For income source text
+
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true);
   const [formId, setFormId] = useState<string | null>(null);
+
+  const fetchDropdownData = useCallback(async () => {
+    setIsFetchingDropdowns(true);
+    try {
+      const [fetchedExpenseCategories, fetchedIncomeCategories, fetchedPaymentMethods] = await Promise.all([
+        getCategories('expense'),
+        getCategories('income'),
+        getPaymentMethods()
+      ]);
+      setExpenseCategories(fetchedExpenseCategories);
+      setIncomeCategories(fetchedIncomeCategories);
+      setAllCategories([...fetchedExpenseCategories, ...fetchedIncomeCategories]);
+      setPaymentMethods(fetchedPaymentMethods);
+
+      // Set defaults after fetching
+      if (!initialTransactionData) {
+        setSelectedCategoryId(fetchedExpenseCategories.length > 0 ? fetchedExpenseCategories[0].id : undefined);
+        setSelectedPaymentMethodId(fetchedPaymentMethods.length > 0 ? fetchedPaymentMethods[0].id : undefined);
+        setSource(fetchedIncomeCategories.length > 0 ? fetchedIncomeCategories[0].name : undefined); // Default source name
+      }
+
+    } catch (error) {
+      console.error("Failed to fetch dropdown data:", error);
+      toast({ title: "Error", description: "Could not load categories or payment methods.", variant: "destructive" });
+    } finally {
+      setIsFetchingDropdowns(false);
+    }
+  }, [toast, initialTransactionData]);
 
 
   useEffect(() => {
     setIsClient(true);
+    fetchDropdownData();
+  }, [fetchDropdownData]);
+  
+
+  useEffect(() => {
     if (initialTransactionData) {
       setFormId(initialTransactionData.id);
       setType(initialTransactionData.type);
       setDate(new Date(initialTransactionData.date));
       setAmount(initialTransactionData.amount.toString());
-      setDescription(initialTransactionData.description);
+      setDescription(initialTransactionData.description || '');
       if (initialTransactionData.type === 'expense') {
-        setCategory(initialTransactionData.category);
-        setPaymentMethod(initialTransactionData.paymentMethod);
-        setExpenseType(initialTransactionData.expenseType);
+        setSelectedCategoryId(initialTransactionData.categoryId || undefined);
+        setSelectedPaymentMethodId(initialTransactionData.paymentMethodId || undefined);
+        setExpenseType((initialTransactionData.expenseType as AppExpenseType) || 'need');
         setSource(undefined);
-      } else {
-        setSource(initialTransactionData.source);
-        setCategory(undefined);
-        setPaymentMethod(undefined);
+      } else { // income
+        setSelectedCategoryId(initialTransactionData.categoryId || undefined); // Income uses categoryId for its type
+        setSource(initialTransactionData.source || undefined);
+        setSelectedPaymentMethodId(undefined);
         setExpenseType(undefined);
       }
     } else {
+        // Defaults for new transaction form (set after dropdowns are fetched)
         setFormId(null);
         setType('expense');
         setDate(new Date());
         setAmount('');
         setDescription('');
-        setCategory(expenseCategories.length > 0 ? expenseCategories[0].name : undefined);
-        setPaymentMethod(paymentMethods.length > 0 ? paymentMethods[0].name : undefined);
         setExpenseType('need');
-        setSource(incomeCategories.length > 0 ? incomeCategories[0].name : undefined);
+        // Default categoryId, paymentMethodId, source are set in fetchDropdownData
     }
-  }, [initialTransactionData]);
+  }, [initialTransactionData, expenseCategories, incomeCategories, paymentMethods]);
 
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!date || !amount || !description ) {
+    if (!date || !amount || (!description && type === 'expense') ) { // description optional for income if source is primary
       toast({
         title: "Missing Information!",
-        description: "Please fill in all required fields for the transaction.",
+        description: "Please fill in all required fields.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -100,31 +151,21 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
 
     const transactionPayload: TransactionInput = {
-      type,
+      type: type as 'income' | 'expense',
       date,
       amount: parseFloat(amount),
-      description,
+      description: description || undefined, // Allow empty string to become undefined
       ...(type === 'expense' && {
-        category: category || '',
-        paymentMethod: paymentMethod || '',
-        expenseType: expenseType || 'need'
+        categoryId: selectedCategoryId,
+        paymentMethodId: selectedPaymentMethodId,
+        expenseType: expenseType
       }),
       ...(type === 'income' && {
-        source: source || ''
+        source: source, // Text source for income
+        categoryId: selectedCategoryId, // Income category ID
       }),
     };
-
-    if (type === 'expense' && (!transactionPayload.category || !transactionPayload.paymentMethod || !transactionPayload.expenseType)) {
-        toast({ title: "Expense Details Missing", description: "Category, Payment Method, and Expense Type are required for expenses.", variant: "destructive" });
-        setIsLoading(false);
-        return;
-    }
-    if (type === 'income' && !transactionPayload.source) {
-        toast({ title: "Income Source Missing", description: "Source is required for income.", variant: "destructive" });
-        setIsLoading(false);
-        return;
-    }
-
+    
     try {
       if (formId) {
         await updateTransaction(formId, transactionPayload);
@@ -136,17 +177,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
       onTransactionAdded?.();
 
-      if (!initialTransactionData) {
+      if (!initialTransactionData) { // Reset form only if it was a new transaction
         setDate(new Date());
         setAmount('');
         setDescription('');
-        setCategory(expenseCategories.length > 0 ? expenseCategories[0].name : undefined);
-        setPaymentMethod(paymentMethods.length > 0 ? paymentMethods[0].name : undefined);
+        setType('expense'); // Default back to expense
+        setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
+        setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
         setExpenseType('need');
         setSource(incomeCategories.length > 0 ? incomeCategories[0].name : undefined);
-        setType('expense');
       }
-      if (onCancel && formId) onCancel();
+      if (onCancel && formId) onCancel(); // Call cancel if it was an edit
 
     } catch (error) {
       console.error("Transaction form error:", error);
@@ -172,52 +213,50 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const formWrapperProps = initialTransactionData
     ? { variants: formCardVariants, initial: "hidden", animate: "visible" }
     : {
-        className: cn("shadow-xl rounded-xl bg-card p-6", glowClass), // Use bg-card for light mode, p-6 for internal padding
+        className: cn("shadow-xl rounded-xl p-0 sm:p-0", glowClass, "bg-card"), // Ensure bg-card for consistency
         variants: formCardVariants,
         initial: "hidden",
         animate: "visible"
       };
   
-  const labelClasses = "text-foreground dark:text-purple-300/90";
-  const inputClasses = "bg-background/70 dark:bg-purple-800/30 border-border dark:border-purple-500/50 text-foreground dark:text-purple-100 placeholder:text-muted-foreground dark:placeholder:text-purple-400/60 focus:border-accent dark:focus:border-yellow-400 focus:ring-accent dark:focus:ring-yellow-400";
+  const labelClasses = "text-foreground/90 dark:text-foreground/80";
+  const inputClasses = "bg-input/50 dark:bg-input/20 border-border/70 dark:border-border/40 text-foreground placeholder:text-muted-foreground/70 focus:border-primary dark:focus:border-accent focus:ring-primary dark:focus:ring-accent";
   const popoverButtonClasses = cn(
     "w-full justify-start text-left font-normal mt-1",
-    "bg-background/70 dark:bg-purple-800/30 border-border dark:border-purple-500/50",
-    "text-foreground dark:text-purple-100 hover:bg-muted dark:hover:bg-purple-700/40",
-    "focus:border-accent dark:focus:border-yellow-400 focus:ring-accent dark:focus:ring-yellow-400",
-    !date && "text-muted-foreground dark:text-purple-400/70"
+    inputClasses,
+    !date && "text-muted-foreground/70"
   );
-  const popoverContentClasses = "w-auto p-0 bg-popover dark:bg-purple-900 border-border dark:border-purple-500/70 text-popover-foreground dark:text-purple-100";
-  const calendarClasses = "[&_button]:text-popover-foreground dark:[&_button]:text-purple-200 [&_.rdp-button_span]:text-popover-foreground dark:[&_.rdp-button_span]:text-purple-200 [&_.rdp-button:hover]:bg-accent/10 dark:[&_.rdp-button:hover]:bg-purple-700/50 [&_.rdp-day_selected]:bg-primary dark:[&_.rdp-day_selected]:bg-yellow-500 [&_.rdp-day_selected]:text-primary-foreground dark:[&_.rdp-day_selected]:text-purple-950";
+  const popoverContentClasses = "w-auto p-0 bg-popover border-border text-popover-foreground";
+  const calendarClasses = "[&_button]:text-popover-foreground [&_.rdp-button_span]:text-popover-foreground [&_.rdp-button:hover]:bg-accent/10 [&_.rdp-day_selected]:bg-primary [&_.rdp-day_selected]:text-primary-foreground";
   const selectTriggerClasses = cn("w-full mt-1", inputClasses);
-  const selectContentClasses = "bg-popover dark:bg-purple-900 border-border dark:border-purple-500/70 text-popover-foreground dark:text-purple-100 [&_.item]:focus:bg-accent/10 dark:[&_.item]:focus:bg-yellow-500/20";
+  const selectContentClasses = "bg-popover border-border text-popover-foreground [&_.item]:focus:bg-accent/10";
 
 
   return (
     <FormWrapperComponent {...formWrapperProps}>
       {!initialTransactionData && (
-        <CardHeader className="p-0 pb-6">
-          <CardTitle className="flex items-center gap-2 text-xl text-primary dark:text-purple-300">
-            <FilePlus className="h-6 w-6 text-accent dark:text-yellow-400" /> {cardTitleText}
+        <CardHeader className="p-6 pb-4">
+          <CardTitle className="flex items-center gap-2 text-xl text-primary">
+            <FilePlus className="h-6 w-6 text-accent" /> {cardTitleText}
           </CardTitle>
-          <CardDescription className="text-muted-foreground dark:text-purple-400/80">{cardDescriptionText}</CardDescription>
+          <CardDescription className="text-muted-foreground">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={initialTransactionData ? 'p-0' : 'p-0'}>
+      <CardContent className={initialTransactionData ? 'p-0' : 'p-6'}>
         <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
           <div>
             <Label className={labelClasses}>Transaction Type</Label>
-            <RadioGroup value={type} onValueChange={(value) => setType(value as TransactionEnumType)} className="flex space-x-4 mt-1">
+            <RadioGroup value={type} onValueChange={(value) => setType(value as 'income' | 'expense')} className="flex space-x-4 mt-1">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem
                   value="income"
                   id={`income-${formId || 'new'}`}
                   className={cn(
                     "border-primary text-primary focus:ring-primary",
-                    "data-[state=checked]:border-green-600 data-[state=checked]:bg-green-500 data-[state=checked]:text-green-50"
+                    type === 'income' ? "data-[state=checked]:border-green-600 data-[state=checked]:bg-green-500 data-[state=checked]:text-primary-foreground" : ""
                   )}
                 />
-                <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", type === 'income' && "text-green-600 dark:text-green-300 font-medium")}>Income (₹)</Label>
+                <Label htmlFor={`income-${formId || 'new'}`} className={cn("text-foreground", type === 'income' && "text-green-600 font-medium")}>Income (₹)</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem
@@ -225,10 +264,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                   id={`expense-${formId || 'new'}`}
                   className={cn(
                     "border-primary text-primary focus:ring-primary",
-                    "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
+                     type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-primary-foreground" : ""
                   )}
                 />
-                <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", type === 'expense' && "text-red-600 dark:text-red-300 font-medium")}>Expense (₹)</Label>
+                <Label htmlFor={`expense-${formId || 'new'}`} className={cn("text-foreground", type === 'expense' && "text-red-600 font-medium")}>Expense (₹)</Label>
               </div>
             </RadioGroup>
           </div>
@@ -242,7 +281,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     variant={"outline"}
                     className={popoverButtonClasses}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-accent dark:text-yellow-400" />
+                    <CalendarIcon className="mr-2 h-4 w-4 text-accent" />
                     {date ? format(date, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
@@ -253,19 +292,20 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     onSelect={setDate}
                     initialFocus
                     className={calendarClasses}
+                    disabled={isFetchingDropdowns}
                   />
                 </PopoverContent>
               </Popover>
             </div>
             <div>
               <Label htmlFor={`amount-${formId || 'new'}`} className={labelClasses}>Amount (₹)</Label>
-              <Input id={`amount-${formId || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className={cn("mt-1", inputClasses)} required />
+              <Input id={`amount-${formId || 'new'}`} type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className={cn("mt-1", inputClasses)} required disabled={isFetchingDropdowns}/>
             </div>
           </div>
 
           <div>
             <Label htmlFor={`description-${formId || 'new'}`} className={labelClasses}>Description</Label>
-            <Input id={`description-${formId || 'new'}`} placeholder="e.g., Groceries, Dinner out" value={description} onChange={(e) => setDescription(e.target.value)} className={cn("mt-1", inputClasses)} required />
+            <Input id={`description-${formId || 'new'}`} placeholder={type === 'expense' ? "e.g., Groceries, Dinner out" : "e.g., July Salary"} value={description} onChange={(e) => setDescription(e.target.value)} className={cn("mt-1", inputClasses)} disabled={isFetchingDropdowns}/>
           </div>
 
           {type === 'expense' && (
@@ -273,30 +313,30 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor={`category-${formId || 'new'}`} className={labelClasses}>Category</Label>
-                  <Select value={category} onValueChange={setCategory}>
+                  <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId} disabled={isFetchingDropdowns}>
                     <SelectTrigger id={`category-${formId || 'new'}`} className={selectTriggerClasses}>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent className={selectContentClasses}>
-                      {expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                      {expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label htmlFor={`paymentMethod-${formId || 'new'}`} className={labelClasses}>Payment Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <Select value={selectedPaymentMethodId} onValueChange={setSelectedPaymentMethodId} disabled={isFetchingDropdowns}>
                     <SelectTrigger id={`paymentMethod-${formId || 'new'}`} className={selectTriggerClasses}>
                       <SelectValue placeholder="Select payment method" />
                     </SelectTrigger>
                     <SelectContent className={selectContentClasses}>
-                      {paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.name}>{pm.name}</SelectItem>)}
+                      {paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div>
                 <Label className={labelClasses}>Expense Type (Need, Want, or Investment)</Label>
-                <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as ExpenseEnumType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
+                <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseType)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                   {[
                     { value: 'need', label: 'Need' },
                     { value: 'want', label: 'Want' },
@@ -306,12 +346,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                       <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`}
                        className={cn(
                           "border-primary text-primary focus:ring-primary",
-                          expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-red-50"
+                          expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-primary-foreground"
                                             : "data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
-
                        )}
+                       disabled={isFetchingDropdowns}
                       />
-                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-foreground dark:text-purple-200/90", expenseType === et.value && type === 'expense' ? "text-red-600 dark:text-red-300 font-medium" : "text-accent dark:text-yellow-300 font-medium" )}>{et.label}</Label>
+                      <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-foreground", expenseType === et.value && type === 'expense' ? "text-red-600 font-medium" : "text-accent font-medium" )}>{et.label}</Label>
                     </div>
                   ))}
                 </RadioGroup>
@@ -320,16 +360,29 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           )}
 
           {type === 'income' && (
-            <div>
-              <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source of Income</Label>
-              <Select value={source} onValueChange={setSource}>
-                <SelectTrigger id={`source-${formId || 'new'}`} className={selectTriggerClasses}>
-                  <SelectValue placeholder="Select source" />
-                </SelectTrigger>
-                <SelectContent className={selectContentClasses}>
-                  {incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor={`income-category-${formId || 'new'}`} className={labelClasses}>Income Category</Label>
+                 <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId} disabled={isFetchingDropdowns}>
+                    <SelectTrigger id={`income-category-${formId || 'new'}`} className={selectTriggerClasses}>
+                      <SelectValue placeholder="Select income category" />
+                    </SelectTrigger>
+                    <SelectContent className={selectContentClasses}>
+                      {incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+              </div>
+               <div>
+                <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source Description</Label>
+                <Input id={`source-${formId || 'new'}`} placeholder="e.g., Client Project X, Bonus Q2" value={source} onChange={(e) => setSource(e.target.value)} className={cn("mt-1", inputClasses)} required disabled={isFetchingDropdowns}/>
+              </div>
+            </div>
+          )}
+          
+          {isFetchingDropdowns && (
+             <div className="flex items-center justify-center space-x-2 text-muted-foreground py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading form options...</span>
             </div>
           )}
 
@@ -337,12 +390,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isFetchingDropdowns}
                 className={cn(
-                  "w-full font-bold text-white",
+                  "w-full font-semibold text-primary-foreground",
                   isLoading ? "bg-muted hover:bg-muted text-muted-foreground" :
-                  type === 'income' ? "bg-green-500 hover:bg-green-600" :
-                  "bg-red-500 hover:bg-red-600"
+                  type === 'income' ? "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700" : // Explicit dark mode colors
+                  "bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700" // Explicit dark mode colors
                 )}
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4"/>}
@@ -351,7 +404,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             </motion.div>
             {initialTransactionData && onCancel && (
               <motion.div {...buttonHoverTap} className="w-full sm:flex-1">
-                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full border-border dark:border-purple-500/70 text-foreground dark:text-purple-300 hover:bg-muted dark:hover:bg-purple-700/30 dark:hover:text-purple-100">
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading || isFetchingDropdowns} className="w-full border-border text-foreground hover:bg-muted">
                   <XCircle className="mr-2 h-4 w-4"/>
                   Cancel Edit
                 </Button>
@@ -363,4 +416,3 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
-

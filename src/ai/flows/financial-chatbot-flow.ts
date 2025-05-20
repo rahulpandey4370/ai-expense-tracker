@@ -11,19 +11,20 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Transaction as AppTransaction } from '@/lib/types';
+import type { Transaction as AppTransaction } from '@/lib/types'; // Using our app's Transaction type
 
 // Zod schema for transactions to be passed to the AI model
+// Aligned with Prisma model structure (relations will be denormalized for AI)
 const AITransactionSchema = z.object({
   id: z.string(),
-  type: z.enum(['income', 'expense']),
+  type: z.string(), // "income" | "expense"
   date: z.string().describe("Date in ISO format string"),
   amount: z.number(),
-  description: z.string(),
-  category: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
-  source: z.string().optional(),
+  description: z.string().nullish(),
+  categoryName: z.string().nullish().describe("Name of the category if applicable"),
+  paymentMethodName: z.string().nullish().describe("Name of the payment method if applicable"),
+  expenseType: z.string().nullish().describe("Type of expense: 'need', 'want', 'investment_expense' if applicable"),
+  source: z.string().nullish().describe("Source of income if applicable"),
 });
 type AITransaction = z.infer<typeof AITransactionSchema>;
 
@@ -49,14 +50,20 @@ export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema
 // Exported wrapper function
 export async function askFinancialBot(input: {
   query: string;
-  transactions: AppTransaction[]; 
+  transactions: AppTransaction[]; // Expecting our app's Transaction type which includes relations
   chatHistory?: ChatMessage[];
 }): Promise<FinancialChatbotOutput> {
-  // Convert AppTransaction[] to AITransaction[] (Date to ISO string)
+  // Convert AppTransaction[] to AITransaction[] (flattening relations for AI)
   const aiTransactions: AITransaction[] = input.transactions.map(t => ({
-    ...t,
-    // Ensure date is converted to ISO string for the AI
+    id: t.id,
+    type: t.type,
     date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
+    amount: t.amount,
+    description: t.description,
+    categoryName: t.category?.name, // Access nested category name
+    paymentMethodName: t.paymentMethod?.name, // Access nested payment method name
+    expenseType: t.expenseType,
+    source: t.source,
   }));
   return financialChatbotFlow({ query: input.query, transactions: aiTransactions, chatHistory: input.chatHistory });
 }
@@ -72,6 +79,7 @@ const financialChatbotFlow = ai.defineFlow(
     let prompt = `You are an AI Financial Assistant, an expert in analyzing personal finance data in Indian Rupees (INR).
 The user has provided their transaction data. Your task is to answer the user's questions based on this data and any provided conversation history.
 Be concise and helpful. If the data doesn't support an answer, clearly state that. Refer to amounts in INR (e.g., ₹1000).
+When mentioning categories or payment methods, use the names provided (categoryName, paymentMethodName).
 
 Transaction Data (potentially filtered by user's current view, e.g., for a specific month):
 \`\`\`json

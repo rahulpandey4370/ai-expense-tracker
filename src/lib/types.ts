@@ -1,79 +1,50 @@
-
+import type { Category as PrismaCategory, PaymentMethod as PrismaPaymentMethod, Transaction as PrismaTransaction } from '@prisma/client';
 import { z } from 'zod';
 
-export type TransactionEnumType = "income" | "expense";
-export type ExpenseEnumType = "need" | "want" | "investment_expense";
+// Re-export Prisma generated types if they are sufficient
+export type Category = PrismaCategory;
+export type PaymentMethod = PrismaPaymentMethod;
+// export type Transaction = PrismaTransaction; // Using extended below
 
-export interface Transaction {
-  id: string;
-  type: TransactionEnumType;
-  date: Date;
-  amount: number;
-  description: string;
-  category?: string; 
-  paymentMethod?: string; 
-  expenseType?: ExpenseEnumType;
-  source?: string; 
-  createdAt?: Date; // Optional, Prisma adds these
-  updatedAt?: Date; // Optional, Prisma adds these
+// Custom Transaction type if we need to transform Prisma's Decimal to number for frontend
+// Prisma returns `Decimal` for `Float` fields, which needs conversion for JS `number` type.
+export interface Transaction extends Omit<PrismaTransaction, 'amount'> {
+  amount: number; // Ensure amount is treated as number in the app
 }
 
 // Zod schema for validating transaction input for Server Actions
-// This is a more specific input type, ensuring data conforms before hitting the DB.
-export const TransactionDTOSchema = z.object({
+// This should align with the Prisma model for Transaction
+export const TransactionInputSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date(),
-  amount: z.number().positive("Amount must be positive"),
-  description: z.string().min(1, "Description cannot be empty"),
-  category: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
-  source: z.string().optional(),
+  amount: z.number().positive("Amount must be a positive number."),
+  description: z.string().min(1, "Description is required.").optional(),
+  categoryId: z.string().optional(), // For expenses, will be required by refine
+  paymentMethodId: z.string().optional(), // For expenses, will be required by refine
+  source: z.string().optional(), // For income, will be required by refine
+  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(), // For expenses
 }).refine(data => {
   if (data.type === 'expense') {
-    return !!data.category && !!data.paymentMethod && !!data.expenseType;
+    return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
   }
   return true;
 }, {
-  message: "Category, Payment Method, and Expense Type are required for expenses.",
-  path: ['category'], // Or a more general path
+  message: "For expenses, Category, Payment Method, and Expense Type are required.",
+  path: ['type'],
 }).refine(data => {
   if (data.type === 'income') {
-    return !!data.source;
+    // For income, categoryId might be used to associate with an income category.
+    // Source field stores the text description like "Salary", "Freelance".
+    return !!data.source && !!data.categoryId;
   }
   return true;
 }, {
-  message: "Source is required for income.",
-  path: ['source'],
+  message: "For income, Source and Category are required.",
+  path: ['type'],
 });
 
-export type TransactionInput = z.infer<typeof TransactionDTOSchema>;
+export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
-
-export interface Category {
-  id: string;
-  name: string;
-  type: "expense" | "income";
-}
-
-export interface PaymentMethod {
-  id: string;
-  name: string;
-  type: "Credit Card" | "UPI" | "Cash" | "Others"; // Kept as is for now
-}
-
-// These are not yet persisted in DB, kept for reference or future use
-export interface Investment {
-  id: string;
-  date: Date;
-  totalValue: number;
-  description?: string;
-}
-
-export interface Cashback {
-  id: string;
-  date: Date;
-  amount: number;
-  source: string;
-  description?: string;
-}
+// Derived types for UI convenience, if needed
+export type TransactionType = PrismaTransaction['type']; // "income" | "expense"
+export type ExpenseType = Exclude<PrismaTransaction['expenseType'], null | undefined>; // "need" | "want" | "investment_expense"

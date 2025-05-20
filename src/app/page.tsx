@@ -1,5 +1,4 @@
 
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -13,9 +12,9 @@ import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
-import type { Transaction, TransactionInput } from '@/lib/types';
-import { getTransactions, addTransaction } from '@/lib/actions/transactions';
-import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle } from 'lucide-react';
+import type { Transaction as AppTransaction, TransactionInput } from '@/lib/types';
+import { getTransactions } from '@/lib/actions/transactions'; // Server action
+import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -53,7 +52,7 @@ const sectionVariants = {
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export default function DashboardPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<AppTransaction[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
@@ -64,12 +63,13 @@ export default function DashboardPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-      setTransactions(fetchedTransactions);
+       // Ensure date is Date object
+      setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
     } catch (error) {
       console.error("Failed to fetch transactions for dashboard:", error);
       toast({
         title: "Error Loading Data",
-        description: "Could not fetch transactions. Please try refreshing.",
+        description: error instanceof Error ? error.message : "Could not fetch transactions. Please try refreshing.",
         variant: "destructive",
       });
       setTransactions([]);
@@ -83,11 +83,12 @@ export default function DashboardPage() {
     fetchAndSetTransactions();
   }, [fetchAndSetTransactions]);
 
-  const handleAddTransactionCallback = async (newTransactionData: TransactionInput) => {
+  const handleAddTransactionCallback = async () => { // No need for newTransactionData param if re-fetching
     try {
-        await fetchAndSetTransactions();
+        await fetchAndSetTransactions(); // Re-fetch all transactions to update the UI
     } catch (error) {
-        console.error("Error after attempting to add transaction:", error);
+        console.error("Error after attempting to add/update transaction:", error);
+        toast({ title: "Data Sync Error", description: "Could not refresh data after the last operation.", variant: "destructive" });
     }
   };
 
@@ -111,7 +112,7 @@ export default function DashboardPage() {
 
   const lastMonthTotalSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1); // Ensure we're at the start of the month before subtracting
+    prevMonthDate.setDate(1); 
     prevMonthDate.setMonth(selectedDate.getMonth() - 1);
 
     const lastMonth = prevMonthDate.getMonth();
@@ -126,18 +127,9 @@ export default function DashboardPage() {
   if (!isClient || isLoadingData) {
     return (
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse bg-background/30 backdrop-blur-sm">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className={cn("h-32 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>)}
-        </div>
-        <div className={cn("h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <div className={cn("h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
-           <div className={cn("h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
-        </div>
-        <div className={cn("h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className={cn("h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
-            <div className={cn("h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10", glowClass)}></div>
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-16 w-16 text-primary animate-spin" />
+          <p className="ml-4 text-lg text-primary">Loading dashboard data...</p>
         </div>
       </main>
     );
@@ -177,8 +169,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
       
-      {/* Transaction Form - No longer wrapped in Card here, styling is in TransactionForm component */}
-      <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+      <motion.div variants={sectionVariants} initial="hidden" animate="visible" className={cn("bg-card rounded-xl p-6", glowClass)}>
+         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+      </motion.div>
 
 
       <motion.div

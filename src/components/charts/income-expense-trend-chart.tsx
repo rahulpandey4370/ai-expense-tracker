@@ -17,12 +17,12 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import type { Transaction } from "@/lib/types"
-import { format, subMonths, getMonth, getYear } from "date-fns";
+import type { Transaction as AppTransaction } from "@/lib/types" // Changed to AppTransaction
+import { subMonths, getMonth, getYear } from "date-fns"; // format removed as it's not used
 import { cn } from "@/lib/utils";
 
 interface IncomeExpenseTrendChartProps {
-  transactions: Transaction[];
+  transactions: AppTransaction[]; // Use AppTransaction
   numberOfMonths?: number;
 }
 
@@ -39,12 +39,13 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
       const month = getMonth(targetDate);
       const year = getYear(targetDate);
 
+      // Ensure date objects are being compared correctly
       const monthlyIncome = transactions
-        .filter(t => t.type === 'income' && t.date.getMonth() === month && t.date.getFullYear() === year)
+        .filter(t => t.type === 'income' && new Date(t.date).getMonth() === month && new Date(t.date).getFullYear() === year)
         .reduce((sum, t) => sum + t.amount, 0);
       
       const monthlyExpenses = transactions
-        .filter(t => t.type === 'expense' && t.date.getMonth() === month && t.date.getFullYear() === year)
+        .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === month && new Date(t.date).getFullYear() === year)
         .reduce((sum, t) => sum + t.amount, 0);
       
       data.push({
@@ -59,11 +60,11 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
   const chartConfig = {
     income: {
       label: "Income (₹)",
-      color: "hsl(var(--chart-2))", // Using a chart color
+      color: "hsl(var(--chart-2))", 
     },
     expense: {
       label: "Expense (₹)",
-      color: "hsl(var(--chart-1))", // Using a chart color
+      color: "hsl(var(--chart-1))", 
     },
   }
 
@@ -98,7 +99,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 tickMargin={10}
                 axisLine={false}
                 tickFormatter={(value) => value.slice(0, 6)}
-                className="fill-foreground" // Added fill for light mode
+                className="fill-foreground" 
               />
               <YAxis 
                 tickFormatter={(value) => `₹${value / 1000}k`} 
@@ -106,7 +107,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 axisLine={false}
                 tickMargin={8}
                 width={50}
-                className="fill-foreground" // Added fill for light mode
+                className="fill-foreground" 
               />
               <ChartTooltip
                 cursor={false}
