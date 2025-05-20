@@ -28,6 +28,8 @@ const messageVariants = {
   visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
 };
 
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+
 export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
@@ -78,7 +80,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
-      <Card className="shadow-lg flex flex-col h-[500px]">
+      <Card className={cn("shadow-lg flex flex-col h-[500px]", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Bot className="h-6 w-6 text-primary" /> AI Financial Assistant
@@ -161,7 +163,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                 disabled={isLoading || !inputValue.trim()} 
                 size="icon" 
                 className="bg-primary hover:bg-primary/90"
-                withMotion // Enable motion for this specific button
+                withMotion 
               >
                 {isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}
                 <span className="sr-only">Send</span>

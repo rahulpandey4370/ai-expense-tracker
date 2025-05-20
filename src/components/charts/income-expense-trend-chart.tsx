@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/chart"
 import type { Transaction } from "@/lib/types"
 import { format, subMonths, getMonth, getYear } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface IncomeExpenseTrendChartProps {
   transactions: Transaction[];
@@ -26,6 +27,7 @@ interface IncomeExpenseTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: IncomeExpenseTrendChartProps) {
   const chartData = useMemo(() => {
@@ -67,7 +69,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
 
   if (!transactions || transactions.length === 0) {
      return (
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle>Income vs. Expense Trend</CardTitle>
           <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>
@@ -80,7 +82,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
   }
 
   return (
-    <Card className="shadow-lg">
+    <Card className={cn("shadow-lg", glowClass)}>
       <CardHeader>
         <CardTitle>Income vs. Expense Trend</CardTitle>
         <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Transaction } from "@/lib/types";
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, ListChecks } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RecentTransactionsListProps {
   transactions: Transaction[];
@@ -31,6 +32,8 @@ const listItemVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 110 } },
 };
 
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
+
 export function RecentTransactionsList({ transactions, count = 5 }: RecentTransactionsListProps) {
   const recentTransactions = [...transactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -38,7 +41,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
 
   if (recentTransactions.length === 0) {
     return (
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary"/>Recent Transactions</CardTitle>
           <CardDescription>Your latest financial activities.</CardDescription>
@@ -52,7 +55,7 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
   
   return (
     <motion.div initial="hidden" animate="visible" variants={{visible: {transition: {delayChildren: 0.2}}}}>
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary"/>Recent Transactions</CardTitle>
           <CardDescription>Your latest financial activities.</CardDescription>

@@ -9,6 +9,7 @@ import { Lightbulb, Zap } from "lucide-react";
 import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spending-insights";
 import type { Transaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from '@/lib/utils';
 
 interface SpendingInsightsProps {
   currentMonthTransactions: Transaction[];
@@ -26,6 +27,8 @@ const buttonHoverTap = {
   whileHover: { scale: 1.03 },
   whileTap: { scale: 0.97 },
 };
+
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedYear }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
@@ -96,7 +99,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/chart"
 import type { Transaction } from "@/lib/types"
 import { format, subMonths, getMonth, getYear } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface MonthlySpendingTrendChartProps {
   transactions: Transaction[];
@@ -24,6 +25,7 @@ interface MonthlySpendingTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: MonthlySpendingTrendChartProps) {
   const chartData = useMemo(() => {
@@ -56,7 +58,7 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
 
   if (!transactions || transactions.length === 0) {
     return (
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle>Monthly Spending Trend</CardTitle>
           <CardDescription>Spending over the last {numberOfMonths} months.</CardDescription>
@@ -69,7 +71,7 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
   }
   
   return (
-    <Card className="shadow-lg">
+    <Card className={cn("shadow-lg", glowClass)}>
       <CardHeader>
         <CardTitle>Monthly Spending Trend</CardTitle>
         <CardDescription>Spending over the last {numberOfMonths} months.</CardDescription>

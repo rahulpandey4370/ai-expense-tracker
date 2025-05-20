@@ -1,3 +1,4 @@
+
 "use client"
 
 import { Pie, PieChart, Cell } from "recharts"
@@ -17,6 +18,7 @@ import {
   ChartLegendContent,
 } from "@/components/ui/chart"
 import type { Transaction } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 interface ExpenseCategoryChartProps {
   transactions: Transaction[]; // Should be pre-filtered for the selected month/year
@@ -35,6 +37,7 @@ const CHART_COLORS = [
   "hsl(var(--accent))",
 ];
 
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function ExpenseCategoryChart({ transactions, selectedMonthName, selectedYear }: ExpenseCategoryChartProps) {
   const expenseData = transactions // Already filtered for the selected period
@@ -60,7 +63,7 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
 
   if (chartData.length === 0) {
     return (
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle>Expenses by Category</CardTitle>
           <CardDescription>Spending distribution for {selectedMonthName} {selectedYear}.</CardDescription>
@@ -73,7 +76,7 @@ export function ExpenseCategoryChart({ transactions, selectedMonthName, selected
   }
 
   return (
-    <Card className="flex flex-col shadow-lg">
+    <Card className={cn("flex flex-col shadow-lg", glowClass)}>
       <CardHeader className="items-center pb-0">
         <CardTitle>Expenses by Category</CardTitle>
         <CardDescription>Spending distribution for {selectedMonthName} {selectedYear}.</CardDescription>

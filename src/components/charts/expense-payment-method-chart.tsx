@@ -1,3 +1,4 @@
+
 "use client"
 
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
@@ -15,12 +16,15 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import type { Transaction } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 interface ExpensePaymentMethodChartProps {
   transactions: Transaction[]; // Should be pre-filtered for the selected month/year
   selectedMonthName: string;
   selectedYear: number;
 }
+
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear }: ExpensePaymentMethodChartProps) {
  const expenseData = transactions // Already filtered
@@ -46,7 +50,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
 
   if (chartData.length === 0) {
     return (
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
           <CardTitle>Expenses by Payment Method</CardTitle>
           <CardDescription>Payment methods for {selectedMonthName} {selectedYear}.</CardDescription>
@@ -59,7 +63,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
   }
   
   return (
-    <Card className="shadow-lg">
+    <Card className={cn("shadow-lg", glowClass)}>
       <CardHeader>
         <CardTitle>Expenses by Payment Method</CardTitle>
         <CardDescription>Payment methods for {selectedMonthName} {selectedYear}.</CardDescription>

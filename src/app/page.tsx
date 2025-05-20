@@ -19,6 +19,7 @@ import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
+import { Card } from '@/components/ui/card'; // Import Card for TransactionForm wrapper
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -48,6 +49,7 @@ const sectionVariants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
+const glowClass = "shadow-[0_0_15px_hsl(var(--accent)/0.4)] dark:shadow-[0_0_15px_hsl(var(--accent)/0.5)]";
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -124,22 +126,15 @@ export default function DashboardPage() {
     return (
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse bg-background/30 backdrop-blur-sm">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>)}
+          {[...Array(4)].map((_, i) => <div key={i} className={`h-32 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>)}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-                <div className="h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-            </div>
-            <div className="h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-          </div>
-          <div className="lg:col-span-1 space-y-6">
-            <div className="h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-            <div className="h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div>
-            <div className="h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10"></div> 
-          </div>
+        <div className={`h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        <div className={`h-96 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
+            <div className={`h-80 bg-muted/50 rounded-lg shadow-lg border border-primary/10 ${glowClass}`}></div>
         </div>
       </main>
     );
@@ -169,7 +164,7 @@ export default function DashboardPage() {
 
        {monthlyMetrics.spending > monthlyMetrics.income && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <Alert variant="destructive" className="shadow-md border-red-700/50 bg-red-600/20 text-red-100">
+          <Alert variant="destructive" className={`shadow-md border-red-700/50 bg-red-600/20 text-red-100 ${glowClass}`}>
             <AlertTriangle className="h-5 w-5 text-red-300" />
             <AlertTitle className="text-red-200">Spending Alert!</AlertTitle>
             <AlertDescription className="text-red-300">
@@ -179,41 +174,51 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div 
-          className="lg:col-span-2 space-y-6"
-          variants={sectionVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ExpenseCategoryChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
-            <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <MonthlySpendingTrendChart transactions={transactions} />
-            <IncomeExpenseTrendChart transactions={transactions} />
-          </div>
-           <RecentTransactionsList transactions={currentMonthTransactions} />
-        </motion.div>
+      <motion.div 
+        variants={sectionVariants} 
+        initial="hidden" 
+        animate="visible" 
+        className={`rounded-xl border-2 border-primary/20 bg-card/80 p-6 ${glowClass}`}
+      >
+        <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+      </motion.div>
+      
+      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <SpendingInsights 
+          currentMonthTransactions={currentMonthTransactions} 
+          lastMonthTotalSpending={lastMonthTotalSpending}
+          selectedMonthName={monthNamesList[selectedMonth]}
+          selectedYear={selectedYear}
+        />
+      </motion.div>
 
-        <motion.div 
-          className="lg:col-span-1 space-y-6"
-          variants={sectionVariants}
-          initial="hidden"
-          animate="visible"
-          // transition={{ delay: 0.2 }}
-        >
-          <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
-          <SpendingInsights 
-            currentMonthTransactions={currentMonthTransactions} 
-            lastMonthTotalSpending={lastMonthTotalSpending}
-            selectedMonthName={monthNamesList[selectedMonth]}
-            selectedYear={selectedYear}
-          />
-          <FinancialChatbot allTransactions={transactions} />
+      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <FinancialChatbot allTransactions={transactions} />
+      </motion.div>
+
+      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
+      </motion.div>
+      
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants}>
+          <ExpenseCategoryChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
         </motion.div>
-      </div>
+        <motion.div variants={itemVariants}>
+          <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <MonthlySpendingTrendChart transactions={transactions} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <IncomeExpenseTrendChart transactions={transactions} />
+        </motion.div>
+      </motion.div>
     </main>
   );
 }
