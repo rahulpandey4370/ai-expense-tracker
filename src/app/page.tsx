@@ -12,13 +12,13 @@ import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
-import type { AppTransaction } from '@/lib/types'; 
-import { getTransactions } from '@/lib/actions/transactions'; 
-import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2 } from 'lucide-react';
+import type { AppTransaction } from '@/lib/types';
+import { getTransactions } from '@/lib/actions/transactions';
+import { DollarSign, TrendingUp, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, Gift, Target, Banknote } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
-import { Card } from '@/components/ui/card'; 
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const containerVariants = {
@@ -26,7 +26,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
+      staggerChildren: 0.07, // Slightly faster stagger
       delayChildren: 0.1,
     },
   },
@@ -50,6 +50,7 @@ const sectionVariants = {
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
@@ -82,9 +83,9 @@ export default function DashboardPage() {
     fetchAndSetTransactions();
   }, [fetchAndSetTransactions]);
 
-  const handleAddTransactionCallback = async () => { 
+  const handleAddTransactionCallback = async () => {
     try {
-        await fetchAndSetTransactions(); 
+        await fetchAndSetTransactions();
     } catch (error) {
         console.error("Error after attempting to add/update transaction:", error);
         toast({ title: "Data Sync Error", description: "Could not refresh data after the last operation.", variant: "destructive" });
@@ -109,12 +110,26 @@ export default function DashboardPage() {
       .reduce((sum, t) => sum + t.amount, 0);
     const savings = income - spending;
     const savingsRate = income > 0 ? (savings / income) * 100 : 0;
-    return { income, spending, savings, savingsRate };
+
+    const totalCashback = currentMonthTransactions
+      .filter(t => t.type === 'income' && t.category?.name === 'Cashback')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalInvestment = currentMonthTransactions
+      .filter(t => t.type === 'expense' &&
+                   (t.expenseType === 'investment_expense' ||
+                    (t.category && investmentCategoryNames.includes(t.category.name)))
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const investmentPercentage = income > 0 ? (totalInvestment / income) * 100 : 0;
+
+    return { income, spending, savings, savingsRate, totalCashback, totalInvestment, investmentPercentage };
   }, [currentMonthTransactions]);
 
   const lastMonthTotalSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1); 
+    prevMonthDate.setDate(1);
     prevMonthDate.setMonth(selectedDate.getMonth() - 1);
 
     const lastMonth = prevMonthDate.getMonth();
@@ -143,13 +158,13 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
       <motion.div
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" // Adjusted for 6 KPIs
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         <motion.div variants={itemVariants}>
-          <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={DollarSign} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-700/50 dark:bg-green-900/20 dark:hover:bg-green-800/30"/>
+          <KpiCard title="Total Income" value={`₹${monthlyMetrics.income.toFixed(2)}`} icon={Banknote} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-700/50 dark:bg-green-900/20 dark:hover:bg-green-800/30"/>
         </motion.div>
         <motion.div variants={itemVariants}>
           <KpiCard title="Total Expenses" value={`₹${monthlyMetrics.spending.toFixed(2)}`} icon={TrendingDown} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName="text-red-500 dark:text-red-400" className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20 dark:border-red-700/50 dark:bg-red-900/20 dark:hover:bg-red-800/30"/>
@@ -159,6 +174,12 @@ export default function DashboardPage() {
         </motion.div>
         <motion.div variants={itemVariants}>
           <KpiCard title="Savings Rate" value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} icon={Percent} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-500 dark:text-purple-400" : "text-yellow-500 dark:text-yellow-400"} className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 dark:border-purple-700/50 dark:bg-purple-900/20 dark:hover:bg-purple-800/30"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Total Cashback" value={`₹${monthlyMetrics.totalCashback.toFixed(2)}`} icon={Gift} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <KpiCard title="Investment %" value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} icon={Target} description={`of income for ${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"/>
         </motion.div>
       </motion.div>
 
@@ -173,9 +194,8 @@ export default function DashboardPage() {
           </Alert>
         </motion.div>
       )}
-      
-      {/* TransactionForm now takes full width */}
-      <Card className={cn("shadow-xl rounded-xl", glowClass, "bg-card")}>
+
+      <Card className={cn("shadow-xl rounded-xl bg-card", glowClass)}>
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
       </Card>
 

@@ -1,0 +1,244 @@
+
+"use client";
+
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { motion } from "framer-motion";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { AppTransaction } from '@/lib/types';
+import { getTransactions } from '@/lib/actions/transactions';
+import { Loader2, AlertTriangle, CalendarRange } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
+
+const pageVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+};
+
+const tableContainerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const tableRowVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
+};
+
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+const cashbackAndInterestCategoryNames = ["Cashback", "Investment Income"];
+
+interface MonthlySummary {
+  monthIndex: number;
+  monthName: string;
+  totalSpend: number;
+  totalInvestment: number;
+  totalSavings: number;
+  totalCashbacksInterests: number;
+  totalIncome: number;
+}
+
+export default function YearlyOverviewPage() {
+  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const { toast } = useToast();
+
+  const availableYears = useMemo(() => {
+    if (allTransactions.length === 0) return [new Date().getFullYear()];
+    const years = new Set(allTransactions.map(t => new Date(t.date).getFullYear()));
+    const currentYear = new Date().getFullYear();
+    if (!years.has(currentYear)) years.add(currentYear);
+    return Array.from(years).sort((a, b) => b - a);
+  }, [allTransactions]);
+
+  const fetchTransactionsCallback = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const fetchedTransactions = await getTransactions();
+      setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
+    } catch (error) {
+      console.error("Failed to fetch transactions for yearly overview:", error);
+      toast({
+        title: "Error Loading Data",
+        description: "Could not fetch transaction data.",
+        variant: "destructive",
+      });
+      setAllTransactions([]);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchTransactionsCallback();
+  }, [fetchTransactionsCallback]);
+
+  useEffect(() => {
+    // Ensure selectedYear is one of the available years, default to most recent if not.
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears, selectedYear]);
+
+
+  const yearlySummaryData = useMemo(() => {
+    const summary: MonthlySummary[] = [];
+    for (let i = 0; i < 12; i++) { // Iterate through 12 months
+      const monthTransactions = allTransactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getFullYear() === selectedYear && transactionDate.getMonth() === i;
+      });
+
+      const totalIncome = monthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const totalSpend = monthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const totalInvestment = monthTransactions
+        .filter(t => t.type === 'expense' &&
+                     (t.expenseType === 'investment_expense' ||
+                      (t.category && investmentCategoryNames.includes(t.category.name)))
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalCashbacksInterests = monthTransactions
+        .filter(t => t.type === 'income' &&
+                     (t.category && cashbackAndInterestCategoryNames.includes(t.category.name))
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const totalSavings = totalIncome - totalSpend;
+
+      summary.push({
+        monthIndex: i,
+        monthName: monthNames[i],
+        totalSpend,
+        totalInvestment,
+        totalSavings,
+        totalCashbacksInterests,
+        totalIncome,
+      });
+    }
+    return summary;
+  }, [allTransactions, selectedYear]);
+
+  const yearlyTotals = useMemo(() => {
+    return yearlySummaryData.reduce((acc, monthData) => {
+      acc.totalSpend += monthData.totalSpend;
+      acc.totalInvestment += monthData.totalInvestment;
+      acc.totalSavings += monthData.totalSavings;
+      acc.totalCashbacksInterests += monthData.totalCashbacksInterests;
+      acc.totalIncome += monthData.totalIncome;
+      return acc;
+    }, { totalSpend: 0, totalInvestment: 0, totalSavings: 0, totalCashbacksInterests: 0, totalIncome: 0 });
+  }, [yearlySummaryData]);
+
+
+  const handleYearChange = (yearValue: string) => {
+    setSelectedYear(parseInt(yearValue, 10));
+  };
+
+  if (isLoadingData) {
+    return (
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse bg-background/30 backdrop-blur-sm">
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-16 w-16 text-primary animate-spin" />
+          <p className="ml-4 text-lg text-primary">Loading yearly overview...</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
+      <motion.div variants={pageVariants} initial="hidden" animate="visible">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
+              <CalendarRange className="w-8 h-8 text-accent transform rotate-[-3deg]" />
+              Yearly Financial Overview
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              A month-by-month summary of your finances for the selected year.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6">
+              <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+                <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground">
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-primary/60 text-foreground">
+                  {availableYears.map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {allTransactions.filter(t => new Date(t.date).getFullYear() === selectedYear).length === 0 ? (
+              <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
+                <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for {selectedYear}</AlertTitle>
+                <AlertDescription>
+                  No transactions found for the year {selectedYear}. Try a different year or add some transactions.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <motion.div className="overflow-x-auto" variants={tableContainerVariants} initial="hidden" animate="visible">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-primary/5 border-b-primary/20">
+                      <TableHead className="font-semibold text-muted-foreground w-[120px]">Month</TableHead>
+                      <TableHead className="text-right font-semibold text-muted-foreground">Total Spend</TableHead>
+                      <TableHead className="text-right font-semibold text-muted-foreground">Total Investment</TableHead>
+                      <TableHead className="text-right font-semibold text-muted-foreground">Total Savings</TableHead>
+                      <TableHead className="text-right font-semibold text-muted-foreground">Cashbacks/Interests</TableHead>
+                      <TableHead className="text-right font-semibold text-muted-foreground">Total Income</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {yearlySummaryData.map((data) => (
+                      <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50">
+                        <TableCell className="font-medium text-foreground">{data.monthName}</TableCell>
+                        <TableCell className={cn("text-right", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
+                        <TableCell className={cn("text-right", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
+                        <TableCell className={cn("text-right", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
+                        <TableCell className={cn("text-right", data.totalCashbacksInterests > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterests.toFixed(2)}</TableCell>
+                        <TableCell className={cn("text-right", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
+                      </motion.tr>
+                    ))}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow className="bg-primary/10 border-t-2 border-primary/30">
+                      <TableHead className="font-bold text-primary">Total ({selectedYear})</TableHead>
+                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
+                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
+                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
+                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalCashbacksInterests > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterests.toFixed(2)}</TableHead>
+                      <TableHead className={cn("text-right font-bold", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    </main>
+  );
+}
+

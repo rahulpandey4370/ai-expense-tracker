@@ -16,13 +16,14 @@ import {
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/yearly-overview", label: "Yearly Overview", icon: TableProperties },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -44,13 +45,10 @@ export default function AppSidebar() {
             <SidebarMenuItem key={item.label}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  {/* Link now renders its own <a> tag. SidebarMenuButton is its child. */}
                   <Link href={item.href} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md">
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className="justify-start"
-                      // Removed asChild from SidebarMenuButton invocation here
-                      // It will render as a button, which is fine inside an <a>
                     >
                       <item.icon className="h-5 w-5" />
                       <span>{item.label}</span>
