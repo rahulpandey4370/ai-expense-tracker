@@ -120,8 +120,8 @@ export default function DashboardPage() {
     
     const totalOutgoings = coreExpenses + totalInvestments;
     
-    const availableToSaveInvest = income - coreExpenses; // Money left after day-to-day spending
-    const netMonthlyCashflow = income - coreExpenses - totalInvestments; // Absolute cash surplus/deficit
+    const availableToSaveInvest = income - coreExpenses; 
+    const netMonthlyCashflow = income - totalOutgoings; 
     
     const investmentPercentage = income > 0 ? (totalInvestments / income) * 100 : 0;
 
@@ -251,14 +251,14 @@ export default function DashboardPage() {
         </motion.div>
         <motion.div variants={itemVariants}>
           <KpiCard 
-            title="Net Monthly Cashflow" 
+            title="Cash Savings" 
             value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
             icon={Wallet} 
-            description={`Cash surplus/deficit this month`}
+            description={`Actual cash saved after all outgoings`}
             valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
             className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
             kpiKey="netMonthlyCashflow" 
-            insightText="Final cash balance after all income, spending, and investments."
+            insightText="Actual cash saved after all income and all outgoings (including investments)."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
@@ -358,3 +358,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+
