@@ -18,9 +18,7 @@ import { ParsedAITransactionSchema, type ParsedAITransaction } from '@/lib/types
 const CategorySchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(['income', 'expense']),
 });
-type CategoryForAIInternal = z.infer<typeof CategorySchemaForAIInternal>;
 
 // Internal schema for AI flow input, not exported
 const PaymentMethodSchemaForAIInternal = z.object({
@@ -31,11 +29,12 @@ const PaymentMethodSchemaForAIInternal = z.object({
 // Internal schema for AI flow input, not exported
 const ParseTransactionTextInputSchemaInternal = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
-  expenseCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
-  incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
+  expenseCategories: z.array(CategorySchemaForAIInternal).describe("A list of available expense categories (name, id) to help with mapping."),
+  incomeCategories: z.array(CategorySchemaForAIInternal).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
 });
+// Type exported for the wrapper function
 export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
 
 
@@ -49,7 +48,7 @@ export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutp
 export async function parseTransactionsFromText(
   input: {
     naturalLanguageText: string;
-    categories: CategoryForAIInternal[]; // Combined categories from client
+    categories: {id: string; name: string; type: 'income' | 'expense'}[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
   }
 ): Promise<ParseTransactionTextOutput> {
@@ -77,8 +76,8 @@ export async function parseTransactionsFromText(
   } catch (flowError: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error';
-    const userFriendlyMessage = errorMessage.includes("Handlebars error") || errorMessage.includes("unknown helper")
-      ? `AI model failed to process the text due to a template error: ${errorMessage}. Please check server logs for AI prompt issues.`
+    const userFriendlyMessage = errorMessage.includes("Handlebars error") || errorMessage.includes("unknown helper") || (errorMessage.includes("GoogleGenerativeAI Error") && errorMessage.includes("Invalid JSON payload"))
+      ? `AI model failed to process the text due to a template or schema error: ${errorMessage}. Please check server logs for AI prompt issues.`
       : `An unexpected error occurred during AI processing: ${errorMessage}. Please check server logs.`;
     return {
       parsedTransactions: [],
@@ -111,7 +110,7 @@ Available Payment Methods (for expenses):
 
 For each transaction identified in the text, provide the following details:
 - date: Transaction date in YYYY-MM-DD format.
-- description: A clear description of the transaction.
+- description: A detailed description of the transaction. If it's a purchase with multiple items (e.g., groceries from a specific store), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana"). For other transactions, use the merchant or a clear summary.
 - amount: The numeric amount (always positive, e.g. 50.75).
 - type: 'income' or 'expense'.
 - categoryNameGuess: (Optional) If you can map it to one of the provided category names, state the name. If it's clearly a category not on the list but makes sense, state it. If unsure, use "Others" or leave blank.
@@ -129,7 +128,6 @@ Input Text:
 Parse the text and return an array of structured transaction objects. If no transactions are found, return an empty array for parsedTransactions.
 Provide amounts in Indian Rupees (INR or ₹). Ensure amounts are always positive numbers.
 If a category or payment method in the text does not exactly match the provided lists but is very similar (e.g., "HDFC CC" vs "CC HDFC 7950"), try to map it to the closest one from the list for categoryNameGuess or paymentMethodNameGuess.
-For descriptions, be concise. E.g., "Dinner with friends at RestaurantX" can be "Dinner at RestaurantX".
 If text mentions "salary for July", and current month is August, assume it's last month's salary.
 Interpret currency symbols like ₹, INR, Rs. correctly for the amount.
 `,
@@ -152,9 +150,9 @@ const parseTransactionsFlow = ai.defineFlow(
       output = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
-      // Check if the error message contains the specific Handlebars helper issue.
-      if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error"))) {
-        throw new Error(`AI model failed to process the text due to a template error: ${aiError.message}. Please check server logs for AI prompt issues.`);
+      // Check if the error message contains specific known issues.
+      if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error") || (aiError.message.includes("GoogleGenerativeAI Error") && aiError.message.includes("Invalid JSON payload")))) {
+        throw new Error(`AI model failed to process the text due to a template or schema error: ${aiError.message}. Please check server logs for AI prompt issues.`);
       }
       throw new Error(`AI model failed to process the text: ${aiError.message || 'Unknown AI error'}`);
     }
@@ -193,4 +191,3 @@ const parseTransactionsFlow = ai.defineFlow(
     };
   }
 );
-
