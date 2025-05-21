@@ -14,7 +14,7 @@ import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
-import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, Gift, Target, HandCoins } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -180,7 +180,13 @@ export default function DashboardPage() {
           <KpiCard title="Cashback/Interests" value={`₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}`} icon={HandCoins} description={`${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"/>
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard title="Investment %" value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} icon={Target} description={`of income for ${monthNamesList[selectedMonth]} ${selectedYear}`} className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"/>
+          <KpiCard 
+            title="Investment %" 
+            value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
+            icon={Target} 
+            description={`Amount: ₹${monthlyMetrics.totalInvestment.toFixed(2)} (${monthNamesList[selectedMonth]} ${selectedYear})`} 
+            className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"
+          />
         </motion.div>
       </motion.div>
 
