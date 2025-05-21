@@ -3,12 +3,10 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { SidebarProvider } from '@/components/ui/sidebar';
-import AppSidebar from '@/components/layout/app-sidebar';
-import { SidebarInset } from '@/components/ui/sidebar';
-import AppHeader from '@/components/layout/app-header';
 import { ThemeProvider } from "@/components/theme-provider";
 import { DateSelectionProvider } from '@/contexts/DateSelectionContext';
+import { AuthProvider } from '@/contexts/AuthContext';
+import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper'; // Import the new wrapper
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -33,25 +31,22 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <DateSelectionProvider>
-            <SidebarProvider defaultOpen>
-              <AppSidebar />
-              <SidebarInset>
-                <AppHeader />
+        <AuthProvider> {/* AuthProvider remains high */}
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <DateSelectionProvider>
+              <ProtectedLayoutWrapper> {/* Use the new wrapper */}
                 {children}
-              </SidebarInset>
-            </SidebarProvider>
-          </DateSelectionProvider>
-          <Toaster />
-        </ThemeProvider>
+              </ProtectedLayoutWrapper>
+            </DateSelectionProvider>
+            <Toaster />
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
 }
-    
