@@ -45,7 +45,7 @@ export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'pay
 export const TransactionInputSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date(),
-  amount: z.number().gt(0, "Amount must be a positive number."), // Changed from positive()
+  amount: z.number().gt(0, "Amount must be a positive number."),
   description: z.string().min(1, "Description is required."),
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
@@ -80,7 +80,7 @@ export type ExpenseType = 'need' | 'want' | 'investment_expense';
 export const ParsedAITransactionSchema = z.object({
   date: z.string().describe("The transaction date in YYYY-MM-DD format. Infer based on text and current date if relative (e.g., 'yesterday')."),
   description: z.string().describe("A concise description of the transaction."),
-  amount: z.number().gt(0).describe("The transaction amount as a positive number."), // Changed from positive()
+  amount: z.number().min(0.01, "Amount must be positive.").describe("The transaction amount as a positive number."),
   type: z.enum(['income', 'expense']).describe("The type of transaction."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
@@ -96,7 +96,7 @@ export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 export const ParsedReceiptTransactionSchema = z.object({
   date: z.string().optional().describe("The transaction date from the receipt in YYYY-MM-DD format. If unidentifiable, leave blank."),
   description: z.string().optional().describe("The merchant name or a concise description of the transaction from the receipt. If unidentifiable, leave blank."),
-  amount: z.number().gt(0).optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."), // Changed from positive()
+  amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
   expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', or 'investment_expense'. If not clearly identifiable, leave blank."),
@@ -104,3 +104,4 @@ export const ParsedReceiptTransactionSchema = z.object({
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
 });
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
+

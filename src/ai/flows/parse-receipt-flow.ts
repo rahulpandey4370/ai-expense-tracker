@@ -4,7 +4,7 @@
  * @fileOverview AI flow for parsing receipt images into structured transaction data.
  *
  * - parseReceiptImage - A function that uses AI to extract transaction details from a receipt image.
- * - ParsedReceiptTransaction - The type for the structure of a single transaction parsed by AI.
+ * - ParsedReceiptTransaction - The type for the structure of a single transaction parsed by AI. (Imported from lib/types)
  * - ParseReceiptImageOutput - The return type for the flow.
  */
 
@@ -12,44 +12,47 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedReceiptTransactionSchema } from '@/lib/types'; // Import from lib/types
+import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction } from '@/lib/types'; // Import from lib/types
 
-const CategorySchemaForAI = z.object({
+// Internal schema for AI flow input, not exported
+const CategorySchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
   type: z.enum(['income', 'expense']),
 });
-type CategoryForAI = z.infer<typeof CategorySchemaForAI>;
+type CategoryForAIInternal = z.infer<typeof CategorySchemaForAIInternal>;
 
-const PaymentMethodSchemaForAI = z.object({
+// Internal schema for AI flow input, not exported
+const PaymentMethodSchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
 });
-type PaymentMethodForAI = z.infer<typeof PaymentMethodSchemaForAI>;
 
-const ParseReceiptImageInputSchema = z.object({
+// Internal schema for AI flow input, not exported
+const ParseReceiptImageInputSchemaInternal = z.object({
   receiptImageUri: z.string().describe(
     "A receipt image, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
   ),
-  categories: z.array(CategorySchemaForAI).describe("A list of available expense categories (name, id, type) to help with mapping."),
-  paymentMethods: z.array(PaymentMethodSchemaForAI).describe("A list of available payment methods (name, id) to help with mapping."),
+  categories: z.array(CategorySchemaForAIInternal).describe("A list of available expense categories (name, id, type) to help with mapping."),
+  paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates if any are ambiguously parsed from the receipt."),
 });
-type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchema>;
+// Type exported for the wrapper function
+export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchemaInternal>;
 
-export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
 
-const ParseReceiptImageOutputSchema = z.object({
+// Internal schema for AI flow output, not exported. Relies on imported ParsedReceiptTransactionSchema
+const ParseReceiptImageOutputSchemaInternal = z.object({
   parsedTransaction: ParsedReceiptTransactionSchema.nullable().describe("The structured transaction parsed from the receipt image, or null if completely unparseable."),
 });
-export type ParseReceiptImageOutput = z.infer<typeof ParseReceiptImageOutputSchema>;
+export type ParseReceiptImageOutput = z.infer<typeof ParseReceiptImageOutputSchemaInternal>;
 
 
 export async function parseReceiptImage(
   input: {
     receiptImageUri: string;
-    categories: CategoryForAI[];
-    paymentMethods: PaymentMethodForAI[];
+    categories: CategoryForAIInternal[];
+    paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
   }
 ): Promise<ParseReceiptImageOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
@@ -67,8 +70,8 @@ export async function parseReceiptImage(
 
 const parseReceiptImagePrompt = ai.definePrompt({
   name: 'parseReceiptImagePrompt',
-  input: { schema: ParseReceiptImageInputSchema },
-  output: { schema: ParseReceiptImageOutputSchema },
+  input: { schema: ParseReceiptImageInputSchemaInternal },
+  output: { schema: ParseReceiptImageOutputSchemaInternal },
   prompt: `You are an expert financial assistant specialized in parsing text from receipt images.
 Your task is to extract transaction details from the provided receipt image.
 The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative. Assume receipts are for expenses.
@@ -84,7 +87,7 @@ Available Payment Methods:
 From the receipt image, extract the following:
 - date: Transaction date in YYYY-MM-DD format. If multiple dates are present (e.g., order date, payment date), prefer the payment date. If no date is clear, use the {{currentDate}}.
 - description: Merchant name or a concise description of the purchase (e.g., "Big Bazaar Groceries", "Starbucks Coffee").
-- amount: The total numeric amount paid (always positive). Look for "Total", "Amount Due", "Paid", etc.
+- amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
 - paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash"), the best guess for a payment method name from the provided list.
 - expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'. If unsure, default to 'need' or 'want' based on common sense for receipt items.
@@ -102,8 +105,8 @@ Prioritize extracting the total amount paid. If items are listed, use the overal
 const parseReceiptImageFlow = ai.defineFlow(
   {
     name: 'parseReceiptImageFlow',
-    inputSchema: ParseReceiptImageInputSchema,
-    outputSchema: ParseReceiptImageOutputSchema,
+    inputSchema: ParseReceiptImageInputSchemaInternal,
+    outputSchema: ParseReceiptImageOutputSchemaInternal,
   },
   async (input) => {
     if (!input.receiptImageUri) {

@@ -4,7 +4,7 @@
  * @fileOverview AI flow for parsing natural language text into structured transaction data.
  *
  * - parseTransactionsFromText - A function that uses AI to extract transaction details from text.
- * - ParsedAITransaction - The type for a single transaction parsed by AI.
+ * - ParsedAITransaction - The type for a single transaction parsed by AI. (Imported from lib/types)
  * - ParseTransactionTextOutput - The return type for the flow.
  */
 
@@ -12,79 +12,85 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedAITransactionSchema } from '@/lib/types'; // Import from lib/types
+import { ParsedAITransactionSchema, type ParsedAITransaction } from '@/lib/types'; // Import from lib/types
 
-const CategorySchemaForAI = z.object({
+// Internal schema for AI flow input, not exported
+const CategorySchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
   type: z.enum(['income', 'expense']),
 });
-type CategoryForAI = z.infer<typeof CategorySchemaForAI>;
+type CategoryForAIInternal = z.infer<typeof CategorySchemaForAIInternal>;
 
-const PaymentMethodSchemaForAI = z.object({
+// Internal schema for AI flow input, not exported
+const PaymentMethodSchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
 });
-type PaymentMethodForAI = z.infer<typeof PaymentMethodSchemaForAI>;
 
-const ParseTransactionTextInputSchema = z.object({
+// Internal schema for AI flow input, not exported
+const ParseTransactionTextInputSchemaInternal = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
-  expenseCategories: z.array(CategorySchemaForAI.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
-  incomeCategories: z.array(CategorySchemaForAI.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
-  paymentMethods: z.array(PaymentMethodSchemaForAI).describe("A list of available payment methods (name, id) to help with mapping."),
+  expenseCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
+  incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
+  paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
 });
-export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchema>;
+export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
 
-export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
-const ParseTransactionTextOutputSchema = z.object({
+// Internal schema for AI flow output, not exported. Relies on imported ParsedAITransactionSchema
+const ParseTransactionTextOutputSchemaInternal = z.object({
   parsedTransactions: z.array(ParsedAITransactionSchema).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
   summaryMessage: z.string().optional().describe("A brief overall summary or any general notes about the parsing process."),
 });
-export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchema>;
+export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchemaInternal>;
 
 export async function parseTransactionsFromText(
   input: {
     naturalLanguageText: string;
-    categories: CategoryForAI[]; // Combined categories from client
-    paymentMethods: PaymentMethodForAI[];
+    categories: CategoryForAIInternal[]; // Combined categories from client
+    paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-  
+
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
-    .map(({ type, ...rest }) => rest); // Omit type for schema compatibility
-  
+    .map(({ type, ...rest }) => rest);
+
   const incomeCategoriesForAI = input.categories
     .filter(c => c.type === 'income')
-    .map(({ type, ...rest }) => rest); // Omit type for schema compatibility
+    .map(({ type, ...rest }) => rest);
 
   if (input.categories.length === 0) {
       console.warn("parseTransactionsFromText called with an empty category list. AI may struggle to map categories correctly. This might indicate an upstream data loading issue for categories.");
   }
   try {
-    return await parseTransactionsFlow({ 
+    return await parseTransactionsFlow({
         naturalLanguageText: input.naturalLanguageText,
         expenseCategories: expenseCategoriesForAI,
         incomeCategories: incomeCategoriesForAI,
         paymentMethods: input.paymentMethods,
-        currentDate 
+        currentDate
     });
   } catch (flowError: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", flowError);
+    const errorMessage = flowError.message || 'Unknown error';
+    const userFriendlyMessage = errorMessage.includes("Handlebars error") || errorMessage.includes("unknown helper")
+      ? `AI model failed to process the text due to a template error: ${errorMessage}. Please check server logs for AI prompt issues.`
+      : `An unexpected error occurred during AI processing: ${errorMessage}. Please check server logs.`;
     return {
       parsedTransactions: [],
-      summaryMessage: `An unexpected error occurred during AI processing: ${flowError.message || 'Unknown error'}. Please check server logs.`
+      summaryMessage: userFriendlyMessage
     };
   }
 }
 
 const parseTransactionsPrompt = ai.definePrompt({
   name: 'parseTransactionsPrompt',
-  input: { schema: ParseTransactionTextInputSchema },
-  output: { schema: ParseTransactionTextOutputSchema },
+  input: { schema: ParseTransactionTextInputSchemaInternal },
+  output: { schema: ParseTransactionTextOutputSchemaInternal },
   prompt: `You are an expert financial assistant. Your task is to parse the following natural language text and extract individual financial transactions.
 The current date is {{currentDate}}. Use this to resolve relative dates like "yesterday", "last Tuesday", "next Friday", etc., into YYYY-MM-DD format.
 
@@ -106,7 +112,7 @@ Available Payment Methods (for expenses):
 For each transaction identified in the text, provide the following details:
 - date: Transaction date in YYYY-MM-DD format.
 - description: A clear description of the transaction.
-- amount: The numeric amount (always positive).
+- amount: The numeric amount (always positive, e.g. 50.75).
 - type: 'income' or 'expense'.
 - categoryNameGuess: (Optional) If you can map it to one of the provided category names, state the name. If it's clearly a category not on the list but makes sense, state it. If unsure, use "Others" or leave blank.
 - paymentMethodNameGuess: (Optional, for expenses only) If you can map it to one of the provided payment method names, state the name. If unsure or not applicable, leave blank.
@@ -132,8 +138,8 @@ Interpret currency symbols like ₹, INR, Rs. correctly for the amount.
 const parseTransactionsFlow = ai.defineFlow(
   {
     name: 'parseTransactionsFlow',
-    inputSchema: ParseTransactionTextInputSchema,
-    outputSchema: ParseTransactionTextOutputSchema,
+    inputSchema: ParseTransactionTextInputSchemaInternal,
+    outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
   async (input) => {
     if (!input.naturalLanguageText.trim()) {
@@ -187,3 +193,4 @@ const parseTransactionsFlow = ai.defineFlow(
     };
   }
 );
+
