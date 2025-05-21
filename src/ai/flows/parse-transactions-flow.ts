@@ -29,11 +29,12 @@ type PaymentMethodForAI = z.infer<typeof PaymentMethodSchemaForAI>;
 
 const ParseTransactionTextInputSchema = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
-  categories: z.array(CategorySchemaForAI).describe("A list of available categories (name, id, type) to help with mapping."),
+  expenseCategories: z.array(CategorySchemaForAI.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
+  incomeCategories: z.array(CategorySchemaForAI.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAI).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
 });
-type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchema>;
+export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchema>;
 
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
@@ -46,16 +47,31 @@ export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutp
 export async function parseTransactionsFromText(
   input: {
     naturalLanguageText: string;
-    categories: CategoryForAI[];
+    categories: CategoryForAI[]; // Combined categories from client
     paymentMethods: PaymentMethodForAI[];
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
+  
+  const expenseCategoriesForAI = input.categories
+    .filter(c => c.type === 'expense')
+    .map(({ type, ...rest }) => rest); // Omit type for schema compatibility
+  
+  const incomeCategoriesForAI = input.categories
+    .filter(c => c.type === 'income')
+    .map(({ type, ...rest }) => rest); // Omit type for schema compatibility
+
   if (input.categories.length === 0) {
       console.warn("parseTransactionsFromText called with an empty category list. AI may struggle to map categories correctly. This might indicate an upstream data loading issue for categories.");
   }
   try {
-    return await parseTransactionsFlow({ ...input, currentDate });
+    return await parseTransactionsFlow({ 
+        naturalLanguageText: input.naturalLanguageText,
+        expenseCategories: expenseCategoriesForAI,
+        incomeCategories: incomeCategoriesForAI,
+        paymentMethods: input.paymentMethods,
+        currentDate 
+    });
   } catch (flowError: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", flowError);
     return {
@@ -73,17 +89,19 @@ const parseTransactionsPrompt = ai.definePrompt({
 The current date is {{currentDate}}. Use this to resolve relative dates like "yesterday", "last Tuesday", "next Friday", etc., into YYYY-MM-DD format.
 
 Available Expense Categories:
-{{#each categories}}
-{{#if (eq this.type "expense")}}- {{this.name}} (ID: {{this.id}}){{/if}}
+{{#each expenseCategories}}
+- {{this.name}} (ID: {{this.id}})
 {{/each}}
 
 Available Income Categories:
-{{#each categories}}
-{{#if (eq this.type "income")}}- {{this.name}} (ID: {{this.id}}){{/if}}
+{{#each incomeCategories}}
+- {{this.name}} (ID: {{this.id}})
 {{/each}}
 
 Available Payment Methods (for expenses):
-{{#each paymentMethods}}- {{this.name}} (ID: {{this.id}}){{/each}}
+{{#each paymentMethods}}
+- {{this.name}} (ID: {{this.id}})
+{{/each}}
 
 For each transaction identified in the text, provide the following details:
 - date: Transaction date in YYYY-MM-DD format.
@@ -128,6 +146,10 @@ const parseTransactionsFlow = ai.defineFlow(
       output = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
+      // Check if the error message contains the specific Handlebars helper issue.
+      if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error"))) {
+        throw new Error(`AI model failed to process the text due to a template error: ${aiError.message}. Please check server logs for AI prompt issues.`);
+      }
       throw new Error(`AI model failed to process the text: ${aiError.message || 'Unknown AI error'}`);
     }
 
@@ -142,26 +164,26 @@ const parseTransactionsFlow = ai.defineFlow(
         if (tx.date) {
           const parsedD = parseDateFns(tx.date, 'yyyy-MM-dd', new Date());
           if (isNaN(parsedD.getTime())) {
-            finalDate = format(new Date(), 'yyyy-MM-dd');
+            finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to current date if AI date is invalid
           } else {
-            finalDate = tx.date;
+            finalDate = tx.date; // Keep valid YYYY-MM-DD from AI
           }
         } else {
-           finalDate = format(new Date(), 'yyyy-MM-dd');
+           finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to current date if AI provides no date
         }
       } catch (e) {
-        finalDate = format(new Date(), 'yyyy-MM-dd');
+        finalDate = format(new Date(), 'yyyy-MM-dd'); // Default on any parsing error
       }
       return {
         ...tx,
         date: finalDate,
-        amount: tx.amount && tx.amount > 0 ? tx.amount : 0,
+        amount: tx.amount && tx.amount > 0 ? tx.amount : 0, // Ensure amount is positive or zero
       };
-    });
+    }).filter(tx => tx.amount > 0 && tx.description); // Further filter for transactions with valid amount and description
 
     return {
         parsedTransactions: validatedTransactions,
-        summaryMessage: output.summaryMessage || "Processing complete."
+        summaryMessage: output.summaryMessage || (validatedTransactions.length > 0 ? "Processing complete." : "AI could not identify any valid transactions in the text.")
     };
   }
 );
