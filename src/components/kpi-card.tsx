@@ -20,7 +20,7 @@ interface KpiCardProps {
   selectedYear: number;
 }
 
-const glowClass = "shadow-[var(--card-glow)]"; // Removed dark:shadow-part for simplicity if not defined in globals
+const glowClass = "shadow-card-glow"; 
 
 export function KpiCard({
   title,
@@ -30,7 +30,7 @@ export function KpiCard({
   className,
   valueClassName,
   kpiKey,
-  insightText,
+  insightText, // insightText is kept for potential future re-introduction of hover effects
   selectedMonth,
   selectedYear
 }: KpiCardProps) {
@@ -41,35 +41,29 @@ export function KpiCard({
     queryParams.append('month', selectedMonth.toString());
     queryParams.append('year', selectedYear.toString());
 
-    // Updated kpiKey logic
     if (kpiKey === 'totalIncome') {
       queryParams.append('type', 'income');
-    } else if (kpiKey === 'coreExpenses') { // Changed from totalExpenses
+    } else if (kpiKey === 'coreExpenses') { 
       queryParams.append('type', 'expense');
-      // Optionally, filter out investment_expense if you want to be strict
-      // queryParams.append('expenseType', 'need'); 
-      // queryParams.append('expenseType', 'want'); // This is tricky with multi-select via URL
-    } else if (kpiKey === 'totalInvestments') { // New key
+      queryParams.append('expenseType', 'need'); // Default to needs, can add more later or remove for general expense
+      // Add more for 'want' if needed: queryParams.append('expenseType', 'want');
+    } else if (kpiKey === 'totalInvestmentsAmount') { // Updated to handle new key
       queryParams.append('type', 'expense');
       queryParams.append('expenseType', 'investment_expense');
-    } else if (kpiKey === 'investmentPercentage') { // For consistency if this key remains
+    } else if (kpiKey === 'investmentPercentage') { 
       queryParams.append('type', 'expense');
       queryParams.append('expenseType', 'investment_expense');
     } else if (kpiKey === 'cashbackInterests') {
       queryParams.append('type', 'income');
-      // Further filtering by category for cashback/interests would require more complex logic
-      // in transactions page or a dedicated filter key.
+      // For more specific filtering for "Cashback", "Investment Income", "Dividends"
+      // you might need a different strategy, as queryParams for multiple category OR is complex.
+      // For now, it shows all income transactions for the month.
     }
-    // For 'availableToSaveInvest' and 'netMonthlyCashflow', navigation might not be direct transaction filters
-    // as they are derived values. Could navigate to a general view or a report.
-    // For now, they won't navigate or will navigate to a general transaction view for the month.
-    if (kpiKey !== 'availableToSaveInvest' && kpiKey !== 'netMonthlyCashflow') {
-       router.push(`/transactions?${queryParams.toString()}`);
-    } else {
-      // Optionally handle navigation for these derived KPIs differently or not at all
-      console.log(`KPI clicked: ${kpiKey} - Navigation not specifically implemented for this derived KPI.`);
-      router.push(`/transactions?${queryParams.toString()}`); // Default to general month view
-    }
+    // For 'availableToSaveInvest', 'netMonthlyCashflow', and 'totalOutgoings' (new), 
+    // these are derived values, so navigating to a general view for the month is appropriate.
+    // No specific type/expenseType filters are applied for these.
+    
+    router.push(`/transactions?${queryParams.toString()}`);
   };
 
   return (
@@ -100,6 +94,3 @@ export function KpiCard({
     </motion.div>
   );
 }
-
-
-    
