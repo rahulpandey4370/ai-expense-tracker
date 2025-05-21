@@ -151,7 +151,6 @@ export const GoalInputSchema = z.object({
   description: z.string().min(1, "Goal description is required."),
   targetAmount: z.number().min(0.01, "Target amount must be positive."),
   targetDurationMonths: z.number().int().min(1, "Duration must be at least 1 month."),
-  // Optional: calculated required monthly savings from AI, stored for reference
   initialRequiredMonthlySavings: z.number().min(0).optional(),
 });
 export type GoalInput = z.infer<typeof GoalInputSchema>;
@@ -161,5 +160,20 @@ export interface Goal extends GoalInput {
   amountSavedSoFar: number;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
-  status?: 'active' | 'completed' | 'on_hold'; // Optional status
+  status?: 'active' | 'completed' | 'on_hold';
+}
+
+
+// AI Financial Health Check Schemas
+export interface FinancialHealthCheckInput {
+  periodDescription: string;
+  currentTotalIncome: number;
+  currentTotalExpenses: number;
+  currentSpendingBreakdown: string; // Summary: Needs: ₹X, Wants: ₹Y, Investments: ₹Z. Top categories: Food (₹A), Transport (₹B).
+  previousTotalIncome: number;
+  previousTotalExpenses: number;
+}
+
+export interface FinancialHealthCheckOutput {
+  healthSummary: string; // The AI-generated natural language summary
 }

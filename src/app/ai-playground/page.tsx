@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, PlusCircle, Wallet } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { getTransactions } from '@/lib/actions/transactions'; // Assuming getCategories is not needed directly here anymore
+import { getTransactions } from '@/lib/actions/transactions';
 import { addGoal, getGoals, updateGoalProgress, deleteGoal, type Goal } from '@/lib/actions/goals';
-import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, Category, GoalInput } from '@/lib/types';
+import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
-import { subMonths, getMonth, getYear, startOfMonth, endOfMonth, format, addMonths, differenceInMonths } from 'date-fns';
+import { getFinancialHealthCheck } from '@/ai/flows/financial-health-check-flow';
+import { subMonths, getMonth, getYear, startOfMonth, endOfMonth, format, addMonths, differenceInMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
@@ -45,6 +47,7 @@ const cardVariants = {
 };
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+type HealthCheckPeriodType = 'current_week' | 'current_month';
 
 export default function AIPlaygroundPage() {
   const { toast } = useToast();
@@ -72,6 +75,12 @@ export default function AIPlaygroundPage() {
   const [allocationAmounts, setAllocationAmounts] = useState<Record<string, string>>({});
   const [isSavingGoal, setIsSavingGoal] = useState(false);
 
+  // Financial Health Check State
+  const [healthCheckPeriodType, setHealthCheckPeriodType] = useState<HealthCheckPeriodType>('current_week');
+  const [isAILoadingHealthCheck, setIsAILoadingHealthCheck] = useState<boolean>(false);
+  const [aiHealthCheckSummary, setAiHealthCheckSummary] = useState<FinancialHealthCheckOutput | null>(null);
+  const [aiHealthCheckError, setAiHealthCheckError] = useState<string | null>(null);
+
 
   const fetchInitialDataCallback = useCallback(async () => {
     setIsLoadingTransactions(true);
@@ -82,7 +91,7 @@ export default function AIPlaygroundPage() {
         getGoals()
       ]);
       setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
-      setSavedGoals(fetchedGoals.map(g => ({...g, createdAt: g.createdAt, updatedAt: g.updatedAt })));
+      setSavedGoals(fetchedGoals.map(g => ({...g, createdAt: new Date(g.createdAt), updatedAt: new Date(g.updatedAt) })));
     } catch (error) {
       console.error("Failed to fetch initial data for AI Playground:", error);
       toast({
@@ -159,7 +168,7 @@ export default function AIPlaygroundPage() {
     setAiGoalError(null);
 
     const averages = calculateGoalPlannerAverages();
-    if (averages.averageMonthlyIncome <= 0 && allTransactions.length > 0) {
+     if (averages.averageMonthlyIncome <= 0 && allTransactions.length > 0) {
       toast({ title: "Data Issue", description: "Average monthly income could not be calculated (is it zero or negative?). Please check your recent transaction data.", variant: "destructive" });
       setIsAILoadingGoal(false);
       return;
@@ -169,15 +178,15 @@ export default function AIPlaygroundPage() {
       goalDescription,
       goalAmount: amountNum,
       goalDurationMonths: durationNum,
-      averageMonthlyIncome: averages.averageMonthlyIncome || 1,
+      averageMonthlyIncome: averages.averageMonthlyIncome || 1, // Ensure non-zero for AI
       averageMonthlyExpenses: averages.averageMonthlyExpenses || 0,
       currentSavingsRate: Math.max(0, Math.min(100, averages.currentSavingsRate || 0)),
     };
 
     try {
       const result = await forecastFinancialGoal(input);
-      if (result.feasibilityAssessment === "Error" || result.feasibilityAssessment === "Input Error") {
-        setAiGoalError(result.suggestedActions.join(' '));
+      if (result.feasibilityAssessment === "Error" || result.feasibilityAssessment === "Input Error" || result.feasibilityAssessment.toLowerCase().includes("error")) {
+        setAiGoalError(result.suggestedActions.join(' ') || "Could not generate forecast.");
         toast({ title: "AI Forecast Error", description: result.suggestedActions.join(' ') || "Could not generate forecast.", variant: "destructive" })
       } else {
         setAiForecast(result);
@@ -207,8 +216,7 @@ export default function AIPlaygroundPage() {
     try {
       await addGoal(goalData);
       toast({ title: "Goal Saved!", description: `'${goalDescription}' has been added to your goals.` });
-      fetchInitialDataCallback(); // Re-fetch goals
-      // Optionally clear forecast or form
+      fetchInitialDataCallback(); 
       setAiForecast(null);
       setGoalDescription('');
       setGoalAmount('');
@@ -232,12 +240,12 @@ export default function AIPlaygroundPage() {
       return;
     }
 
-    setIsLoadingGoals(true); // Indicate general loading for goals section
+    setIsLoadingGoals(true);
     try {
       await updateGoalProgress(goalId, amountToAllocate);
       toast({ title: "Savings Allocated!", description: `₹${amountToAllocate} allocated to your goal.` });
-      setAllocationAmounts(prev => ({ ...prev, [goalId]: '' })); // Clear input
-      fetchInitialDataCallback(); // Re-fetch goals to update progress
+      setAllocationAmounts(prev => ({ ...prev, [goalId]: '' }));
+      fetchInitialDataCallback();
     } catch (error: any) {
       toast({ title: "Allocation Error", description: error.message || "Could not allocate savings.", variant: "destructive" });
       setIsLoadingGoals(false);
@@ -249,23 +257,22 @@ export default function AIPlaygroundPage() {
     try {
       await deleteGoal(goalId);
       toast({ title: "Goal Deleted", description: `'${goalDesc}' has been removed.` });
-      fetchInitialDataCallback(); // Re-fetch goals
+      fetchInitialDataCallback();
     } catch (error: any) {
       toast({ title: "Deletion Error", description: error.message || "Could not delete goal.", variant: "destructive" });
       setIsLoadingGoals(false);
     }
   };
 
-
   const calculateBudgetingAssistantInputs = useCallback(() => {
     const today = new Date();
     let totalExpensesLast3Months = 0;
-    const spendingByTypeLast3Months: Record<string, number> = { need: 0, want: 0, investment_expense: 0 }; // Use string for key
+    const spendingByTypeLast3Months: Record<string, number> = { need: 0, want: 0, investment_expense: 0 };
     const spendingByCategoryLast3Months: Record<string, number> = {};
     const monthSet = new Set<string>();
 
     for (let i = 0; i < 3; i++) {
-      const targetMonthDate = subMonths(today, i + 1);
+      const targetMonthDate = subMonths(today, i + 1); // Analyze last 3 full months, not including current partial month
       const monthStart = startOfMonth(targetMonthDate);
       const monthEnd = endOfMonth(targetMonthDate);
 
@@ -302,7 +309,6 @@ export default function AIPlaygroundPage() {
     return { averagePastMonthlyExpenses, pastSpendingBreakdown };
   }, [allTransactions]);
 
-
   const handleGetBudgetPlan = async () => {
     const incomeNum = parseFloat(statedMonthlyIncome);
     const savingsGoalNum = parseFloat(savingsGoalPercentage);
@@ -315,8 +321,8 @@ export default function AIPlaygroundPage() {
       toast({ title: "Invalid Savings Goal", description: "Savings goal percentage must be between 0 and 100.", variant: "destructive" });
       return;
     }
-    if (allTransactions.length < 3 && !isLoadingTransactions) {
-      toast({ title: "Insufficient Data", description: "Not enough transaction history for budgeting. Please add more transactions.", variant: "default" });
+     if (allTransactions.length < 3 && !isLoadingTransactions) {
+      toast({ title: "Insufficient Data", description: "Not enough transaction history (ideally 3 months) for meaningful budgeting. Please add more transactions.", variant: "default" });
     }
 
     setIsAILoadingBudget(true);
@@ -329,12 +335,12 @@ export default function AIPlaygroundPage() {
       statedMonthlyIncome: incomeNum,
       statedMonthlySavingsGoalPercentage: savingsGoalNum,
       averagePastMonthlyExpenses: averagePastMonthlyExpenses || 0,
-      pastSpendingBreakdown: pastSpendingBreakdown || "No significant past spending data available.",
+      pastSpendingBreakdown: pastSpendingBreakdown || "No significant past spending data available from the last 3 months.",
     };
 
     try {
       const result = await suggestBudgetPlan(input);
-      if (result.analysisSummary.includes("Could not generate budget") || result.analysisSummary.includes("error occurred")) {
+       if (result.analysisSummary.toLowerCase().includes("error") || result.analysisSummary.toLowerCase().includes("could not generate budget")) {
         setAiBudgetError(result.analysisSummary + " " + (result.detailedSuggestions?.categoryAdjustments?.join(' ') || ''));
         toast({ title: "AI Budgeting Error", description: result.analysisSummary, variant: "destructive" })
       } else {
@@ -347,6 +353,94 @@ export default function AIPlaygroundPage() {
       toast({ title: "AI Error", description: message, variant: "destructive" });
     } finally {
       setIsAILoadingBudget(false);
+    }
+  };
+
+  const getTransactionsForDateRange = (startDate: Date, endDate: Date): AppTransaction[] => {
+    return allTransactions.filter(t => {
+      const transactionDate = new Date(t.date);
+      return transactionDate >= startDate && transactionDate <= endDate;
+    });
+  };
+
+  const summarizeSpendingForAI = (transactions: AppTransaction[]): string => {
+    if (transactions.length === 0) return "No spending in this period.";
+    const spendingByType: Record<string, number> = { need: 0, want: 0, investment_expense: 0 };
+    const spendingByCategory: Record<string, number> = {};
+
+    transactions.filter(t => t.type === 'expense').forEach(t => {
+      if (t.expenseType) spendingByType[t.expenseType] = (spendingByType[t.expenseType] || 0) + t.amount;
+      if (t.category?.name) spendingByCategory[t.category.name] = (spendingByCategory[t.category.name] || 0) + t.amount;
+    });
+
+    const topCategories = Object.entries(spendingByCategory)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 2)
+      .map(([name, total]) => `${name}: ₹${total.toFixed(0)}`)
+      .join(', ');
+    
+    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments_Expenses: ₹${spendingByType.investment_expense.toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
+  };
+
+  const handleGetHealthCheck = async () => {
+    setIsAILoadingHealthCheck(true);
+    setAiHealthCheckSummary(null);
+    setAiHealthCheckError(null);
+
+    const today = new Date();
+    let currentPeriodStart: Date, currentPeriodEnd: Date;
+    let previousPeriodStart: Date, previousPeriodEnd: Date;
+    let periodDescription = "";
+
+    if (healthCheckPeriodType === 'current_week') {
+      currentPeriodStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+      currentPeriodEnd = endOfWeek(today, { weekStartsOn: 1 }); // Sunday
+      previousPeriodStart = startOfWeek(subMonths(currentPeriodStart, 0.25), { weekStartsOn: 1 }); // Previous week start
+      previousPeriodEnd = endOfWeek(previousPeriodStart, { weekStartsOn: 1 }); // Previous week end
+      periodDescription = `This Week (${format(currentPeriodStart, "MMM d")} - ${format(currentPeriodEnd, "MMM d, yyyy")})`;
+    } else { // current_month
+      currentPeriodStart = startOfMonth(today);
+      currentPeriodEnd = endOfMonth(today);
+      const prevMonthDate = subMonths(today,1);
+      previousPeriodStart = startOfMonth(prevMonthDate);
+      previousPeriodEnd = endOfMonth(prevMonthDate);
+      periodDescription = `This Month (${format(currentPeriodStart, "MMMM yyyy")})`;
+    }
+
+    const currentTransactions = getTransactionsForDateRange(currentPeriodStart, currentPeriodEnd);
+    const previousTransactions = getTransactionsForDateRange(previousPeriodStart, previousPeriodEnd);
+
+    if (currentTransactions.length === 0) {
+        setAiHealthCheckError(`No transactions found for ${periodDescription} to generate a health check.`);
+        toast({title: "Insufficient Data", description: `No transactions for ${periodDescription}.`, variant:"default"});
+        setIsAILoadingHealthCheck(false);
+        return;
+    }
+
+    const input: FinancialHealthCheckInput = {
+      periodDescription,
+      currentTotalIncome: currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+      currentTotalExpenses: currentTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+      currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions),
+      previousTotalIncome: previousTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+      previousTotalExpenses: previousTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+    };
+    
+    try {
+      const result = await getFinancialHealthCheck(input);
+      if (result.healthSummary.toLowerCase().includes("error") || result.healthSummary.toLowerCase().includes("could not generate")) {
+        setAiHealthCheckError(result.healthSummary);
+        toast({ title: "AI Health Check Error", description: result.healthSummary, variant: "destructive" });
+      } else {
+        setAiHealthCheckSummary(result);
+      }
+    } catch (err: any) {
+      console.error("Error getting AI health check:", err);
+      const message = err.message || "Failed to get AI health check.";
+      setAiHealthCheckError(message);
+      toast({ title: "AI Error", description: message, variant: "destructive" });
+    } finally {
+      setIsAILoadingHealthCheck(false);
     }
   };
 
@@ -721,6 +815,84 @@ export default function AIPlaygroundPage() {
                 <AlertTitle>Start Budgeting!</AlertTitle>
                 <AlertDescription>
                   Enter your income and savings goal. The AI needs some transaction history (ideally 3 months) for a good plan. If you've just started, add some transactions first!
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <Separator />
+
+       {/* AI Financial Health Check Section */}
+      <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+          <CardHeader>
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <Activity className="w-7 h-7 md:w-8 md:h-8 text-accent" />
+              AI Financial Health Check
+            </CardTitle>
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
+              Get a quick AI summary of your financial activity for the current week or month.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <motion.div variants={cardVariants} className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
+              <div>
+                <Label htmlFor="healthCheckPeriod" className="text-foreground/90">Select Period</Label>
+                <Select value={healthCheckPeriodType} onValueChange={(value) => setHealthCheckPeriodType(value as HealthCheckPeriodType)}>
+                  <SelectTrigger id="healthCheckPeriod" className="w-full md:w-[200px] mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary">
+                    <SelectValue placeholder="Select period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current_week">Current Week</SelectItem>
+                    <SelectItem value="current_month">Current Month</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleGetHealthCheck} disabled={isAILoadingHealthCheck || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
+                {isAILoadingHealthCheck ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
+                {isLoadingTransactions ? "Loading data..." : (isAILoadingHealthCheck ? "Generating Summary..." : "Get Health Check")}
+              </Button>
+            </motion.div>
+
+            {isAILoadingHealthCheck && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-background/50 border-primary/20">
+                <CardTitle className="text-lg text-primary mb-2">AI Analyzing Your Financials...</CardTitle>
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-full bg-muted" />
+                  <Skeleton className="h-4 w-full bg-muted" />
+                  <Skeleton className="h-4 w-5/6 bg-muted" />
+                </div>
+              </motion.div>
+            )}
+
+            {aiHealthCheckError && !isAILoadingHealthCheck && (
+              <motion.div variants={cardVariants}>
+                <Alert variant="destructive" className="shadow-md">
+                  <AlertTriangle className="h-5 w-5" />
+                  <AlertTitle>AI Health Check Error</AlertTitle>
+                  <AlertDescription>{aiHealthCheckError}</AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+
+            {aiHealthCheckSummary && !isAILoadingHealthCheck && !aiHealthCheckError && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
+                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Health Summary</CardTitle>
+                <div className="space-y-2 text-sm text-foreground/90 whitespace-pre-wrap">
+                  {aiHealthCheckSummary.healthSummary.split('\n').map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+             {(!aiHealthCheckSummary && !isAILoadingHealthCheck && !aiHealthCheckError && !isLoadingTransactions && allTransactions.length === 0) && (
+              <Alert variant="default" className="border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
+                <Activity className="h-4 w-4" />
+                <AlertTitle>Start Your Health Check!</AlertTitle>
+                <AlertDescription>
+                  Select a period. The AI needs some transaction data to generate a summary.
                 </AlertDescription>
               </Alert>
             )}
