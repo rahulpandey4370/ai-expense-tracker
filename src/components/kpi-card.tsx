@@ -4,8 +4,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState } from 'react';
+import { motion } from "framer-motion";
 import { useRouter } from 'next/navigation';
 
 interface KpiCardProps {
@@ -15,32 +14,26 @@ interface KpiCardProps {
   description?: string;
   className?: string;
   valueClassName?: string;
-  kpiKey: string; // e.g., 'totalIncome', 'totalExpenses'
-  insightText: string;
+  kpiKey: string;
+  insightText: string; // Kept for prop consistency, but not displayed
   selectedMonth: number;
   selectedYear: number;
 }
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 
-const cardVariants = {
-  front: { rotateY: 0 },
-  back: { rotateY: 180 },
-};
-
-export function KpiCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  description, 
-  className, 
+export function KpiCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+  className,
   valueClassName,
   kpiKey,
-  insightText,
+  insightText, // Not visually used anymore
   selectedMonth,
-  selectedYear 
+  selectedYear
 }: KpiCardProps) {
-  const [isFlipped, setIsFlipped] = useState(false);
   const router = useRouter();
 
   const handleCardClick = () => {
@@ -56,70 +49,41 @@ export function KpiCard({
       queryParams.append('type', 'expense');
       queryParams.append('expenseType', 'investment_expense');
     } else if (kpiKey === 'cashbackInterests') {
+      // For 'cashbackInterests', we might want to filter by income type and relevant categories
+      // However, simple filtering by type 'income' is a start.
+      // The transactions page doesn't currently support multiple category pre-filters via URL.
       queryParams.append('type', 'income');
-      // Further filtering by category for cashback/interests would ideally be handled on the transactions page
-      // For simplicity, we'll just filter by income type here and rely on categories for specific items.
     }
-    
+    // Add more specific kpiKey conditions if needed for other KPIs that navigate
+
     router.push(`/transactions?${queryParams.toString()}`);
   };
 
   return (
     <motion.div
-      className="h-full perspective" // perspective class for 3D effect
-      onHoverStart={() => setIsFlipped(true)}
-      onHoverEnd={() => setIsFlipped(false)}
+      className={cn(
+        "shadow-lg h-full flex flex-col cursor-pointer",
+        glowClass,
+        className
+      )}
       onClick={handleCardClick}
-      style={{ cursor: 'pointer' }}
+      whileHover={{ scale: 1.02, transition: { duration: 0.1 } }} // Optional: subtle hover scale
+      whileTap={{ scale: 0.98 }}
     >
-      <motion.div
-        className={cn(
-          "shadow-lg h-full flex flex-col relative preserve-3d w-full", 
-          glowClass, 
-          className
-        )}
-        variants={cardVariants}
-        animate={isFlipped ? "back" : "front"}
-        transition={{ duration: 0.6 }}
-      >
-        {/* Front of the card */}
-        <motion.div 
-          className="absolute w-full h-full backface-hidden bg-card rounded-lg border border-transparent" // Added border-transparent
-        >
-          <Card className="h-full flex flex-col border-none shadow-none"> {/* Removed border and shadow from inner card */}
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {title}
-              </CardTitle>
-              <Icon className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-center">
-              <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>
-                {typeof value === 'number' ? value.toLocaleString() : value}
-              </div>
-              {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Back of the card */}
-        <motion.div 
-          className="absolute w-full h-full backface-hidden bg-accent/20 rounded-lg border border-accent/30 rotate-y-180"
-          style={{ transform: 'rotateY(180deg)' }} // Ensure it's initially rotated
-        >
-           <Card className="h-full flex flex-col items-center justify-center p-4 border-none shadow-none bg-transparent"> {/* bg-transparent */}
-            <CardTitle className="text-sm font-semibold text-center text-accent-foreground mb-2">Insight</CardTitle>
-            <p className="text-xs text-center text-accent-foreground/90">{insightText}</p>
-          </Card>
-        </motion.div>
-      </motion.div>
+      <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {title}
+          </CardTitle>
+          <Icon className="h-5 w-5 text-primary" />
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col justify-center">
+          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>
+            {typeof value === 'number' ? value.toLocaleString() : value}
+          </div>
+          {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
+        </CardContent>
+      </Card>
     </motion.div>
   );
 }
-
-// Add these utility classes to your globals.css or a utility CSS file if not already present
-// .perspective { perspective: 1000px; }
-// .preserve-3d { transform-style: preserve-3d; }
-// .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-// .rotate-y-180 { transform: rotateY(180deg); }
-// (Or handle directly with Tailwind's transform utilities if preferred)
