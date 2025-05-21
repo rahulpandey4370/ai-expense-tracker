@@ -25,7 +25,7 @@ interface ExpensePaymentMethodChartProps {
   chartHeightClass?: string; // New prop
 }
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-chart-glow dark:shadow-chart-glow-dark";
 
 export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear, chartHeightClass = "max-h-[300px] w-full" }: ExpensePaymentMethodChartProps) {
  const expenseData = transactions 
@@ -71,7 +71,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className={chartHeightClass}>
-          <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
+          <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
             <CartesianGrid horizontal={false} />
             <XAxis type="number" dataKey="expenses" hide tickFormatter={(value) => `₹${value}`} />
             <YAxis
@@ -100,3 +100,4 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
     </Card>
   )
 }
+
