@@ -93,6 +93,8 @@ const parseTransactionsPrompt = ai.definePrompt({
   prompt: `You are an expert financial assistant. Your task is to parse the following natural language text and extract individual financial transactions.
 The current date is {{currentDate}}. Use this to resolve relative dates like "yesterday", "last Tuesday", "next Friday", etc., into YYYY-MM-DD format.
 
+**IMPORTANT:** The user's input might contain typos or be phrased imperfectly. Focus on understanding the user's intent and extracting the core financial details accurately. Be robust to common misspellings or grammatical errors.
+
 Available Expense Categories:
 {{#each expenseCategories}}
 - {{this.name}} (ID: {{this.id}})
@@ -130,6 +132,8 @@ Provide amounts in Indian Rupees (INR or ₹). Ensure amounts are always positiv
 If a category or payment method in the text does not exactly match the provided lists but is very similar (e.g., "HDFC CC" vs "CC HDFC 7950"), try to map it to the closest one from the list for categoryNameGuess or paymentMethodNameGuess.
 If text mentions "salary for July", and current month is August, assume it's last month's salary.
 Interpret currency symbols like ₹, INR, Rs. correctly for the amount.
+Even if the user makes spelling mistakes for categories or payment methods (e.g., "groaries" instead of "Groceries", "UOI" instead of "UPI"), try your best to map them to the correct items from the provided lists.
+Focus on extracting the key financial details even if the sentence structure is informal.
 `,
 });
 
@@ -191,3 +195,4 @@ const parseTransactionsFlow = ai.defineFlow(
     };
   }
 );
+
