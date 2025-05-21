@@ -13,7 +13,7 @@ import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-tren
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
-import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, TrendingUp, Sigma } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -118,10 +118,10 @@ export default function DashboardPage() {
       )
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalOutgoings = coreExpenses + totalInvestments;
+    const totalExpensesIncludingInvestments = coreExpenses + totalInvestments;
     
-    const availableToSaveInvest = income - coreExpenses; 
-    const netMonthlyCashflow = income - totalOutgoings; 
+    const availableToSaveOrInvest = income - coreExpenses; 
+    const netMonthlyCashflow = income - totalExpensesIncludingInvestments; // Cash savings after all outgoings
     
     const investmentPercentage = income > 0 ? (totalInvestments / income) * 100 : 0;
 
@@ -129,15 +129,21 @@ export default function DashboardPage() {
       .filter(t => t.type === 'income' && t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const cashSavingsPercentage = income > 0 ? (netMonthlyCashflow / income) * 100 : 0;
+    const totalSavingsAndInvestmentPercentage = income > 0 ? (availableToSaveOrInvest / income) * 100 : 0;
+
+
     return { 
       income, 
       coreExpenses,
       totalInvestments,
-      totalOutgoings,
-      availableToSaveInvest,
-      netMonthlyCashflow,
+      totalExpensesIncludingInvestments, // For "Total Expenses" KPI
+      availableToSaveOrInvest, // For "Total Savings & Investment %" description
+      netMonthlyCashflow, // For "Cash Savings" KPI
       investmentPercentage,
       totalCashbackInterestsDividends,
+      cashSavingsPercentage,
+      totalSavingsAndInvestmentPercentage
     };
   }, [currentMonthTransactions]);
 
@@ -198,7 +204,7 @@ export default function DashboardPage() {
             title="Core Expenses" 
             value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`} 
             icon={TrendingDown} 
-            description={`Needs & Wants for ${monthNamesList[selectedMonth]}`}
+            description="Needs & Wants this month"
             valueClassName="text-red-500 dark:text-red-400" 
             className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20 dark:border-red-700/50 dark:bg-red-900/20 dark:hover:bg-red-800/30"
             kpiKey="coreExpenses"
@@ -212,7 +218,7 @@ export default function DashboardPage() {
             title="Total Investments" 
             value={`₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
             icon={Landmark} 
-            description={`Dedicated investment outflows`}
+            description="Dedicated investment outflows"
             valueClassName="text-blue-500 dark:text-blue-400"
             className="border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 dark:border-blue-700/50 dark:bg-blue-900/20 dark:hover:bg-blue-800/30"
             kpiKey="totalInvestmentsAmount"
@@ -224,9 +230,9 @@ export default function DashboardPage() {
         <motion.div variants={itemVariants}>
           <KpiCard 
             title="Total Outgoings" 
-            value={`₹${monthlyMetrics.totalOutgoings.toFixed(2)}`} 
+            value={`₹${monthlyMetrics.totalExpensesIncludingInvestments.toFixed(2)}`} 
             icon={Sigma} 
-            description={`Core Expenses + Investments`}
+            description={`Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}`}
             valueClassName="text-orange-500 dark:text-orange-400" 
             className="border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 dark:border-orange-700/50 dark:bg-orange-900/20 dark:hover:bg-orange-800/30"
             kpiKey="totalOutgoings"
@@ -237,24 +243,10 @@ export default function DashboardPage() {
         </motion.div>
         <motion.div variants={itemVariants}>
           <KpiCard 
-            title="Available to Save/Invest" 
-            value={`₹${monthlyMetrics.availableToSaveInvest.toFixed(2)}`} 
-            icon={PiggyBank} 
-            description={`Income after core expenses`}
-            valueClassName={monthlyMetrics.availableToSaveInvest >= 0 ? "text-teal-500 dark:text-teal-400" : "text-orange-500 dark:text-orange-400"} 
-            className="border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 dark:border-teal-700/50 dark:bg-teal-900/20 dark:hover:bg-teal-800/30"
-            kpiKey="availableToSaveInvest" 
-            insightText="What's left after day-to-day costs, ready for saving or investing."
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <KpiCard 
             title="Cash Savings" 
             value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
             icon={Wallet} 
-            description={`Actual cash saved after all outgoings`}
+            description="Actual cash saved after all outgoings"
             valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
             className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
             kpiKey="netMonthlyCashflow" 
@@ -264,8 +256,24 @@ export default function DashboardPage() {
           />
         </motion.div>
         <motion.div variants={itemVariants}>
+           <KpiCard
+            title="Cash Savings %"
+            value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
+            icon={Percent}
+            description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
+            valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
+            className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
+            kpiKey="savingsPercentage" // Used for navigation filter logic
+            insightText="Percentage of income saved as cash after all expenses and investments."
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            secondaryTitle="Total Saved/Invested %"
+            secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
           <KpiCard 
-            title="Investment Rate" 
+            title="Investment Rate %" 
             value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
             icon={Target} 
             description={`Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
@@ -292,7 +300,7 @@ export default function DashboardPage() {
         </motion.div>
       </motion.div>
 
-       {(monthlyMetrics.coreExpenses + monthlyMetrics.totalInvestments) > monthlyMetrics.income && (
+       {(monthlyMetrics.totalExpensesIncludingInvestments) > monthlyMetrics.income && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <Alert variant="destructive" className={cn("shadow-md border-red-700/50 bg-red-600/20 text-red-100 dark:bg-red-900/30 dark:text-red-200", glowClass)}>
             <AlertTriangle className="h-5 w-5 text-red-300 dark:text-red-400" />
@@ -358,4 +366,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-
