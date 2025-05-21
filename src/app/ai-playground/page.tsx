@@ -373,13 +373,14 @@ export default function AIPlaygroundPage() {
       if (t.category?.name) spendingByCategory[t.category.name] = (spendingByCategory[t.category.name] || 0) + t.amount;
     });
 
-    const topCategories = Object.entries(spendingByCategory)
+    // Get top 4 categories
+    const topCategoriesString = Object.entries(spendingByCategory)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 2)
+      .slice(0, 4) // Changed from 2 to 4
       .map(([name, total]) => `${name}: ₹${total.toFixed(0)}`)
       .join(', ');
     
-    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments_Expenses: ₹${spendingByType.investment_expense.toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
+    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments_Expenses: ₹${spendingByType.investment_expense.toFixed(0)}. Top categories: ${topCategoriesString || 'N/A'}.`;
   };
 
   const handleGetHealthCheck = async () => {
@@ -833,7 +834,7 @@ export default function AIPlaygroundPage() {
               AI Financial Health Check
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Get a quick AI summary of your financial activity for the current week or month.
+              Get a quick AI summary of your financial activity for the current week or month. Includes top spends and optimization tips.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -903,3 +904,4 @@ export default function AIPlaygroundPage() {
     </main>
   );
 }
+

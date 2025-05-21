@@ -24,7 +24,7 @@ const FinancialHealthCheckInputSchemaInternal = z.object({
 });
 
 const FinancialHealthCheckOutputSchemaInternal = z.object({
-  healthSummary: z.string().describe("A concise (2-4 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), and give a brief overall financial 'health' sentiment (e.g., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+  healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (e.g., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
 });
 
 export async function getFinancialHealthCheck(
@@ -53,7 +53,7 @@ const healthCheckPrompt = ai.definePrompt({
   output: { schema: FinancialHealthCheckOutputSchemaInternal },
   config: {
     temperature: 0.4,
-    maxOutputTokens: 300,
+    maxOutputTokens: 400, // Increased slightly for more detail
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -62,7 +62,7 @@ const healthCheckPrompt = ai.definePrompt({
     ],
   },
   prompt: `You are a friendly financial assistant for FinWise AI.
-Provide a concise (2-4 sentences) financial health check summary for the user based on the provided data in Indian Rupees (INR).
+Provide a concise (3-5 sentences) financial health check summary for the user based on the provided data in Indian Rupees (INR).
 
 Period: {{periodDescription}}
 
@@ -78,9 +78,11 @@ Previous Period Data (for comparison):
 Your Task:
 1.  Briefly state the total income and expenses for the current period.
 2.  Compare these figures to the previous period (e.g., "Income increased by ₹X", "Spending was ₹Y lower").
-3.  Comment on the current spending breakdown (e.g., "Most spending was on Needs.", "Want-based spending was significant.").
-4.  Give a brief overall sentiment about their financial health for this period (e.g., "Overall, spending seems well-managed this period.", "Expenses were notably high compared to income.").
-5.  Be positive and constructive. Use the ₹ symbol for INR amounts.
+3.  Comment on the current spending breakdown (e.g., "Most spending was on Needs.").
+4.  Identify and list the top 3-4 spending categories from the 'currentSpendingBreakdown' field.
+5.  Provide 1-2 specific, actionable suggestions for optimizing spending, potentially focusing on the identified top categories or general saving tips.
+6.  Give a brief overall sentiment about their financial health for this period (e.g., "Overall, spending seems well-managed this period.", "Expenses were notably high compared to income.").
+7.  Be positive and constructive. Use the ₹ symbol for INR amounts.
 `,
 });
 
@@ -95,3 +97,4 @@ const financialHealthCheckFlow = ai.defineFlow(
     return result.output!;
   }
 );
+
