@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface KpiCardProps {
   title: string;
@@ -19,8 +19,8 @@ interface KpiCardProps {
   insightText: string;
   selectedMonth: number;
   selectedYear: number;
-  secondaryTitle?: string; // Title to show on double-click
-  secondaryValue?: string; // Value to show on double-click
+  secondaryTitle?: string;
+  secondaryValue?: string;
 }
 
 const glowClass = "shadow-card-glow";
@@ -42,15 +42,26 @@ export function KpiCard({
   const router = useRouter();
   const [showSecondary, setShowSecondary] = useState(false);
   const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const handleCardClick = () => {
-    // If a double-click timeout is pending, clear it (this is a single click)
+    if (!isClient) return;
+
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       setClickTimeout(null);
     }
 
-    // Set a timeout to handle single click. If double click happens, this will be cleared.
+    // Specific KPIs where single click navigation is disabled
+    if (kpiKey === "savingsPercentage" || kpiKey === "investmentRate" || kpiKey === "cashSavings") {
+      return; 
+    }
+
     const newTimeout = setTimeout(() => {
       const queryParams = new URLSearchParams();
       queryParams.append('month', selectedMonth.toString());
@@ -60,36 +71,37 @@ export function KpiCard({
         queryParams.append('type', 'income');
       } else if (kpiKey === 'coreExpenses') {
         queryParams.append('type', 'expense');
-        // For core expenses, we might want to filter out investment_expense
-        // queryParams.append('expenseType', 'need'); // Example, can be more complex
+        // Optionally add filters for 'need' and 'want' if desired
+        // queryParams.append('expenseType', 'need');
         // queryParams.append('expenseType', 'want');
       } else if (kpiKey === 'totalInvestmentsAmount') {
         queryParams.append('type', 'expense');
         queryParams.append('expenseType', 'investment_expense');
       } else if (kpiKey === 'cashbackInterests') {
         queryParams.append('type', 'income');
-        // More specific category filtering could be added if needed
-      } else if (kpiKey === 'savingsPercentage' || kpiKey === 'netMonthlyCashflow' || kpiKey === 'totalOutgoings' || kpiKey === 'availableToSaveInvest') {
-        // For these derived metrics, show all transactions for context
-        // No specific type filter applied by default
+        // Consider adding category filter for 'Cashback', 'Investment Income', 'Dividends'
       }
+      // For 'totalOutgoings', 'availableToSaveInvest', 'savingsPercentage', 'netMonthlyCashflow', we show all transactions for context.
+
       router.push(`/transactions?${queryParams.toString()}`);
       setClickTimeout(null);
-    }, 250); // 250ms delay to detect double click
+    }, 250); 
 
     setClickTimeout(newTimeout);
   };
 
   const handleDoubleClick = () => {
+    if (!isClient) return;
+
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       setClickTimeout(null);
     }
-    if (secondaryValue) {
+    if (secondaryValue && kpiKey === "savingsPercentage") {
       setShowSecondary(true);
       setTimeout(() => {
         setShowSecondary(false);
-      }, 3000); // Show secondary info for 3 seconds
+      }, 3000); 
     }
   };
 
@@ -120,9 +132,13 @@ export function KpiCard({
             {typeof displayValue === 'number' ? displayValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : displayValue}
           </div>
           {description && !showSecondary && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
-          {showSecondary && secondaryValue && <p className="text-xs text-accent pt-1 animate-pulse">Showing total including investments</p>}
+           {showSecondary && secondaryValue && kpiKey === "savingsPercentage" && (
+            <p className="text-xs text-accent pt-1 animate-pulse">Showing total saved/invested %</p>
+           )}
         </CardContent>
       </Card>
     </motion.div>
   );
 }
+
+    
