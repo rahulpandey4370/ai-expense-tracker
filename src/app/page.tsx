@@ -5,13 +5,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from "framer-motion";
 import { KpiCard } from "@/components/kpi-card";
 import { TransactionForm } from "@/components/transaction-form";
-import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
-import { ExpensePaymentMethodChart } from "@/components/charts/expense-payment-method-chart";
 import { SpendingInsights } from "@/components/spending-insights";
 import { RecentTransactionsList } from "@/components/recent-transactions-list";
 import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
+import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart"; // Added
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target } from 'lucide-react';
@@ -49,7 +48,7 @@ const sectionVariants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
@@ -231,26 +230,35 @@ export default function DashboardPage() {
         <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
       </motion.div>
 
-      {/* Charts Section - Full width grid */}
+      {/* Charts Section - Simplified */}
       <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        className="grid grid-cols-1 gap-6" // Parent grid for all charts
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
+        {/* Expense Type Split Chart - Full width */}
         <motion.div variants={itemVariants}>
-          <ExpenseCategoryChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
+          <ExpenseTypeSplitChart 
+            transactions={currentMonthTransactions} 
+            selectedMonthName={monthNamesList[selectedMonth]} 
+            selectedYear={selectedYear}
+            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
+          />
         </motion.div>
-        <motion.div variants={itemVariants}>
-          <ExpensePaymentMethodChart transactions={currentMonthTransactions} selectedMonthName={monthNamesList[selectedMonth]} selectedYear={selectedYear} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <MonthlySpendingTrendChart transactions={transactions} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <IncomeExpenseTrendChart transactions={transactions} />
-        </motion.div>
+
+        {/* Monthly Spending Trend and Income/Expense Trend - Side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <motion.div variants={itemVariants}>
+            <MonthlySpendingTrendChart transactions={transactions} numberOfMonths={3} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <IncomeExpenseTrendChart transactions={transactions} numberOfMonths={3} />
+          </motion.div>
+        </div>
       </motion.div>
     </main>
   );
 }
+
+    
