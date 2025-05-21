@@ -13,7 +13,7 @@ interface KpiCardProps {
   valueClassName?: string;
 }
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 
 export function KpiCard({ title, value, icon: Icon, description, className, valueClassName }: KpiCardProps) {
   return (
@@ -29,7 +29,7 @@ export function KpiCard({ title, value, icon: Icon, description, className, valu
           <Icon className="h-5 w-5 text-primary" />
         </CardHeader>
         <CardContent>
-          <div className={cn("text-3xl font-bold text-foreground", valueClassName)}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
+          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
           {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
         </CardContent>
       </Card>
