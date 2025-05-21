@@ -27,7 +27,7 @@ interface IncomeExpenseTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: IncomeExpenseTrendChartProps) {
   const chartData = useMemo(() => {
@@ -46,10 +46,14 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
         })
         .reduce((sum, t) => sum + t.amount, 0);
       
+      // This 'monthlyExpenses' refers to 'coreExpenses' as calculated in page.tsx
       const monthlyExpenses = transactions
         .filter(t => {
             const transactionDate = new Date(t.date);
-            return t.type === 'expense' && transactionDate.getMonth() === month && transactionDate.getFullYear() === year;
+            return t.type === 'expense' && 
+                   (t.expenseType === 'need' || t.expenseType === 'want') && // Ensure only core expenses
+                   transactionDate.getMonth() === month && 
+                   transactionDate.getFullYear() === year;
         })
         .reduce((sum, t) => sum + t.amount, 0);
       
@@ -65,11 +69,11 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
   const chartConfig = {
     income: {
       label: "Income (₹)",
-      color: "hsl(var(--chart-2))", 
+      color: "hsl(var(--chart-2))", // chart-2 is a greenish/teal color in your theme
     },
     expense: {
-      label: "Expense (₹)",
-      color: "hsl(var(--chart-1))", 
+      label: "Core Expense (₹)", // Clarified label to reflect it's core expenses
+      color: "hsl(var(--destructive))", // Using destructive (red) color for expenses
     },
   }
 
