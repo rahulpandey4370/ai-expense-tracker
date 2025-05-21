@@ -18,14 +18,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
-import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
+import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
-import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/parse-transactions-flow';
-import { parseReceiptImage, type ParsedReceiptTransaction } from '@/ai/flows/parse-receipt-flow';
+import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
+import { parseReceiptImage } from '@/ai/flows/parse-receipt-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { TransactionInputSchema } from '@/lib/types';
+import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransactionSchema } from '@/lib/types';
 import Image from 'next/image';
 
 
@@ -53,9 +53,12 @@ type BulkParsedTransaction = Partial<TransactionInput> & {
   paymentMethodName?: string;
 };
 
+const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+
+
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('ai_text');
 
   // Single Transaction State
   const [type, setType] = useState<AppTransactionTypeEnum>('expense');
@@ -401,6 +404,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setIsLoading(false);
         return;
     }
+
 
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
     results.forEach((result, idx) => {
@@ -1198,12 +1202,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         {initialTransactionData ? (
             renderSingleTransactionForm()
         ) : (
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai_text' | 'ai_receipt')} className="w-full">
+            <Tabs defaultValue="ai_text" value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai_text' | 'ai_receipt')} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4 h-auto flex-wrap md:h-10">
-                    <TabsTrigger value="single" className="text-xs sm:text-sm">Single Entry</TabsTrigger>
-                    <TabsTrigger value="bulk" className="text-xs sm:text-sm">Bulk Paste</TabsTrigger>
                     <TabsTrigger value="ai_text" className="text-xs sm:text-sm">AI Text Input</TabsTrigger>
                     <TabsTrigger value="ai_receipt" className="text-xs sm:text-sm">AI Receipt Scan</TabsTrigger>
+                    <TabsTrigger value="single" className="text-xs sm:text-sm">Single Entry</TabsTrigger>
+                    <TabsTrigger value="bulk" className="text-xs sm:text-sm">Bulk Paste</TabsTrigger>
                 </TabsList>
                 <TabsContent value="single">
                     {renderSingleTransactionForm()}
@@ -1223,3 +1227,4 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
+
