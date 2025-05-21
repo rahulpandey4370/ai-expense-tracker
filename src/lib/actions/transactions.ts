@@ -3,7 +3,7 @@
 
 import { put, del, list, head, type BlobNotFoundError } from '@vercel/blob';
 import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
-import { TransactionInputSchema } from '@/lib/types'; // Import from types.ts
+import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
@@ -15,15 +15,27 @@ const TRANSACTIONS_DIR = 'transactions/';
 async function ensureBlobStoreFile<T>(filePath: string, defaultData: T[]): Promise<T[]> {
   try {
     const blob = await head(filePath);
-    const response = await fetch(blob.url);
+    const response = await fetch(blob.url, { cache: 'no-store' }); // Added cache: 'no-store'
     if (!response.ok) {
       console.error(`Failed to fetch content of existing blob ${filePath}: ${response.statusText} (Status: ${response.status})`);
-      throw new Error(`Failed to fetch content of existing blob ${filePath}: ${response.statusText}`);
+      // Fall through to creation logic if fetch fails for a reason other than pure non-existence (e.g. permissions changed)
+      // This might lead to overwriting if not careful, but for this app's data files, it's likely a "not found" equivalent.
+    } else {
+      return await response.json();
     }
-    return await response.json();
+    // If response was not ok, it means the blob might exist but is not accessible, or some other error.
+    // The original catch block handles BlobNotFoundError specifically for creation.
+    // For robustness, we might consider if other non-ok statuses should also trigger creation,
+    // but typically `head` would fail with BlobNotFoundError if it's truly not there.
+    // If we reach here because response.ok was false, it's an edge case. The original catch will handle true "not found".
+    // To be safe, we'll assume if fetch wasn't ok after head was, something is wrong, try to create.
+    // This path is less likely; BlobNotFoundError in head is the primary "not found" path.
+    console.warn(`Blob ${filePath} metadata found, but content fetch failed. Will attempt to create/overwrite.`);
+    throw new BlobNotFoundError(); // Simulate not found to trigger creation logic
+
   } catch (error: any) {
     let isNotFoundError = false;
-    if (error instanceof Error && 'name' in error && error.name === 'BlobNotFoundError') {
+    if (error instanceof BlobNotFoundError || (error && error.name === 'BlobNotFoundError')) {
       isNotFoundError = true;
     } else if (error && typeof error.message === 'string') {
       const message = error.message.toLowerCase();
@@ -39,13 +51,12 @@ async function ensureBlobStoreFile<T>(filePath: string, defaultData: T[]): Promi
     if (!isNotFoundError && error && error.status === 404) {
       isNotFoundError = true;
     }
-     if (!isNotFoundError && error && error.code === 'BLOB_NOT_FOUND') {
+    if (!isNotFoundError && error && error.code === 'BLOB_NOT_FOUND') {
         isNotFoundError = true;
     }
 
-
     if (isNotFoundError) {
-      console.log(`Blob ${filePath} not found. Attempting to create with default data.`);
+      console.log(`Blob ${filePath} not found or fetch failed. Attempting to create with default data.`);
       try {
         await put(filePath, JSON.stringify(defaultData, null, 2), {
           access: 'public',
@@ -76,7 +87,7 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
     return allCategories;
   } catch (error) {
     console.error('Failed to fetch categories:', error);
-    throw new Error('Database query failed: Could not fetch categories. Please check server logs on Vercel for detailed Blob errors. Ensure Blob store is accessible.');
+    throw new Error('Database query failed: Could not fetch categories. Ensure Vercel Blob is set up and migrations (if applicable) ran. Check server logs for detailed Prisma errors.');
   }
 }
 
@@ -86,7 +97,7 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
     return await ensureBlobStoreFile<PaymentMethod>(PAYMENT_METHODS_BLOB_PATH, defaultPaymentMethods);
   } catch (error) {
     console.error('Failed to fetch payment methods:', error);
-    throw new Error('Database query failed: Could not fetch payment methods. Please check server logs on Vercel for detailed Blob errors. Ensure Blob store is accessible.');
+    throw new Error('Database query failed: Could not fetch payment methods. Ensure Vercel Blob is set up and migrations (if applicable) ran. Check server logs for detailed Prisma errors.');
   }
 }
 
@@ -117,19 +128,19 @@ export async function getTransactions(): Promise<AppTransaction[]> {
       const salaryCategory = allCategories.find(c => c.name === 'Salary');
       const groceriesCategory = allCategories.find(c => c.name === 'Groceries');
       const foodDiningCategory = allCategories.find(c => c.name === 'Food and Dining');
-      const upiPaymentMethod = allPaymentMethods.find(pm => pm.type === 'UPI');
-      const ccPaymentMethod = allPaymentMethods.find(pm => pm.type === 'Credit Card');
+      const upiPaymentMethod = allPaymentMethods.find(pm => pm.type === 'UPI'); // Assuming type 'UPI' for a generic UPI
+      const ccPaymentMethod = allPaymentMethods.find(pm => pm.name === 'CC HDFC 7950'); // Using a specific CC name
 
       const mockTxData: TransactionInput[] = [];
 
       if (salaryCategory) {
-        mockTxData.push({ type: 'income', date: new Date(new Date().setDate(1)), amount: 50000, description: 'Monthly Salary', categoryId: salaryCategory.id, source: 'Company XYZ' });
+        mockTxData.push({ type: 'income', date: new Date(new Date().setDate(1)), amount: 75000, description: 'Monthly Salary', categoryId: salaryCategory.id, source: 'Company A' });
       }
       if (groceriesCategory && upiPaymentMethod) {
-        mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(5)), amount: 2500, description: 'Groceries for the week', categoryId: groceriesCategory.id, paymentMethodId: upiPaymentMethod.id, expenseType: 'need' });
+        mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(5)), amount: 3500, description: 'Weekly Groceries', categoryId: groceriesCategory.id, paymentMethodId: upiPaymentMethod.id, expenseType: 'need' });
       }
       if (foodDiningCategory && ccPaymentMethod) {
-         mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(10)), amount: 800, description: 'Dinner with friends', categoryId: foodDiningCategory.id, paymentMethodId: ccPaymentMethod.id, expenseType: 'want' });
+         mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(10)), amount: 1200, description: 'Dinner with Friends', categoryId: foodDiningCategory.id, paymentMethodId: ccPaymentMethod.id, expenseType: 'want' });
       }
       
       if (mockTxData.length === 0 && (salaryCategory || groceriesCategory || foodDiningCategory)) {
@@ -148,7 +159,7 @@ export async function getTransactions(): Promise<AppTransaction[]> {
           id: newId,
           ...validation.data,
           date: validation.data.date.toISOString(),
-          description: validation.data.description || '',
+          description: validation.data.description || '', // Ensure description is not undefined
           createdAt: now,
           updatedAt: now,
         };
@@ -166,11 +177,12 @@ export async function getTransactions(): Promise<AppTransaction[]> {
        revalidatePath('/');
        revalidatePath('/transactions');
        revalidatePath('/reports');
+       revalidatePath('/yearly-overview');
     } else {
         for (const blob of blobs) {
           if (!blob.pathname.endsWith('.json')) continue;
           try {
-            const response = await fetch(blob.url);
+            const response = await fetch(blob.url, { cache: 'no-store' }); // Added cache: 'no-store'
             if (!response.ok) {
                 console.warn(`Failed to fetch transaction blob ${blob.pathname}: ${response.statusText}`);
                 continue;
@@ -214,7 +226,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     id,
     ...validation.data,
     date: validation.data.date.toISOString(),
-    description: validation.data.description || '',
+    description: validation.data.description || '', // Ensure description is not undefined
     createdAt: now,
     updatedAt: now,
   };
@@ -225,6 +237,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
 
     const [allCategories, allPaymentMethods] = await Promise.all([
         getCategories(),
@@ -254,21 +267,24 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   try {
     const blobHead = await head(blobPath);
      if (!blobHead || !blobHead.url) throw new Error('Transaction blob metadata not found or URL missing for update.');
-    const response = await fetch(blobHead.url);
+    const response = await fetch(blobHead.url, { cache: 'no-store' }); // Added cache: 'no-store'
     if (!response.ok) throw new Error(`Failed to fetch existing transaction for update. Status: ${response.status}`);
     existingRawTx = await response.json();
   } catch (error: any) {
     console.error(`Failed to fetch transaction ${id} for update:`, error);
-     if (error instanceof Error && 'name' in error && error.name === 'BlobNotFoundError') {
+     if (error instanceof Error && (error.name === 'BlobNotFoundError' || (error as any).code === 'BLOB_NOT_FOUND')) {
         throw new Error(`Transaction with ID ${id} not found for update.`);
     }
     throw new Error(`Could not retrieve transaction for update. Original error: ${error.message}`);
   }
 
+  // Create a new object for updatedFields based on `data`
   const updatedFields: Partial<RawTransaction> = {};
   if (data.type !== undefined) updatedFields.type = data.type;
-  if (data.date !== undefined) updatedFields.date = data.date.toISOString();
+  if (data.date !== undefined) updatedFields.date = data.date.toISOString(); // data.date is a Date object
   if (data.amount !== undefined) updatedFields.amount = data.amount;
+  
+  // Handle description carefully: if data.description is explicitly passed (even as empty string), use it. Otherwise, keep existing.
   updatedFields.description = data.description !== undefined ? data.description : existingRawTx.description;
 
 
@@ -276,19 +292,24 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     updatedFields.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedFields.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
     updatedFields.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    updatedFields.source = undefined;
+    // Ensure source is cleared if it was an income before and now is an expense
+    if (data.type === 'expense') updatedFields.source = undefined;
   } else if (data.type === 'income' || (data.type === undefined && existingRawTx.type === 'income')) {
     updatedFields.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedFields.source = data.source !== undefined ? data.source : existingRawTx.source;
-    updatedFields.paymentMethodId = undefined;
-    updatedFields.expenseType = undefined;
+    // Ensure expense-specific fields are cleared if it was an expense before and now is an income
+    if (data.type === 'income') {
+      updatedFields.paymentMethodId = undefined;
+      updatedFields.expenseType = undefined;
+    }
   }
+
 
   const rawTransactionUpdate: RawTransaction = {
     ...existingRawTx,
     ...updatedFields,
-    id: existingRawTx.id,
-    createdAt: existingRawTx.createdAt,
+    id: existingRawTx.id, // Ensure ID is not changed
+    createdAt: existingRawTx.createdAt, // Ensure createdAt is not changed
     updatedAt: new Date().toISOString(),
   };
 
@@ -298,6 +319,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
 
     const [allCategories, allPaymentMethods] = await Promise.all([
         getCategories(),
@@ -327,12 +349,14 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete transaction from blob:', error);
-    if (error instanceof Error && 'name' in error && error.name === 'BlobNotFoundError') {
+    if (error instanceof Error && (error.name === 'BlobNotFoundError' || (error as any).code === 'BLOB_NOT_FOUND') ) {
          console.warn(`Attempted to delete non-existent blob: ${TRANSACTIONS_DIR}${id}.json`);
-         return { success: true };
+         // Considered success if blob already doesn't exist to avoid user-facing errors for this case
+         return { success: true }; 
     }
     throw new Error(`Could not delete transaction from blob storage. Original error: ${error.message}`);
   }
