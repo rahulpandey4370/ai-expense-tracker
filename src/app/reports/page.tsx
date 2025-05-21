@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { AppTransaction } from '@/lib/types'; 
+import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen } from 'lucide-react';
@@ -14,6 +14,7 @@ import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
+import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart'; // Import new chart
 import { comparativeExpenseAnalysis, type ComparativeExpenseAnalysisInput } from '@/ai/flows/comparative-expense-analysis';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -37,13 +38,13 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 
 export default function ReportsPage() {
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
-  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]); 
+  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  
+
   const [reportYear, setReportYear] = useState<number>(selectedYear);
   const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for Annual
 
@@ -57,7 +58,7 @@ export default function ReportsPage() {
     setIsLoadingData(true);
     try {
       const fetchedTransactions = await getTransactions();
-      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)}))); 
+      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
     } catch (error) {
       console.error("Failed to fetch transactions for reports:", error);
       toast({
@@ -78,13 +79,13 @@ export default function ReportsPage() {
 
   const handleYearChange = (yearValue: string) => {
     setReportYear(parseInt(yearValue, 10));
-    contextHandleYearChange(yearValue); 
+    contextHandleYearChange(yearValue);
   };
 
   const handleMonthChangeInternal = (monthValue: string) => {
     setReportMonth(parseInt(monthValue, 10));
-    if (parseInt(monthValue, 10) !== -1) { 
-      contextHandleMonthChange(monthValue); 
+    if (parseInt(monthValue, 10) !== -1) {
+      contextHandleMonthChange(monthValue);
     }
   };
 
@@ -100,28 +101,28 @@ export default function ReportsPage() {
     });
   }, [allTransactions, reportYear, reportMonth]);
 
-  const currentPeriodExpensesTotal = useMemo(() => 
+  const currentPeriodExpensesTotal = useMemo(() =>
     filteredTransactionsForPeriod.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
   , [filteredTransactionsForPeriod]);
 
   const previousPeriodExpensesTotal = useMemo(() => {
     let prevPeriodYear = reportYear;
-    let prevPeriodMonth = reportMonth -1; 
+    let prevPeriodMonth = reportMonth -1;
 
-    if (reportMonth === 0) { 
+    if (reportMonth === 0) {
       prevPeriodMonth = 11;
       prevPeriodYear = reportYear - 1;
-    } else if (reportMonth === -1) { 
+    } else if (reportMonth === -1) {
       prevPeriodYear = reportYear - 1;
-      prevPeriodMonth = -1; 
+      prevPeriodMonth = -1;
     }
-    
 
-    return allTransactions.filter(t => { 
+
+    return allTransactions.filter(t => {
       const transactionDate = new Date(t.date);
       const transactionYear = transactionDate.getFullYear();
       const transactionMonth = transactionDate.getMonth();
-      if (prevPeriodMonth === -1) { 
+      if (prevPeriodMonth === -1) {
         return transactionYear === prevPeriodYear && t.type === 'expense';
       }
       return transactionYear === prevPeriodYear && transactionMonth === prevPeriodMonth && t.type === 'expense';
@@ -146,7 +147,7 @@ export default function ReportsPage() {
     setAiAnalysis(null);
 
     const currentPeriodName = reportMonth === -1 ? `${reportYear}` : `${monthNamesList[reportMonth]} ${reportYear}`;
-    
+
     let previousPeriodName;
     if (reportMonth === 0) previousPeriodName = `${monthNamesList[11]} ${reportYear - 1}`;
     else if (reportMonth === -1) previousPeriodName = `${reportYear -1}`;
@@ -160,7 +161,7 @@ export default function ReportsPage() {
         let prevTargetMonth = reportMonth -1;
         if (reportMonth === 0) { prevTargetMonth = 11; prevTargetYear = reportYear - 1; }
         else if (reportMonth === -1) { prevTargetYear = reportYear -1; prevTargetMonth = -1; /* annual */ }
-        
+
         if (prevTargetMonth === -1) return transactionYear === prevTargetYear;
         return transactionYear === prevTargetYear && transactionMonth === prevTargetMonth;
     });
@@ -173,42 +174,42 @@ export default function ReportsPage() {
       expenseCategoriesCurrent: formatExpenseCategoriesForAI(filteredTransactionsForPeriod),
       expenseCategoriesPrevious: formatExpenseCategoriesForAI(previousPeriodTransactions),
     };
-    
+
     try {
       const result = await comparativeExpenseAnalysis(input);
       setAiAnalysis(result.analysis);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error generating AI report:", err);
-      setAiError("Failed to generate the AI report. Please try again.");
+      setAiError(err.message || "Failed to generate the AI report. Please try again.");
     } finally {
       setIsAiLoading(false);
     }
   };
-  
+
   const exportReportToPDF = async () => {
     const reportContentElement = document.getElementById('report-content-area');
     if (!reportContentElement) {
       toast({ title: "Export Failed", description: "Could not find report content.", variant: "destructive"});
       return;
     }
-    
+
     toast({ title: "Generating PDF...", description: "Please wait while your report is being generated."});
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500)); 
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(reportContentElement, {
-        scale: 2, 
-        useCORS: true, 
-        logging: false, // Quieten logs in console
-        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() === "0 0% 3.9%" // dark mode check
-            ? "hsl(var(--background))" // Use actual dark bg
-            : "#FFFFFF", // Use white for light mode for better PDF readability
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: document.documentElement.classList.contains('dark')
+            ? getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+            : "#FFFFFF",
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', 
+        unit: 'pt',
         format: 'a4'
       });
 
@@ -216,22 +217,22 @@ export default function ReportsPage() {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      
+
       const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const newImgWidth = imgWidth * ratio * 0.95; 
+      const newImgWidth = imgWidth * ratio * 0.95;
       const newImgHeight = imgHeight * ratio * 0.95;
 
       const x = (pdfWidth - newImgWidth) / 2;
-      const y = (pdfHeight - newImgHeight) / 2; 
+      const y = (pdfHeight - newImgHeight) / 2;
 
 
       pdf.addImage(imgData, 'PNG', x, y, newImgWidth, newImgHeight);
       pdf.save(`financial_report_${reportMonth === -1 ? reportYear : monthNamesList[reportMonth] + '_' + reportYear}.pdf`);
       toast({ title: "Report Exported!", description: "Your financial report PDF has been generated." });
-    } catch (error)
+    } catch (error: any)
      {
       console.error("Error exporting PDF:", error);
-      toast({ title: "Export Failed", description: "An error occurred during PDF generation.", variant: "destructive"});
+      toast({ title: "Export Failed", description: `An error occurred during PDF generation: ${error.message || 'Unknown error'}.`, variant: "destructive"});
     }
   };
 
@@ -277,9 +278,9 @@ export default function ReportsPage() {
                 </Button>
               </motion.div>
             </div>
-          
-            <motion.div 
-              id="report-content-area" 
+
+            <motion.div
+              id="report-content-area"
               className="space-y-6 p-2 sm:p-4 bg-background rounded-lg"
               variants={cardVariants}
               initial="hidden"
@@ -301,25 +302,33 @@ export default function ReportsPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-6">
-                    <motion.div variants={cardVariants}>
-                        <ExpenseCategoryChart 
-                            transactions={filteredTransactionsForPeriod} 
-                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
+                     <motion.div variants={cardVariants}>
+                        <ExpenseTypeSplitChart
+                            transactions={filteredTransactionsForPeriod}
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]}
                             selectedYear={reportYear}
                             chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
                         />
                     </motion.div>
                     <motion.div variants={cardVariants}>
-                        <ExpensePaymentMethodChart 
-                            transactions={filteredTransactionsForPeriod} 
-                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
+                        <ExpenseCategoryChart
+                            transactions={filteredTransactionsForPeriod}
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]}
+                            selectedYear={reportYear}
+                            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
+                        />
+                    </motion.div>
+                    <motion.div variants={cardVariants}>
+                        <ExpensePaymentMethodChart
+                            transactions={filteredTransactionsForPeriod}
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]}
                             selectedYear={reportYear}
                             chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
                         />
                     </motion.div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div> 
+                      <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                       <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                   </div>
                 </>

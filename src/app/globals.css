@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -32,7 +33,7 @@ body {
     --chart-3: 285 70% 65%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.75rem; /* Increased for a "funkier" look */
+    --radius: 0.75rem; 
 
     /* Sidebar specific theme */
     --sidebar-background: 180 20% 97%; /* Very light teal, almost white */
@@ -43,6 +44,11 @@ body {
     --sidebar-accent-foreground: 180 100% 15%; /* Dark teal for text on hover */
     --sidebar-border: 180 15% 90%; /* Light teal border */
     --sidebar-ring: 174 45% 60%; /* Medium Teal (same as main ring) */
+
+    /* Glow variables */
+    --card-glow: 0 0 8px hsl(var(--accent) / 0.3);
+    --card-glow-dark: 0 0 10px hsl(var(--accent) / 0.5);
+    --chart-glow-accent: 0 0 8px hsl(var(--accent) / 0.3); /* For charts using accent glow */
   }
 
   .dark {
@@ -70,7 +76,7 @@ body {
     --chart-3: 285 65% 55%;
     --chart-4: 43 70% 60%;
     --chart-5: 27 80% 60%;
-    --radius: 0.75rem; /* Increased for a "funkier" look */
+    --radius: 0.75rem; 
 
     /* Dark Sidebar specific theme */
     --sidebar-background: 180 15% 10%; /* Dark teal, almost black */
@@ -81,6 +87,9 @@ body {
     --sidebar-accent-foreground: 180 20% 90%; /* Light teal/gray for text on hover */
     --sidebar-border: 180 15% 18%; /* Darker teal border */
     --sidebar-ring: 174 40% 70%; /* Lighter Teal for dark mode ring */
+    
+    /* Glow variable for dark mode */
+    --chart-glow-accent: 0 0 10px hsl(var(--accent) / 0.5); /* For charts using accent glow */
   }
 }
 
@@ -92,3 +101,4 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
