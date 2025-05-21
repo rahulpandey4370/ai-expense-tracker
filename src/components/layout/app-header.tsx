@@ -23,9 +23,8 @@ export default function AppHeader() {
   return (
     <header className="sticky top-0 z-10 flex h-auto min-h-16 flex-wrap items-center justify-between gap-y-2 gap-x-4 border-b bg-background/80 backdrop-blur-sm px-4 py-2 md:px-6">
       <div className="flex items-center gap-2">
-        <div className="md:hidden">
-          <SidebarTrigger />
-        </div>
+        {/* SidebarTrigger is now always visible */}
+        <SidebarTrigger />
         <div className="hidden md:block">
           {/* Placeholder for breadcrumbs or title */}
         </div>

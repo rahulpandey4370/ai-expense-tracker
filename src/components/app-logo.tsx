@@ -15,16 +15,17 @@ export function AppLogo({ className, appName = "FinWise AI", ...props }: AppLogo
         viewBox="0 0 24 24" 
         fill="none" 
         xmlns="http://www.w3.org/2000/svg" 
-        className="transform group-hover:scale-110 transition-transform duration-300 ease-in-out text-primary" // Use primary color
+        className="transform group-hover:scale-110 transition-transform duration-300 ease-in-out text-primary"
       >
-        <path d="M4 12H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M6 8L10 12L6 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M18 8L14 12L18 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        {/* Chaotic elements - could be more abstract if needed */}
-        <path d="M8 5S9 3 12 3S16 5 16 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
-        <path d="M8 19S9 21 12 21S16 19 16 19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
+        {/* Simple abstract/chaotic symbol */}
+        <path d="M12 2L12 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M22 12L2 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M19.0711 4.92896L4.92893 19.0711" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M19.0711 19.0711L4.92893 4.92896" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" fill="hsl(var(--background))"/>
       </svg>
-      <span className="text-xl font-extrabold text-primary group-data-[collapsible=icon]:hidden whitespace-nowrap tracking-tighter leading-tight">
+      {/* App name is now always visible, not hidden when sidebar is collapsed */}
+      <span className="text-xl font-extrabold text-primary whitespace-nowrap tracking-tighter leading-tight">
         {appName}
       </span>
     </div>

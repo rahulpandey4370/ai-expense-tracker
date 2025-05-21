@@ -29,12 +29,18 @@ const navItems = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const { isMobile, state: sidebarState } = useSidebar();
+  const { isMobile, state: sidebarState, setOpenMobile } = useSidebar();
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="FinWise AI Home">
+        <Link href="/" aria-label="FinWise AI Home" onClick={handleLinkClick}>
           <AppLogo appName="FinWise AI" />
         </Link>
       </SidebarHeader>
@@ -46,7 +52,11 @@ export default function AppSidebar() {
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Link href={item.href} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md block">
+                    <Link 
+                      href={item.href} 
+                      onClick={handleLinkClick}
+                      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md block"
+                    >
                       <SidebarMenuButton
                         isActive={pathname === item.href}
                         className="justify-start"
