@@ -107,21 +107,44 @@ export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSc
 
 
 // AI Goal Forecaster Schemas
-const GoalForecasterInputSchemaInternal = z.object({
-  goalDescription: z.string().describe("The user's description of their financial goal (e.g., 'Save for a vacation to Europe', 'Buy a new gaming laptop')."),
-  goalAmount: z.number().positive().describe("The target monetary amount for the goal in INR."),
-  goalDurationMonths: z.number().int().positive().describe("The desired duration in months to achieve the goal."),
-  averageMonthlyIncome: z.number().positive().describe("The user's average monthly income in INR based on recent data."),
-  averageMonthlyExpenses: z.number().positive().describe("The user's average monthly expenses (excluding dedicated savings/investments for this specific goal) in INR based on recent data."),
-  currentSavingsRate: z.number().min(0).max(100).describe("The user's current approximate savings rate as a percentage of income (e.g., 20 for 20%)."),
-});
-export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchemaInternal>;
+// Input schema is directly defined in goal-forecaster-flow.ts for internal use
+// but we export the TypeScript type for the page component.
+export interface GoalForecasterInput {
+  goalDescription: string;
+  goalAmount: number;
+  goalDurationMonths: number;
+  averageMonthlyIncome: number;
+  averageMonthlyExpenses: number;
+  currentSavingsRate: number;
+}
 
-const GoalForecasterOutputSchemaInternal = z.object({
-  feasibilityAssessment: z.string().describe("A brief assessment of whether the goal is feasible within the given timeframe based on current financials (e.g., 'Highly Feasible', 'Challenging but Possible', 'Likely Unfeasible without changes')."),
-  projectedMonthsToGoal: z.number().int().optional().describe("If feasible or challenging, the AI's projected number of months to reach the goal with current savings habits. Omit if unfeasible."),
-  requiredMonthlySavings: z.number().positive().describe("The amount the user would need to save specifically for this goal each month to achieve it in the desired duration."),
-  suggestedActions: z.array(z.string()).describe("A list of 2-4 actionable suggestions to help achieve the goal. These could include increasing savings by a certain amount, or reducing spending in specific categories (e.g., 'Reduce 'Food and Dining' by X%', 'Increase monthly savings by ₹Y'). Be specific with INR amounts where possible."),
-  motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
-});
-export type GoalForecasterOutput = z.infer<typeof GoalForecasterOutputSchemaInternal>;
+export interface GoalForecasterOutput {
+  feasibilityAssessment: string;
+  projectedMonthsToGoal?: number;
+  requiredMonthlySavings: number;
+  suggestedActions: string[];
+  motivationalMessage?: string;
+}
+
+// AI Budgeting Assistant Schemas
+export interface BudgetingAssistantInput {
+  statedMonthlyIncome: number;
+  statedMonthlySavingsGoalPercentage: number; // e.g., 20 for 20%
+  averagePastMonthlyExpenses: number; // calculated from user's last 3 months data
+  pastSpendingBreakdown: string; // e.g., "Needs: X (Rent: A, Groceries: B), Wants: Y (Dining: C), Investments_Expenses: Z"
+}
+
+export interface BudgetingAssistantOutput {
+  recommendedMonthlyBudget: {
+    needs: number;
+    wants: number;
+    investmentsAsSpending: number; // e.g. regular MF/stock purchases
+    targetSavings: number; // From user's goal %
+    discretionarySpendingOrExtraSavings: number; // Income - (needs + wants + investments + targetSavings)
+  };
+  detailedSuggestions: {
+    categoryAdjustments: string[]; // e.g., "Consider reducing 'Dining Out' by approx ₹P"
+    generalTips: string[]; // e.g., "Automate savings transfers."
+  };
+  analysisSummary: string; // General commentary
+}

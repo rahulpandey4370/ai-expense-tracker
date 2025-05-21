@@ -7,5 +7,6 @@ import '@/ai/flows/comparative-expense-analysis.ts';
 import '@/ai/flows/financial-chatbot-flow.ts';
 import '@/ai/flows/parse-transactions-flow.ts';
 import '@/ai/flows/parse-receipt-flow.ts';
-import '@/ai/flows/goal-forecaster-flow.ts'; // Ensure this is imported
+import '@/ai/flows/goal-forecaster-flow.ts';
+import '@/ai/flows/budgeting-assistant-flow.ts'; // Ensure this is imported
     

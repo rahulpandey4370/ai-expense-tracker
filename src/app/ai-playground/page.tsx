@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, FlaskConical, Wand2, AlertTriangle } from "lucide-react";
+import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { getTransactions } from '@/lib/actions/transactions';
-import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput } from '@/lib/types';
+import { getTransactions, getCategories as fetchCategories } from '@/lib/actions/transactions';
+import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, Category } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
-import { subMonths, getMonth, getYear } from 'date-fns';
+import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
+import { subMonths, getMonth, getYear, startOfMonth, endOfMonth } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -29,49 +31,64 @@ const cardVariants = {
 };
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"]; // From yearly-overview
 
 export default function AIPlaygroundPage() {
   const { toast } = useToast();
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
 
+  // Goal Planner State
   const [goalDescription, setGoalDescription] = useState<string>('');
   const [goalAmount, setGoalAmount] = useState<string>('');
   const [goalDurationMonths, setGoalDurationMonths] = useState<string>('');
-
-  const [isAILoading, setIsAILoading] = useState<boolean>(false);
+  const [isAILoadingGoal, setIsAILoadingGoal] = useState<boolean>(false);
   const [aiForecast, setAiForecast] = useState<GoalForecasterOutput | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGoalError, setAiGoalError] = useState<string | null>(null);
 
-  const fetchTransactionsCallback = useCallback(async () => {
+  // Budgeting Assistant State
+  const [statedMonthlyIncome, setStatedMonthlyIncome] = useState<string>('');
+  const [savingsGoalPercentage, setSavingsGoalPercentage] = useState<string>('');
+  const [isAILoadingBudget, setIsAILoadingBudget] = useState<boolean>(false);
+  const [aiBudgetPlan, setAiBudgetPlan] = useState<BudgetingAssistantOutput | null>(null);
+  const [aiBudgetError, setAiBudgetError] = useState<string | null>(null);
+
+
+  const fetchInitialDataCallback = useCallback(async () => {
     setIsLoadingTransactions(true);
     try {
-      const fetchedTransactions = await getTransactions();
+      const [fetchedTransactions, fetchedCategories] = await Promise.all([
+        getTransactions(),
+        fetchCategories()
+      ]);
       setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
+      setAllCategories(fetchedCategories);
     } catch (error) {
-      console.error("Failed to fetch transactions for AI Playground:", error);
+      console.error("Failed to fetch initial data for AI Playground:", error);
       toast({
-        title: "Error Loading Transaction Data",
-        description: "Could not fetch necessary transaction data for AI analysis.",
+        title: "Error Loading Initial Data",
+        description: "Could not fetch transaction or category data for AI analysis.",
         variant: "destructive",
       });
       setAllTransactions([]);
+      setAllCategories([]);
     } finally {
       setIsLoadingTransactions(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    fetchTransactionsCallback();
-  }, [fetchTransactionsCallback]);
+    fetchInitialDataCallback();
+  }, [fetchInitialDataCallback]);
 
-  const calculateAverages = useCallback(() => {
+  const calculateGoalPlannerAverages = useCallback(() => {
     const today = new Date();
     let totalIncomeLast6Months = 0;
     let totalExpensesLast6Months = 0;
-    const monthSet = new Set<string>(); // To count unique months with data
+    const monthSet = new Set<string>(); 
 
-    for (let i = 0; i < 6; i++) { // Look at last 6 months
+    for (let i = 0; i < 6; i++) { 
       const targetDate = subMonths(today, i);
       const monthKey = `${getYear(targetDate)}-${getMonth(targetDate)}`;
       
@@ -87,7 +104,7 @@ export default function AIPlaygroundPage() {
       if (monthHasData) monthSet.add(monthKey);
     }
     
-    const numberOfMonthsWithData = monthSet.size > 0 ? monthSet.size : 1; // Avoid division by zero
+    const numberOfMonthsWithData = monthSet.size > 0 ? monthSet.size : 1;
 
     const averageMonthlyIncome = totalIncomeLast6Months / numberOfMonthsWithData;
     const averageMonthlyExpenses = totalExpensesLast6Months / numberOfMonthsWithData;
@@ -113,39 +130,34 @@ export default function AIPlaygroundPage() {
       return;
     }
 
-    if (allTransactions.length < 10 && !isLoadingTransactions) { // Check if enough data for meaningful average
-        toast({ title: "Insufficient Data", description: "Not enough transaction history (need at least a few months) for an accurate forecast. Please add more transactions.", variant: "default" });
-        // Optionally, allow proceeding but with a warning or default values for averages
-        // For now, we prevent proceeding.
-        // return; 
+    if (allTransactions.length < 3 && !isLoadingTransactions) { 
+        toast({ title: "Insufficient Data", description: "Not enough transaction history for an accurate forecast. Please add more transactions.", variant: "default" });
     }
 
-
-    setIsAILoading(true);
+    setIsAILoadingGoal(true);
     setAiForecast(null);
-    setAiError(null);
+    setAiGoalError(null);
 
-    const averages = calculateAverages();
+    const averages = calculateGoalPlannerAverages();
     if (averages.averageMonthlyIncome <=0 && allTransactions.length > 0) {
         toast({ title: "Data Issue", description: "Average monthly income could not be calculated (is it zero or negative?). Please check your recent transaction data.", variant: "destructive"});
-        setIsAILoading(false);
+        setIsAILoadingGoal(false);
         return;
     }
-
 
     const input: GoalForecasterInput = {
       goalDescription,
       goalAmount: amountNum,
       goalDurationMonths: durationNum,
-      averageMonthlyIncome: averages.averageMonthlyIncome || 1, // Prevent 0 for AI model, it will be handled by prompt
+      averageMonthlyIncome: averages.averageMonthlyIncome || 1, 
       averageMonthlyExpenses: averages.averageMonthlyExpenses || 0,
-      currentSavingsRate: averages.currentSavingsRate || 0,
+      currentSavingsRate: Math.max(0, Math.min(100, averages.currentSavingsRate || 0)), // Ensure rate is 0-100
     };
 
     try {
       const result = await forecastFinancialGoal(input);
-      if (result.feasibilityAssessment === "Error") {
-        setAiError(result.suggestedActions.join(' '));
+      if (result.feasibilityAssessment === "Error" || result.feasibilityAssessment === "Input Error") {
+        setAiGoalError(result.suggestedActions.join(' '));
         toast({title: "AI Forecast Error", description: result.suggestedActions.join(' ') || "Could not generate forecast.", variant: "destructive"})
       } else {
         setAiForecast(result);
@@ -153,16 +165,110 @@ export default function AIPlaygroundPage() {
     } catch (err: any) {
       console.error("Error getting AI forecast:", err);
       const message = err.message || "Failed to get AI forecast.";
-      setAiError(message);
+      setAiGoalError(message);
       toast({ title: "AI Error", description: message, variant: "destructive" });
     } finally {
-      setIsAILoading(false);
+      setIsAILoadingGoal(false);
+    }
+  };
+
+  const calculateBudgetingAssistantInputs = useCallback(() => {
+    const today = new Date();
+    let totalExpensesLast3Months = 0;
+    const spendingByTypeLast3Months: Record<ExpenseType, number> = { need: 0, want: 0, investment_expense: 0 };
+    const spendingByCategoryLast3Months: Record<string, number> = {};
+    const monthSet = new Set<string>();
+
+    for (let i = 0; i < 3; i++) { // Look at last 3 full months
+      const targetMonthDate = subMonths(today, i + 1); // i+1 to get previous full months
+      const monthStart = startOfMonth(targetMonthDate);
+      const monthEnd = endOfMonth(targetMonthDate);
+      
+      let monthHasData = false;
+      allTransactions.forEach(t => {
+        const transactionDate = new Date(t.date);
+        if (transactionDate >= monthStart && transactionDate <= monthEnd) {
+          monthHasData = true;
+          if (t.type === 'expense') {
+            totalExpensesLast3Months += t.amount;
+            if (t.expenseType) {
+              spendingByTypeLast3Months[t.expenseType] = (spendingByTypeLast3Months[t.expenseType] || 0) + t.amount;
+            }
+            if (t.category?.name) {
+              spendingByCategoryLast3Months[t.category.name] = (spendingByCategoryLast3Months[t.category.name] || 0) + t.amount;
+            }
+          }
+        }
+      });
+      if (monthHasData) monthSet.add(`${getYear(monthStart)}-${getMonth(monthStart)}`);
+    }
+    
+    const numberOfMonthsWithData = monthSet.size > 0 ? monthSet.size : 1;
+    const averagePastMonthlyExpenses = totalExpensesLast3Months / numberOfMonthsWithData;
+
+    const topCategories = Object.entries(spendingByCategoryLast3Months)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3) // Top 3 categories
+      .map(([name, total]) => `${name}: ₹${(total / numberOfMonthsWithData).toFixed(0)}`)
+      .join(', ');
+
+    const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ₹${(spendingByTypeLast3Months.need / numberOfMonthsWithData).toFixed(0)}, Wants: ₹${(spendingByTypeLast3Months.want / numberOfMonthsWithData).toFixed(0)}, Investments (as expense): ₹${(spendingByTypeLast3Months.investment_expense / numberOfMonthsWithData).toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
+    
+    return { averagePastMonthlyExpenses, pastSpendingBreakdown };
+  }, [allTransactions]);
+
+
+  const handleGetBudgetPlan = async () => {
+    const incomeNum = parseFloat(statedMonthlyIncome);
+    const savingsGoalNum = parseFloat(savingsGoalPercentage);
+
+    if (isNaN(incomeNum) || incomeNum <= 0) {
+        toast({ title: "Invalid Income", description: "Monthly income must be a positive number.", variant: "destructive" });
+        return;
+    }
+    if (isNaN(savingsGoalNum) || savingsGoalNum < 0 || savingsGoalNum > 100) {
+        toast({ title: "Invalid Savings Goal", description: "Savings goal percentage must be between 0 and 100.", variant: "destructive" });
+        return;
+    }
+     if (allTransactions.length < 3 && !isLoadingTransactions) { 
+        toast({ title: "Insufficient Data", description: "Not enough transaction history for budgeting. Please add more transactions.", variant: "default" });
+    }
+
+    setIsAILoadingBudget(true);
+    setAiBudgetPlan(null);
+    setAiBudgetError(null);
+
+    const { averagePastMonthlyExpenses, pastSpendingBreakdown } = calculateBudgetingAssistantInputs();
+
+    const input: BudgetingAssistantInput = {
+      statedMonthlyIncome: incomeNum,
+      statedMonthlySavingsGoalPercentage: savingsGoalNum,
+      averagePastMonthlyExpenses: averagePastMonthlyExpenses || 0,
+      pastSpendingBreakdown: pastSpendingBreakdown || "No significant past spending data available.",
+    };
+
+    try {
+      const result = await suggestBudgetPlan(input);
+      if (result.analysisSummary.includes("Could not generate budget") || result.analysisSummary.includes("error occurred")) {
+        setAiBudgetError(result.analysisSummary + " " + (result.detailedSuggestions?.categoryAdjustments?.join(' ') || ''));
+        toast({title: "AI Budgeting Error", description: result.analysisSummary, variant: "destructive"})
+      } else {
+        setAiBudgetPlan(result);
+      }
+    } catch (err: any) {
+      console.error("Error getting AI budget plan:", err);
+      const message = err.message || "Failed to get AI budget plan.";
+      setAiBudgetError(message);
+      toast({ title: "AI Error", description: message, variant: "destructive" });
+    } finally {
+      setIsAILoadingBudget(false);
     }
   };
 
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
+      {/* AI Financial Goal Planner Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
@@ -212,13 +318,13 @@ export default function AIPlaygroundPage() {
                   />
                 </div>
               </div>
-              <Button onClick={handleGetForecast} disabled={isAILoading || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
-                {isAILoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
-                {isLoadingTransactions ? "Loading transaction data..." : (isAILoading ? "Forecasting..." : "Get AI Forecast")}
+              <Button onClick={handleGetForecast} disabled={isAILoadingGoal || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
+                {isAILoadingGoal ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
+                {isLoadingTransactions ? "Loading data..." : (isAILoadingGoal ? "Forecasting..." : "Get AI Forecast")}
               </Button>
             </motion.div>
 
-            {isAILoading && (
+            {isAILoadingGoal && (
               <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-background/50 border-primary/20">
                 <CardTitle className="text-lg text-primary mb-2">AI Analyzing Your Goal...</CardTitle>
                 <div className="space-y-3">
@@ -230,19 +336,19 @@ export default function AIPlaygroundPage() {
               </motion.div>
             )}
 
-            {aiError && !isAILoading && (
+            {aiGoalError && !isAILoadingGoal && (
               <motion.div variants={cardVariants}>
                 <Alert variant="destructive" className="shadow-md">
                   <AlertTriangle className="h-5 w-5" />
-                  <AlertTitle>AI Forecast Error</AlertTitle>
-                  <AlertDescription>{aiError}</AlertDescription>
+                  <AlertTitle>AI Goal Forecast Error</AlertTitle>
+                  <AlertDescription>{aiGoalError}</AlertDescription>
                 </Alert>
               </motion.div>
             )}
 
-            {aiForecast && !isAILoading && !aiError && (
+            {aiForecast && !isAILoadingGoal && !aiGoalError && (
               <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
-                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Forecast &amp; Plan</CardTitle>
+                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Goal Forecast &amp; Plan</CardTitle>
                 <div className="space-y-3 text-sm">
                   <p><strong className="text-foreground">Goal:</strong> {goalDescription}</p>
                   <p><strong className="text-foreground">Target:</strong> ₹{parseFloat(goalAmount).toLocaleString()} in {goalDurationMonths} months</p>
@@ -272,18 +378,146 @@ export default function AIPlaygroundPage() {
                 </div>
               </motion.div>
             )}
-             {(!aiForecast && !isAILoading && !aiError && !isLoadingTransactions && allTransactions.length < 1) && (
+             {(!aiForecast && !isAILoadingGoal && !aiGoalError && !isLoadingTransactions && allTransactions.length < 1) && (
                 <Alert variant="default" className="border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
                     <FlaskConical className="h-4 w-4"/>
                     <AlertTitle>Start Planning!</AlertTitle>
                     <AlertDescription>
-                        Enter your goal details above. The AI needs some transaction history (ideally a few months) to provide the best forecast. If you've just started, add some transactions first!
+                        Enter your goal details above. The AI needs some transaction history (ideally a few months) for an accurate forecast. If you've just started, add some transactions first!
                     </AlertDescription>
                 </Alert>
             )}
           </CardContent>
         </Card>
       </motion.div>
+
+      <Separator />
+
+      {/* AI Budgeting Assistant Section */}
+      <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+          <CardHeader>
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <PiggyBank className="w-7 h-7 md:w-8 md:h-8 text-accent transform scale-x-[-1]" />
+              AI Budgeting Assistant
+            </CardTitle>
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
+              Get a personalized budget plan based on your income, savings goals, and past spending (avg. last 3 months).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <motion.div variants={cardVariants} className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="statedMonthlyIncome" className="text-foreground/90">Your Stated Monthly Income (₹)</Label>
+                  <Input
+                    id="statedMonthlyIncome"
+                    type="number"
+                    value={statedMonthlyIncome}
+                    onChange={(e) => setStatedMonthlyIncome(e.target.value)}
+                    placeholder="e.g., 60000"
+                    className="mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="savingsGoalPercentage" className="text-foreground/90">Monthly Savings Goal (%)</Label>
+                  <Input
+                    id="savingsGoalPercentage"
+                    type="number"
+                    value={savingsGoalPercentage}
+                    onChange={(e) => setSavingsGoalPercentage(e.target.value)}
+                    placeholder="e.g., 20 for 20%"
+                    min="0" max="100"
+                    className="mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleGetBudgetPlan} disabled={isAILoadingBudget || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
+                {isAILoadingBudget ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
+                {isLoadingTransactions ? "Loading data..." : (isAILoadingBudget ? "Generating Budget..." : "Get AI Budget Plan")}
+              </Button>
+            </motion.div>
+
+            {isAILoadingBudget && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-background/50 border-primary/20">
+                <CardTitle className="text-lg text-primary mb-2">AI Crafting Your Budget...</CardTitle>
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-3/4 bg-muted" />
+                  <Skeleton className="h-4 w-full bg-muted" />
+                  <Skeleton className="h-4 w-full bg-muted" />
+                  <Skeleton className="h-4 w-5/6 bg-muted" />
+                </div>
+              </motion.div>
+            )}
+
+            {aiBudgetError && !isAILoadingBudget && (
+              <motion.div variants={cardVariants}>
+                <Alert variant="destructive" className="shadow-md">
+                  <AlertTriangle className="h-5 w-5" />
+                  <AlertTitle>AI Budgeting Error</AlertTitle>
+                  <AlertDescription>{aiBudgetError}</AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+
+            {aiBudgetPlan && !isAILoadingBudget && !aiBudgetError && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
+                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Budget Plan</CardTitle>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Recommended Monthly Budget (₹):</h4>
+                    <ul className="list-disc list-inside pl-4 space-y-1 text-foreground/90">
+                      <li>Needs: ₹{aiBudgetPlan.recommendedMonthlyBudget.needs.toLocaleString()}</li>
+                      <li>Wants: ₹{aiBudgetPlan.recommendedMonthlyBudget.wants.toLocaleString()}</li>
+                      <li>Investments (as Spending): ₹{aiBudgetPlan.recommendedMonthlyBudget.investmentsAsSpending.toLocaleString()}</li>
+                      <li>Target Savings: ₹{aiBudgetPlan.recommendedMonthlyBudget.targetSavings.toLocaleString()}</li>
+                      <li>Discretionary/Extra Savings: ₹{aiBudgetPlan.recommendedMonthlyBudget.discretionarySpendingOrExtraSavings.toLocaleString()}</li>
+                    </ul>
+                  </div>
+                  <hr className="border-accent/30 my-2"/>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Analysis & Summary:</h4>
+                    <p className="text-foreground/90 whitespace-pre-wrap">{aiBudgetPlan.analysisSummary}</p>
+                  </div>
+                   <div>
+                    <h4 className="font-semibold text-foreground mb-1">Detailed Suggestions:</h4>
+                    {aiBudgetPlan.detailedSuggestions.categoryAdjustments.length > 0 && (
+                        <>
+                            <p className="text-foreground/80 italic text-xs">Category Adjustments:</p>
+                            <ul className="list-disc list-inside space-y-1 pl-4 text-foreground/90">
+                            {aiBudgetPlan.detailedSuggestions.categoryAdjustments.map((action, index) => (
+                                <li key={`cat-${index}`}>{action}</li>
+                            ))}
+                            </ul>
+                        </>
+                    )}
+                    {aiBudgetPlan.detailedSuggestions.generalTips.length > 0 && (
+                        <>
+                             <p className="text-foreground/80 italic text-xs mt-2">General Tips:</p>
+                            <ul className="list-disc list-inside space-y-1 pl-4 text-foreground/90">
+                            {aiBudgetPlan.detailedSuggestions.generalTips.map((tip, index) => (
+                                <li key={`tip-${index}`}>{tip}</li>
+                            ))}
+                            </ul>
+                        </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+             {(!aiBudgetPlan && !isAILoadingBudget && !aiBudgetError && !isLoadingTransactions && allTransactions.length < 1) && (
+                <Alert variant="default" className="border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
+                    <PiggyBank className="h-4 w-4"/>
+                    <AlertTitle>Start Budgeting!</AlertTitle>
+                    <AlertDescription>
+                        Enter your income and savings goal. The AI needs some transaction history (ideally 3 months) for a good plan. If you've just started, add some transactions first!
+                    </AlertDescription>
+                </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
     </main>
   );
 }
