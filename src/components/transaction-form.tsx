@@ -16,16 +16,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip } from "lucide-react";
+import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
-import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/parse-transactions-flow';
-import { parseReceiptImage, type ParsedReceiptTransaction } from '@/ai/flows/parse-receipt-flow';
+import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
+import { parseReceiptImage } from '@/ai/flows/parse-receipt-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransactionSchema } from '@/lib/types'; // Import from lib/types
+import { TransactionInputSchema, type ParsedAITransaction, type ParsedReceiptTransaction } from '@/lib/types';
 import Image from 'next/image';
 
 
@@ -120,7 +120,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       }
     } catch (error) {
       console.error("Failed to fetch dropdown data:", error);
-      toast({ title: "Error", description: "Could not load categories or payment methods.", variant: "destructive" });
+      toast({ title: "Error Loading Options", description: "Could not load categories or payment methods. Please refresh or try again later.", variant: "destructive" });
     } finally {
       setIsFetchingDropdowns(false);
     }
@@ -279,7 +279,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       const values = line.split('\t');
       const errors: string[] = [];
 
-      // Expected: Description, Category, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method
+      // Expected: Description, Category Name, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method Name
       if (values.length < 7) {
         errors.push("Expected 7 columns: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method.");
         return { originalRow: line, rowIndex: index, errors, type: 'expense' };
@@ -323,7 +323,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         date: parsedDate,
         description: desc,
         amount: amt,
-        type: 'expense',
+        type: 'expense', // All bulk transactions assumed to be expenses
         categoryName: catName,
         paymentMethodName: pmName,
         expenseType: expTypeStr as AppExpenseTypeEnum,
@@ -347,24 +347,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
+    const newParsedBulkTransactions = [...parsedBulkTransactions]; // Create a mutable copy
 
     const transactionsToSubmit: TransactionInput[] = [];
-    for (const pt of parsedBulkTransactions) {
+    for (const pt of newParsedBulkTransactions) {
         if (pt.errors && pt.errors.length > 0) {
-            errorCount++;
+            // errorCount++; // Already has errors, don't double count
             continue;
         }
-        if (!pt.date || pt.amount === undefined || !pt.type || !pt.description || !pt.categoryName || !pt.paymentMethodName || !pt.expenseType) {
-            errorCount++;
+        if (!pt.date || pt.amount === undefined || pt.type !== 'expense' || !pt.description || !pt.categoryName || !pt.paymentMethodName || !pt.expenseType) {
             pt.errors = [...(pt.errors || []), "Missing critical parsed information for submission."];
+            errorCount++;
             continue;
         }
 
         const category = expenseCategories.find(c => c.name.toLowerCase() === pt.categoryName?.toLowerCase());
         const paymentMethod = paymentMethods.find(pm => pm.name.toLowerCase() === pt.paymentMethodName?.toLowerCase());
 
-        if (!category) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown category "${pt.categoryName}"`]; continue; }
-        if (!paymentMethod) { errorCount++; pt.errors = [...(pt.errors || []), `Unknown payment method "${pt.paymentMethodName}"`]; continue; }
+        if (!category) { pt.errors = [...(pt.errors || []), `Unknown category "${pt.categoryName}"`]; errorCount++; continue; }
+        if (!paymentMethod) { pt.errors = [...(pt.errors || []), `Unknown payment method "${pt.paymentMethodName}"`]; errorCount++; continue; }
 
         const transactionInput: TransactionInput = {
             date: pt.date,
@@ -378,20 +379,20 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
         const validation = TransactionInputSchema.safeParse(transactionInput);
         if(!validation.success) {
-            errorCount++;
             const readableErrors = Object.entries(validation.error.flatten().fieldErrors)
               .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
               .join('; ');
             pt.errors = [...(pt.errors || []), `Validation: ${readableErrors || "Invalid data."}`];
+            errorCount++;
             continue;
         }
         transactionsToSubmit.push(validation.data);
     }
 
-    setParsedBulkTransactions([...parsedBulkTransactions]);
+    setParsedBulkTransactions(newParsedBulkTransactions);
 
     if(transactionsToSubmit.length === 0 && errorCount > 0) {
-        toast({ title: "Submission Failed", description: "No valid transactions to submit after review.", variant: "destructive" });
+        toast({ title: "Submission Failed", description: "No valid transactions to submit after review. Check errors in the table.", variant: "destructive" });
         setIsLoading(false);
         return;
     }
@@ -402,13 +403,26 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
 
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
-    results.forEach(result => {
-        if (result.status === 'fulfilled') successCount++;
-        else {
+    results.forEach((result, idx) => {
+        // Find the original parsed transaction corresponding to this result
+        const originalParsedTx = newParsedBulkTransactions.find(pt => 
+            !pt.errors && // Only consider initially valid ones
+            transactionsToSubmit[idx] && // Ensure there's a mapping
+            pt.description === transactionsToSubmit[idx].description && // Basic matching, can be improved
+            pt.amount === transactionsToSubmit[idx].amount
+        );
+
+        if (result.status === 'fulfilled') {
+            successCount++;
+        } else {
             errorCount++;
             console.error("Bulk addTransaction error:", result.reason);
+            if (originalParsedTx) {
+                originalParsedTx.errors = [...(originalParsedTx.errors || []), `Save Error: ${result.reason instanceof Error ? result.reason.message : "Unknown save error"}`];
+            }
         }
     });
+     setParsedBulkTransactions(newParsedBulkTransactions); // Update UI with save errors
 
     toast({
       title: "Bulk Submission Complete",
@@ -417,8 +431,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     if (successCount > 0) {
       onTransactionAdded?.();
-      setBulkText('');
-      setParsedBulkTransactions([]);
+      // Optionally clear only successfully submitted items or the whole form
+      // setBulkText('');
+      // setParsedBulkTransactions(newParsedBulkTransactions.filter(pt => pt.errors && pt.errors.length > 0)); // Keep failed items for review
     }
     setIsLoading(false);
   };
@@ -441,12 +456,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
       });
-
-      setParsedAITransactions(result.parsedTransactions);
-      if (result.parsedTransactions.length > 0) {
-        toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
+      
+      if (result.summaryMessage && result.parsedTransactions.length === 0) {
+        // If there's a summary message and no transactions, it might be an error message from the flow
+        setAiProcessingError(result.summaryMessage);
+        toast({ title: "AI Processing Note", description: result.summaryMessage, variant: "default" });
       } else {
-         toast({ title: "AI Processing Complete", description: result.summaryMessage || "The AI could not identify any clear transactions in the text." });
+        setParsedAITransactions(result.parsedTransactions);
+        if (result.parsedTransactions.length > 0) {
+            toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
+        } else {
+            toast({ title: "AI Processing Complete", description: result.summaryMessage || "The AI could not identify any clear transactions in the text." });
+        }
       }
 
     } catch (error: any) {
@@ -461,30 +482,32 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const handleAIReviewChange = (index: number, field: keyof TransactionInput, value: any) => {
     const updated = [...aiReviewTransactions];
-    if (!updated[index]) updated[index] = {} as TransactionInput;
-    (updated[index] as any)[field] = value;
+    if (!updated[index]) updated[index] = {} as TransactionInput; // Should not happen if initialized correctly
+    
+    const currentItem = { ...updated[index] };
 
     if (field === 'type') {
+        currentItem.type = value as AppTransactionTypeEnum;
         if (value === 'income') {
-            updated[index].paymentMethodId = undefined;
-            updated[index].expenseType = undefined;
+            currentItem.paymentMethodId = undefined;
+            currentItem.expenseType = undefined;
             const incomeCat = incomeCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (incomeCategories.length > 0 ? incomeCategories[0] : undefined);
-            if (incomeCat) updated[index].categoryId = incomeCat.id;
-
-        } else {
-            updated[index].source = undefined;
+            currentItem.categoryId = incomeCat?.id;
+        } else { // expense
+            currentItem.source = undefined;
             const expenseCat = expenseCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (expenseCategories.length > 0 ? expenseCategories[0] : undefined);
-             if (expenseCat) updated[index].categoryId = expenseCat.id;
+            currentItem.categoryId = expenseCat?.id;
 
             const pm = paymentMethods.find(p => p.name.toLowerCase() === parsedAITransactions[index]?.paymentMethodNameGuess?.toLowerCase()) || (paymentMethods.length > 0 ? paymentMethods[0] : undefined);
-            if (pm) updated[index].paymentMethodId = pm.id;
-
-            updated[index].expenseType = parsedAITransactions[index]?.expenseTypeNameGuess || 'need';
+            currentItem.paymentMethodId = pm?.id;
+            currentItem.expenseType = parsedAITransactions[index]?.expenseTypeNameGuess || 'need';
         }
+    } else if (field === 'date' && value instanceof Date) {
+      currentItem.date = value;
+    } else {
+       (currentItem as any)[field] = value;
     }
-    if (field === 'date' && value instanceof Date) {
-      updated[index].date = value;
-    }
+    updated[index] = currentItem;
     setAiReviewTransactions(updated);
   };
 
@@ -492,9 +515,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (parsedAITransactions.length > 0) {
       const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
         let catId, pmId;
-        let transactionDate = new Date();
+        let transactionDate = new Date(); // Default to now
         try {
-            if(aiTx.date) {
+            if(aiTx.date) { // aiTx.date is YYYY-MM-DD string from AI
                 const parsed = parseDateFns(aiTx.date, 'yyyy-MM-dd', new Date());
                 if(!isNaN(parsed.getTime())) transactionDate = parsed;
             }
@@ -504,21 +527,21 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         if (aiTx.type === 'expense') {
           catId = expenseCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
           pmId = paymentMethods.find(p => p.name.toLowerCase() === aiTx.paymentMethodNameGuess?.toLowerCase())?.id;
-        } else {
+        } else { // income
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
 
         return {
-          date: transactionDate,
+          date: transactionDate, // This will be a Date object
           description: aiTx.description || "AI Parsed Transaction",
           amount: aiTx.amount || 0,
           type: aiTx.type || 'expense',
-          categoryId: catId,
-          paymentMethodId: aiTx.type === 'expense' ? pmId : undefined,
+          categoryId: catId, // Will be undefined if no match
+          paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, // Will be undefined if no match or not an expense
           expenseType: aiTx.type === 'expense' ? (aiTx.expenseTypeNameGuess || 'need') : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
-      }).filter(tx => tx.amount && tx.amount > 0 && tx.description);
+      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); // Basic filter for plausible transactions
       setAiReviewTransactions(initialReviewItems);
     } else {
       setAiReviewTransactions([]);
@@ -529,9 +552,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
+    const submissionErrors: string[] = [];
 
     const transactionsToSubmit: TransactionInput[] = [];
-    for(const reviewItem of aiReviewTransactions) {
+    for(const [index, reviewItem] of aiReviewTransactions.entries()) {
         const validation = TransactionInputSchema.safeParse(reviewItem);
         if (validation.success) {
             transactionsToSubmit.push(validation.data);
@@ -540,35 +564,59 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             const readableErrors = Object.entries(validation.error.flatten().fieldErrors)
                 .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
                 .join('; ');
-            toast({title: "AI Review Item Invalid", description: `Item "${reviewItem.description?.substring(0,20)}...": ${readableErrors}`, variant: "destructive"});
+            const itemDescription = reviewItem.description || `Item ${index + 1}`;
+            const errorMsg = `Validation failed for "${itemDescription.substring(0,30)}...": ${readableErrors}`;
+            submissionErrors.push(errorMsg);
+            toast({title: "AI Review Item Invalid", description: errorMsg, variant: "destructive"});
         }
     }
 
-    if (transactionsToSubmit.length === 0) {
-        toast({ title: "No Valid Transactions to Submit", description: "Please review and confirm AI suggestions, ensuring all required fields are valid.", variant: "destructive"});
+    if (transactionsToSubmit.length === 0 && errorCount > 0) {
+        toast({ title: "No Valid Transactions to Submit", description: "Please review and correct AI suggestions, ensuring all required fields are valid.", variant: "destructive"});
+        setIsLoading(false);
+        return;
+    }
+     if (transactionsToSubmit.length === 0 && errorCount === 0) {
+        toast({ title: "Nothing to Submit", description: "No transactions were parsed or selected for submission.", variant: "default" });
         setIsLoading(false);
         return;
     }
 
+
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
-    results.forEach(result => {
-        if (result.status === 'fulfilled') successCount++;
-        else {
+    results.forEach((result, idx) => {
+        const originalTxDescription = transactionsToSubmit[idx]?.description || `Transaction ${idx + 1}`;
+        if (result.status === 'fulfilled') {
+            successCount++;
+        } else {
             errorCount++;
-            console.error("AI submission error:", result.reason);
+            const errorMessage = result.reason instanceof Error ? result.reason.message : "Unknown error saving transaction.";
+            console.error(`AI submission error for "${originalTxDescription}":`, result.reason);
+            submissionErrors.push(`Failed to save "${originalTxDescription.substring(0,30)}...": ${errorMessage}`);
+            toast({ title: "Save Error", description: `Could not save transaction "${originalTxDescription.substring(0,30)}...": ${errorMessage}`, variant: "destructive" });
         }
     });
 
-    toast({
-      title: "AI Submission Complete",
-      description: `${successCount} transactions added. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
-    });
+    if (submissionErrors.length > 0 && successCount < transactionsToSubmit.length) {
+         toast({
+            title: "Partial AI Submission",
+            description: `${successCount} transactions added. ${errorCount} failed. Check individual error messages.`,
+            variant: successCount > 0 ? "default" : "destructive",
+        });
+    } else if (successCount === transactionsToSubmit.length) {
+        toast({
+            title: "AI Submission Complete",
+            description: `${successCount} transactions added successfully.`,
+        });
+    }
+
 
     if (successCount > 0) {
       onTransactionAdded?.();
       setAiText('');
       setParsedAITransactions([]);
       setAiReviewTransactions([]);
+      setAiProcessingError(null);
     }
     setIsLoading(false);
   };
@@ -593,7 +641,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       toast({ title: "No Receipt File", description: "Please upload a receipt image first.", variant: "destructive" });
       return;
     }
-    if (!receiptPreview) { // Should not happen if receiptFile is set, but good check
+    if (!receiptPreview) { 
         toast({ title: "File Error", description: "Could not read the receipt file for preview.", variant: "destructive"});
         return;
     }
@@ -603,42 +651,48 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setAiReceiptError(null);
 
     try {
-      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'}));
+      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'})); // Receipts are expenses
       const paymentMethodNamesForAI = paymentMethods.map(p => ({ id: p.id, name: p.name }));
 
       const result = await parseReceiptImage({
-        receiptImageUri: receiptPreview, // receiptPreview is the data URI
+        receiptImageUri: receiptPreview, 
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
       });
-      setParsedReceiptTransaction(result.parsedTransaction);
-
-      if (result.parsedTransaction && result.parsedTransaction.amount && result.parsedTransaction.description) {
-        let catId, pmId;
-        let transactionDate = new Date();
-        try {
-            if(result.parsedTransaction.date) {
-                const parsed = parseDateFns(result.parsedTransaction.date, 'yyyy-MM-dd', new Date());
-                if(!isNaN(parsed.getTime())) transactionDate = parsed;
-            }
-        } catch (e) { console.warn("AI receipt returned invalid date string:", result.parsedTransaction.date); }
-
-        catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction?.categoryNameGuess?.toLowerCase())?.id;
-        pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction?.paymentMethodNameGuess?.toLowerCase())?.id;
-
-        setAiReceiptReviewTransaction({
-          date: transactionDate,
-          description: result.parsedTransaction.description,
-          amount: result.parsedTransaction.amount,
-          type: 'expense', // Receipts are generally expenses
-          categoryId: catId,
-          paymentMethodId: pmId,
-          expenseType: result.parsedTransaction.expenseTypeNameGuess || 'need',
-        });
-        toast({ title: "AI Receipt Scan Complete", description: "Review the extracted details below." });
+      
+      if (result.parsedTransaction?.error && !result.parsedTransaction?.amount && !result.parsedTransaction?.description) {
+          setAiReceiptError(result.parsedTransaction.error);
+          toast({ title: "AI Receipt Scan Issue", description: result.parsedTransaction.error, variant: "default" });
       } else {
-        setAiReceiptError(result.parsedTransaction?.error || "AI could not extract sufficient details from the receipt.");
-        toast({ title: "AI Receipt Scan Issue", description: result.parsedTransaction?.error || "Could not extract clear transaction details.", variant: "default" });
+          setParsedReceiptTransaction(result.parsedTransaction);
+          if (result.parsedTransaction && (result.parsedTransaction.amount || result.parsedTransaction.description)) { // Looser check
+            let catId, pmId;
+            let transactionDate = new Date();
+            try {
+                if(result.parsedTransaction.date) {
+                    const parsed = parseDateFns(result.parsedTransaction.date, 'yyyy-MM-dd', new Date());
+                    if(!isNaN(parsed.getTime())) transactionDate = parsed;
+                }
+            } catch (e) { console.warn("AI receipt returned invalid date string:", result.parsedTransaction.date); }
+
+            catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction?.categoryNameGuess?.toLowerCase())?.id;
+            pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction?.paymentMethodNameGuess?.toLowerCase())?.id;
+
+            setAiReceiptReviewTransaction({
+              date: transactionDate,
+              description: result.parsedTransaction.description || "Scanned Receipt",
+              amount: result.parsedTransaction.amount || 0,
+              type: 'expense', 
+              categoryId: catId,
+              paymentMethodId: pmId,
+              expenseType: result.parsedTransaction.expenseTypeNameGuess || 'need',
+            });
+            toast({ title: "AI Receipt Scan Complete", description: "Review the extracted details below." });
+          } else {
+            const errorMsg = result.parsedTransaction?.error || "AI could not extract sufficient details from the receipt.";
+            setAiReceiptError(errorMsg);
+            toast({ title: "AI Receipt Scan Issue", description: errorMsg, variant: "default" });
+          }
       }
     } catch (error: any) {
       console.error("AI receipt processing error in component:", error);
@@ -657,6 +711,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (field === 'date' && value instanceof Date) {
         updated.date = value;
       }
+      // If type changes, reset related fields if necessary (though receipts are usually expenses)
+      // if (field === 'type') { ... } 
       return updated;
     });
   };
@@ -817,7 +873,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const renderBulkPasteForm = () => (
     <div className="space-y-4">
-      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
+      <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
       <Textarea
         id="bulk-input"
         value={bulkText}
@@ -1030,7 +1086,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         {receiptPreview && (
             <div className="mt-2 border rounded-md p-2 bg-background/50 flex flex-col items-center">
                 <p className="text-sm text-muted-foreground mb-1">Receipt Preview:</p>
-                <Image src={receiptPreview} alt="Receipt preview" width={200} height={300} className="max-w-full max-h-[250px] object-contain rounded-md border" />
+                <Image src={receiptPreview} alt="Receipt preview" width={200} height={300} className="max-w-full max-h-[250px] object-contain rounded-md border" data-ai-hint="receipt image" />
             </div>
         )}
 
@@ -1112,11 +1168,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     {parsedReceiptTransaction?.confidenceScore !== undefined && (
                         <p className="text-xs text-muted-foreground">AI Confidence: {(parsedReceiptTransaction.confidenceScore * 100).toFixed(0)}%</p>
                     )}
-                    {parsedReceiptTransaction?.error && (
+                    {parsedReceiptTransaction?.error && ( // Display specific error from parsed receipt transaction
                         <p className="text-xs text-red-500">AI Note: {parsedReceiptTransaction.error}</p>
                     )}
                 </Card>
-                 <Button onClick={handleSubmitAIReceipt} disabled={isLoading || !aiReceiptReviewTransaction} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
+                 <Button onClick={handleSubmitAIReceipt} disabled={isLoading || !aiReceiptReviewTransaction || !aiReceiptReviewTransaction.amount} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
                     Submit Reviewed Receipt Transaction
                 </Button>
@@ -1136,7 +1192,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           <CardDescription className="text-muted-foreground">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6', "bg-card rounded-b-xl")}>
+      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6 pt-4', "bg-card rounded-b-xl")}>
         {initialTransactionData ? (
             renderSingleTransactionForm()
         ) : (
@@ -1165,3 +1221,4 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
+
