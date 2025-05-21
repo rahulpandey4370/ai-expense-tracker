@@ -21,7 +21,7 @@ export default function AppHeader() {
   } = useDateSelection();
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
+    <header className="sticky top-0 z-10 flex h-auto min-h-16 flex-wrap items-center justify-between gap-y-2 gap-x-4 border-b bg-background/80 backdrop-blur-sm px-4 py-2 md:px-6">
       <div className="flex items-center gap-2">
         <div className="md:hidden">
           <SidebarTrigger />
@@ -31,27 +31,27 @@ export default function AppHeader() {
         </div>
       </div>
       
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <Select value={selectedMonth.toString()} onValueChange={handleMonthChange}>
-            <SelectTrigger className="w-[110px] h-8 text-xs">
+            <SelectTrigger className="w-[110px] h-8 text-xs sm:w-[120px] sm:text-sm">
               <SelectValue placeholder="Month" />
             </SelectTrigger>
             <SelectContent>
               {monthNamesList.map((month, index) => (
-                <SelectItem key={month} value={index.toString()} className="text-xs">
+                <SelectItem key={month} value={index.toString()} className="text-xs sm:text-sm">
                   {month.substring(0,3)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
-            <SelectTrigger className="w-[75px] h-8 text-xs">
+            <SelectTrigger className="w-[75px] h-8 text-xs sm:w-[85px] sm:text-sm">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
               {years.map(year => (
-                <SelectItem key={year} value={year.toString()} className="text-xs">
+                <SelectItem key={year} value={year.toString()} className="text-xs sm:text-sm">
                   {year}
                 </SelectItem>
               ))}

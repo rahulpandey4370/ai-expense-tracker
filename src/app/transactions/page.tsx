@@ -181,7 +181,7 @@ export default function TransactionsPage() {
 
 
   const handleTransactionUpdateOrAdd = () => {
-    fetchData(); // Refetch all data to ensure consistency
+    fetchData(); 
     setEditingTransaction(null);
   };
 
@@ -190,7 +190,7 @@ export default function TransactionsPage() {
     try {
       await deleteTransaction(transactionId);
       toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
-      fetchData(); // Refetch data after delete
+      fetchData(); 
     } catch (error) {
       console.error("Failed to delete transaction:", error);
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
@@ -235,7 +235,7 @@ export default function TransactionsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `rahuls_transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `finwise_transactions_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -258,11 +258,11 @@ export default function TransactionsPage() {
       >
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
-            <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
-              <BookOpen className="w-8 h-8 text-accent transform -rotate-6"/>
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <BookOpen className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-6"/>
               Manage Transactions
             </CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
               View and manage all your financial entries. Filters available below.
               Currently viewing: <strong className="text-accent">{currentPeriodText}</strong>
             </CardDescription>
@@ -274,40 +274,40 @@ export default function TransactionsPage() {
                 placeholder="Search transactions (e.g., 'Groceries', 'Salary')"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70"
+                className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
               />
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
                 <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="selected_month">Selected Month ({monthNamesList[selectedMonth]} {selectedYear})</SelectItem>
-                    <SelectItem value="full_year">Full Year ({selectedYear})</SelectItem>
+                    <SelectItem value="selected_month" className="text-xs md:text-sm">Selected Month ({monthNamesList[selectedMonth]} {selectedYear})</SelectItem>
+                    <SelectItem value="full_year" className="text-xs md:text-sm">Full Year ({selectedYear})</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterType} onValueChange={(value) => setFilterType(value as string | 'all')}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="all" className="text-xs md:text-sm">All Types</SelectItem>
+                    <SelectItem value="income" className="text-xs md:text-sm">Income</SelectItem>
+                    <SelectItem value="expense" className="text-xs md:text-sm">Expense</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all">All Categories/Sources</SelectItem>
-                    {allCategoriesState.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
+                    <SelectItem value="all" className="text-xs md:text-sm">All Categories/Sources</SelectItem>
+                    {allCategoriesState.map(cat => <SelectItem key={cat.id} value={cat.id} className="text-xs md:text-sm">{cat.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={filterPaymentMethodId} onValueChange={setFilterPaymentMethodId}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all">All Payment Methods</SelectItem>
-                    {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}
+                    <SelectItem value="all" className="text-xs md:text-sm">All Payment Methods</SelectItem>
+                    {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id} className="text-xs md:text-sm">{pm.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground">
+                  <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
                     <Download className="mr-2 h-4 w-4" />
                     Export to CSV
                   </Button>
@@ -315,125 +315,128 @@ export default function TransactionsPage() {
               </div>
             </div>
 
-            <div className="my-4 p-4 border rounded-lg bg-background/50 border-primary/20">
-              <div className="flex flex-wrap justify-between items-center gap-4">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <List className="mr-2 h-5 w-5 text-primary" />
+            <div className="my-4 p-3 md:p-4 border rounded-lg bg-background/50 border-primary/20">
+              <div className="flex flex-col sm:flex-row flex-wrap justify-between items-center gap-2 md:gap-4">
+                <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
+                  <List className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s) for <strong className="text-accent">{currentPeriodText}</strong></span>
                 </div>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Sigma className="mr-2 h-5 w-5 text-primary" />
+                <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
+                  <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
                 </div>
               </div>
             </div>
 
             {isLoading ? (
-              <div className="flex justify-center items-center h-[400px]">
-                <Loader2 className="h-12 w-12 text-accent animate-spin" />
-                <p className="ml-4 text-primary">Loading transactions...</p>
+              <div className="flex justify-center items-center h-[300px] sm:h-[400px]">
+                <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-accent animate-spin" />
+                <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading transactions...</p>
               </div>
             ) : (
-            <ScrollArea className="h-[500px] rounded-md border border-primary/30 p-1 bg-background/50">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-primary/10 border-b-primary/30">
-                    <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Date{getSortIndicator('date')}</TableHead>
-                    <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Description{getSortIndicator('description')}</TableHead>
-                    <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Type{getSortIndicator('type')}</TableHead>
-                    <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-muted-foreground font-semibold hover:text-accent">Amount (₹){getSortIndicator('amount')}</TableHead>
-                    <TableHead onClick={() => requestSort('categoryName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Category/Source{getSortIndicator('categoryName')}</TableHead>
-                    <TableHead onClick={() => requestSort('paymentMethodName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Payment Method{getSortIndicator('paymentMethodName')}</TableHead>
-                    <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent">Expense Type{getSortIndicator('expenseType')}</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <motion.tbody variants={tableContainerVariants} initial="hidden" animate="visible">
-                  {filteredTransactions.length > 0 ? (
-                    filteredTransactions.map((transaction) => (
-                      <motion.tr
-                        key={transaction.id}
-                        variants={tableRowVariants}
-                        layout
-                        className="hover:bg-accent/10 border-b-primary/20"
-                      >
-                        <TableCell className="text-foreground/90">{format(new Date(transaction.date), "dd MMM, yyyy")}</TableCell>
-                        <TableCell className="font-medium text-foreground">{transaction.description}</TableCell>
-                        <TableCell>
-                          <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
-                                className={cn(
-                                  transaction.type === 'income' ?
-                                  'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' :
-                                  'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 hover:bg-red-500/30'
-                                )}>
-                            {transaction.type === 'income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
-                            {transaction.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={`text-right font-semibold ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-foreground/90">{transaction.category?.name || transaction.source}</TableCell>
-                        <TableCell className="text-foreground/90">{transaction.paymentMethod?.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          {transaction.type === 'expense' && transaction.expenseType && (
-                            <Badge
-                              variant={'outline'}
-                              className={cn(
-                                `capitalize border-opacity-50`,
-                                transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
-                                transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
-                                'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
-                              )}
-                            >
-                              {transaction.expenseType.replace('_expense', '')}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="space-x-1">
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(transaction)} className="text-accent hover:text-accent/80 hover:bg-accent/10">
-                              <Edit3 className="h-4 w-4" />
-                              <span className="sr-only">Edit Transaction</span>
-                            </Button>
-                          </motion.div>
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-400 hover:bg-red-500/10">
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Delete Transaction</span>
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="text-accent">Are you sure you want to delete this transaction?</AlertDialogTitle>
-                                <AlertDialogDescription className="text-muted-foreground">
-                                  This action cannot be undone. This will permanently remove the transaction: "{transaction.description}".
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
-                                  {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                  {isDeleting ? "Deleting..." : "Delete"}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                          </motion.div>
-                        </TableCell>
-                      </motion.tr>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
-                        No transactions found for {currentPeriodText}. Try adjusting your filters or adding a new transaction.
-                      </TableCell>
+            <ScrollArea className="h-[400px] sm:h-[500px] rounded-md border border-primary/30 p-0 bg-background/50">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-primary/10 border-b-primary/30">
+                      <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Date{getSortIndicator('date')}</TableHead>
+                      <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Description{getSortIndicator('description')}</TableHead>
+                      <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Type{getSortIndicator('type')}</TableHead>
+                      <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Amount (₹){getSortIndicator('amount')}</TableHead>
+                      <TableHead onClick={() => requestSort('categoryName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Category/Source{getSortIndicator('categoryName')}</TableHead>
+                      <TableHead onClick={() => requestSort('paymentMethodName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Payment Method{getSortIndicator('paymentMethodName')}</TableHead>
+                      <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Expense Type{getSortIndicator('expenseType')}</TableHead>
+                      <TableHead className="text-muted-foreground font-semibold text-xs sm:text-sm whitespace-nowrap">Actions</TableHead>
                     </TableRow>
-                  )}
-                </motion.tbody>
-              </Table>
+                  </TableHeader>
+                  <motion.tbody variants={tableContainerVariants} initial="hidden" animate="visible">
+                    {filteredTransactions.length > 0 ? (
+                      filteredTransactions.map((transaction) => (
+                        <motion.tr
+                          key={transaction.id}
+                          variants={tableRowVariants}
+                          layout
+                          className="hover:bg-accent/10 border-b-primary/20 text-xs sm:text-sm"
+                        >
+                          <TableCell className="text-foreground/90 whitespace-nowrap">{format(new Date(transaction.date), "dd MMM, yy")}</TableCell>
+                          <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
+                          <TableCell>
+                            <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
+                                  className={cn(
+                                    "text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5",
+                                    transaction.type === 'income' ?
+                                    'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' :
+                                    'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 hover:bg-red-500/30'
+                                  )}>
+                              {transaction.type === 'income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
+                              {transaction.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={`text-right font-semibold whitespace-nowrap ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-foreground/90 min-w-[120px]">{transaction.category?.name || transaction.source}</TableCell>
+                          <TableCell className="text-foreground/90 min-w-[120px]">{transaction.paymentMethod?.name || 'N/A'}</TableCell>
+                          <TableCell>
+                            {transaction.type === 'expense' && transaction.expenseType && (
+                              <Badge
+                                variant={'outline'}
+                                className={cn(
+                                  `capitalize border-opacity-50 text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5`,
+                                  transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
+                                  transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
+                                  'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
+                                )}
+                              >
+                                {transaction.expenseType.replace('_expense', '')}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="space-x-0.5 sm:space-x-1 whitespace-nowrap">
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
+                              <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(transaction)} className="text-accent hover:text-accent/80 hover:bg-accent/10 h-7 w-7 sm:h-8 sm:w-8">
+                                <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                <span className="sr-only">Edit Transaction</span>
+                              </Button>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-400 hover:bg-red-500/10 h-7 w-7 sm:h-8 sm:w-8">
+                                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  <span className="sr-only">Delete Transaction</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-accent">Are you sure you want to delete this transaction?</AlertDialogTitle>
+                                  <AlertDialogDescription className="text-muted-foreground">
+                                    This action cannot be undone. This will permanently remove the transaction: "{transaction.description}".
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
+                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    {isDeleting ? "Deleting..." : "Delete"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                            </motion.div>
+                          </TableCell>
+                        </motion.tr>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                          No transactions found for {currentPeriodText}. Try adjusting your filters or adding a new transaction.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </motion.tbody>
+                </Table>
+              </div>
             </ScrollArea>
             )}
           </CardContent>
@@ -441,7 +444,7 @@ export default function TransactionsPage() {
       </motion.div>
 
       <AlertDialog open={editingTransaction !== null} onOpenChange={(isOpen) => !isOpen && setEditingTransaction(null)}>
-          <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg sm:max-w-2xl">
+          <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg w-[90vw] max-w-lg sm:max-w-xl md:max-w-2xl rounded-lg">
               <AlertDialogHeader>
                   <AlertDialogTitle className="text-accent text-xl">
                     {editingTransaction ? "Edit Transaction" : "New Transaction"}
@@ -450,7 +453,7 @@ export default function TransactionsPage() {
                     {editingTransaction ? "Modify the details of this transaction." : "Record a new income or expense."}
                   </AlertDialogDescription>
               </AlertDialogHeader>
-              <div className="py-4">
+              <div className="py-4 max-h-[70vh] overflow-y-auto pr-2">
                 <TransactionForm
                   onTransactionAdded={handleTransactionUpdateOrAdd}
                   initialTransactionData={editingTransaction}
@@ -462,6 +465,3 @@ export default function TransactionsPage() {
     </main>
   );
 }
-
-
-    

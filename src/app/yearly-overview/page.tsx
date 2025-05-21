@@ -48,8 +48,8 @@ const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Inc
 export interface MonthlySummary {
   monthIndex: number;
   monthName: string;
-  monthShortName: string; // For chart labels
-  year: number; // For chart labels
+  monthShortName: string; 
+  year: number; 
   totalSpend: number;
   totalInvestment: number;
   totalSavings: number;
@@ -64,12 +64,13 @@ export default function YearlyOverviewPage() {
   const { toast } = useToast();
 
   const availableYears = useMemo(() => {
-    if (allTransactions.length === 0) return [new Date().getFullYear()];
+    if (allTransactions.length === 0 && !isLoadingData) return [new Date().getFullYear()];
     const years = new Set(allTransactions.map(t => new Date(t.date).getFullYear()));
     const currentYear = new Date().getFullYear();
     if (!years.has(currentYear)) years.add(currentYear);
+    if(years.size === 0) return [new Date().getFullYear()]; // Fallback if no transactions at all
     return Array.from(years).sort((a, b) => b - a);
-  }, [allTransactions]);
+  }, [allTransactions, isLoadingData]);
 
   const fetchTransactionsCallback = useCallback(async () => {
     setIsLoadingData(true);
@@ -178,23 +179,23 @@ export default function YearlyOverviewPage() {
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
-            <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
-              <CalendarRange className="w-8 h-8 text-accent transform rotate-[-3deg]" />
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <CalendarRange className="w-7 h-7 md:w-8 md:h-8 text-accent transform rotate-[-3deg]" />
               Yearly Financial Overview
             </CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
               A month-by-month summary of your finances for the selected year.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-6">
               <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
-                <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground">
+                <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm">
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-primary/60 text-foreground">
                   {availableYears.map(year => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    <SelectItem key={year} value={year.toString()} className="text-xs md:text-sm">{year}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -224,34 +225,34 @@ export default function YearlyOverviewPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-primary/5 border-b-primary/20">
-                        <TableHead className="font-semibold text-muted-foreground w-[120px]">Month</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground">Total Income</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground">Total Spend</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground">Total Savings</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground">Total Investment</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground">Cashbacks/Interests/Dividends</TableHead>
+                        <TableHead className="font-semibold text-muted-foreground w-[100px] sm:w-[120px] text-xs sm:text-sm whitespace-nowrap">Month</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Income</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Spend</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Savings</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Investment</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Cashbacks/Interests/Dividends</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {yearlySummaryData.map((data) => (
-                        <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50">
-                          <TableCell className="font-medium text-foreground">{data.monthName}</TableCell>
-                          <TableCell className={cn("text-right", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
+                        <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50 text-xs sm:text-sm">
+                          <TableCell className="font-medium text-foreground whitespace-nowrap">{data.monthName}</TableCell>
+                          <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
+                          <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
                         </motion.tr>
                       ))}
                     </TableBody>
                     <TableFooter>
-                      <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                        <TableHead className="font-bold text-primary">Total ({selectedYear})</TableHead>
-                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
+                      <TableRow className="bg-primary/10 border-t-2 border-primary/30 text-xs sm:text-sm">
+                        <TableHead className="font-bold text-primary whitespace-nowrap">Total ({selectedYear})</TableHead>
+                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
+                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
                       </TableRow>
                     </TableFooter>
                   </Table>

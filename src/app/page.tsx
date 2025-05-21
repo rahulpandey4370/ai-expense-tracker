@@ -130,7 +130,7 @@ export default function DashboardPage() {
 
   const lastMonthTotalSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1);
+    prevMonthDate.setDate(1); // Set to first of the month before going back
     prevMonthDate.setMonth(selectedDate.getMonth() - 1);
 
     const lastMonth = prevMonthDate.getMonth();
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse bg-background/30 backdrop-blur-sm">
         <div className="flex justify-center items-center h-screen">
           <Loader2 className="h-16 w-16 text-primary animate-spin" />
-          <p className="ml-4 text-lg text-primary">Loading dashboard data...</p>
+          <p className="ml-4 text-lg text-primary">Loading FinWise AI dashboard...</p>
         </div>
       </main>
     );
@@ -159,7 +159,7 @@ export default function DashboardPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
       <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -202,10 +202,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      <Card className={cn("shadow-xl rounded-xl p-0 sm:p-0 bg-card", glowClass)}>
+      <Card className={cn("p-0 sm:p-0 bg-card", glowClass)}>
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
       </Card>
-
 
       {/* AI Insights and Chatbot side-by-side */}
       <motion.div

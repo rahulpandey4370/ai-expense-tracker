@@ -200,8 +200,10 @@ export default function ReportsPage() {
       const canvas = await html2canvas(reportContentElement, {
         scale: 2, 
         useCORS: true, 
-        logging: true,
-        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim(),
+        logging: false, // Quieten logs in console
+        backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() === "0 0% 3.9%" // dark mode check
+            ? "hsl(var(--background))" // Use actual dark bg
+            : "#FFFFFF", // Use white for light mode for better PDF readability
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
@@ -239,37 +241,37 @@ export default function ReportsPage() {
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
-            <CardTitle className="text-3xl font-bold text-primary flex items-center gap-2">
-              <FileText className="w-8 h-8 text-accent transform rotate-[-3deg]" />
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <FileText className="w-7 h-7 md:w-8 md:h-8 text-accent transform rotate-[-3deg]" />
               Financial Reports
             </CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
               Analyze your spending and income patterns. Use filters to select the report period.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-6 flex flex-wrap items-center gap-4">
+            <div className="mb-6 flex flex-col sm:flex-row flex-wrap items-center gap-3 md:gap-4">
               <Select value={reportMonth.toString()} onValueChange={handleMonthChangeInternal}>
-                <SelectTrigger className="w-full md:w-[180px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground">
+                <SelectTrigger className="w-full sm:w-[180px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm">
                   <SelectValue placeholder="Select Report Period" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-primary/60 text-foreground">
-                  <SelectItem value="-1">Annual Report</SelectItem>
+                  <SelectItem value="-1" className="text-xs md:text-sm">Annual Report</SelectItem>
                   {monthNamesList.map((month, index) => (
-                    <SelectItem key={index} value={index.toString()}>{month}</SelectItem>
+                    <SelectItem key={index} value={index.toString()} className="text-xs md:text-sm">{month}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Select value={reportYear.toString()} onValueChange={handleYearChange}>
-                <SelectTrigger className="w-full md:w-[120px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground">
+                <SelectTrigger className="w-full sm:w-[120px] bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm">
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-primary/60 text-foreground">
-                  {contextYears.map(year => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}
+                  {contextYears.map(year => <SelectItem key={year} value={year.toString()} className="text-xs md:text-sm">{year}</SelectItem>)}
                 </SelectContent>
               </Select>
               <motion.div {...buttonHoverTap}>
-                <Button onClick={exportReportToPDF} variant="outline" className="bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground">
+                <Button onClick={exportReportToPDF} variant="outline" className="w-full sm:w-auto bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
                     <Download className="mr-2 h-4 w-4" />
                     Export to PDF
                 </Button>
@@ -278,18 +280,18 @@ export default function ReportsPage() {
           
             <motion.div 
               id="report-content-area" 
-              className="space-y-6 p-4 bg-background rounded-lg"
+              className="space-y-6 p-2 sm:p-4 bg-background rounded-lg"
               variants={cardVariants}
               initial="hidden"
               animate="visible"
             >
               {isLoadingData ? (
-                <div className="flex justify-center items-center h-[400px]">
-                  <Loader2 className="h-12 w-12 text-accent animate-spin" />
-                  <p className="ml-4 text-primary">Loading report data...</p>
+                <div className="flex justify-center items-center h-[300px] sm:h-[400px]">
+                  <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-accent animate-spin" />
+                  <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading report data...</p>
                 </div>
               ) : filteredTransactionsForPeriod.length === 0 && !isLoadingData ? (
-                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 dark:border-yellow-500/70 shadow-md">
+                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                   <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for this Period</AlertTitle>
                   <AlertDescription>
@@ -304,7 +306,7 @@ export default function ReportsPage() {
                             transactions={filteredTransactionsForPeriod} 
                             selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
                             selectedYear={reportYear}
-                            chartHeightClass="max-h-[400px] min-h-[350px] md:min-h-[400px]"
+                            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
                         />
                     </motion.div>
                     <motion.div variants={cardVariants}>
@@ -312,7 +314,7 @@ export default function ReportsPage() {
                             transactions={filteredTransactionsForPeriod} 
                             selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} 
                             selectedYear={reportYear}
-                            chartHeightClass="max-h-[400px] min-h-[350px] md:min-h-[400px]"
+                            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
                         />
                     </motion.div>
                   </div>
@@ -326,11 +328,11 @@ export default function ReportsPage() {
               <motion.div variants={cardVariants}>
                 <Card className={cn("shadow-lg border-accent/30 bg-accent/10", glowClass)}>
                   <CardHeader>
-                    <CardTitle className="text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
+                    <CardTitle className="text-lg sm:text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-accent" />
                       AI Insights
                     </CardTitle>
-                    <CardDescription className="text-accent/80 dark:text-accent-foreground/80">
+                    <CardDescription className="text-xs sm:text-sm text-accent/80 dark:text-accent-foreground/80">
                       AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${ reportMonth === 0 ? monthNamesList[11] + ' ' + (reportYear-1) : monthNamesList[reportMonth-1] + ' ' + reportYear}`}.
                     </CardDescription>
                   </CardHeader>
@@ -342,19 +344,19 @@ export default function ReportsPage() {
                         <Skeleton className="h-4 w-3/4 bg-accent/30" />
                       </div>
                     )}
-                    {aiError && <p className="text-sm text-red-600 dark:text-red-400">{aiError}</p>}
+                    {aiError && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{aiError}</p>}
                     {aiAnalysis && !isAiLoading && (
-                      <div className="text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
+                      <div className="text-xs sm:text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
                         {aiAnalysis.split('\n').map((line, index) => (
                           <p key={index}>{line.replace(/^- /, '• ')}</p>
                         ))}
                       </div>
                     )}
                     {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactionsForPeriod.length === 0 && !isLoadingData) && (
-                      <p className="text-sm text-muted-foreground">Not enough data to generate AI analysis for this period.</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Not enough data to generate AI analysis for this period.</p>
                     )}
                     <motion.div {...buttonHoverTap}>
-                      <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactionsForPeriod.length === 0 && !isLoadingData)} className="w-full mt-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold">
+                      <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactionsForPeriod.length === 0 && !isLoadingData)} className="w-full mt-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-xs md:text-sm">
                         {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
                         {isAiLoading ? "Generating..." : "Generate AI Analysis"}
                       </Button>

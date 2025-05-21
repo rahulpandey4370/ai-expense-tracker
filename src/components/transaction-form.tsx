@@ -21,11 +21,11 @@ import { format, parse as parseDateFns } from "date-fns";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
-import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
-import { parseReceiptImage } from '@/ai/flows/parse-receipt-flow';
+import { parseTransactionsFromText, type ParsedAITransaction } from '@/ai/flows/parse-transactions-flow';
+import { parseReceiptImage, type ParsedReceiptTransaction } from '@/ai/flows/parse-receipt-flow';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { TransactionInputSchema, type ParsedAITransaction, type ParsedReceiptTransaction } from '@/lib/types';
+import { TransactionInputSchema } from '@/lib/types';
 import Image from 'next/image';
 
 
@@ -279,9 +279,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       const values = line.split('\t');
       const errors: string[] = [];
 
-      // Expected: Description, Category Name, Amount, Total Amount (ignored), Date (DD/MM/YYYY), Expense Type, Payment Method Name
+      // Expected: Description, Category Name, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method Name
       if (values.length < 7) {
-        errors.push("Expected 7 columns: Description, Category, Amount, Ignored Column, Date (DD/MM/YYYY), Expense Type, Payment Method.");
+        errors.push("Expected 7 columns: Description, Category, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method.");
         return { originalRow: line, rowIndex: index, errors, type: 'expense' };
       }
 
@@ -417,8 +417,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         } else {
             errorCount++;
             console.error("Bulk addTransaction error:", result.reason);
+            const errorMessage = result.reason instanceof Error ? result.reason.message : "Unknown save error";
             if (originalParsedTx) {
-                originalParsedTx.errors = [...(originalParsedTx.errors || []), `Save Error: ${result.reason instanceof Error ? result.reason.message : "Unknown save error"}`];
+                originalParsedTx.errors = [...(originalParsedTx.errors || []), `Save Error: ${errorMessage}`];
+            } else {
+                // This case might occur if the matching logic fails or if transaction was already marked with error
+                toast({ title: "Save Error (Bulk)", description: `An item failed to save: ${errorMessage}`, variant: "destructive"});
             }
         }
     });
@@ -458,16 +462,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       });
       
       if (result.summaryMessage && result.parsedTransactions.length === 0) {
-        // If there's a summary message and no transactions, it might be an error message from the flow
         setAiProcessingError(result.summaryMessage);
         toast({ title: "AI Processing Note", description: result.summaryMessage, variant: "default" });
-      } else {
+      } else if(result.parsedTransactions.length > 0){
         setParsedAITransactions(result.parsedTransactions);
-        if (result.parsedTransactions.length > 0) {
-            toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
-        } else {
-            toast({ title: "AI Processing Complete", description: result.summaryMessage || "The AI could not identify any clear transactions in the text." });
-        }
+        toast({ title: "AI Processing Complete", description: `Found ${result.parsedTransactions.length} potential transactions. Please review.` });
+      } else {
+        setAiProcessingError(result.summaryMessage || "The AI could not identify any clear transactions in the text.");
+        toast({ title: "AI Processing Complete", description: result.summaryMessage || "The AI could not identify any clear transactions in the text." });
       }
 
     } catch (error: any) {
@@ -482,7 +484,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const handleAIReviewChange = (index: number, field: keyof TransactionInput, value: any) => {
     const updated = [...aiReviewTransactions];
-    if (!updated[index]) updated[index] = {} as TransactionInput; // Should not happen if initialized correctly
+    if (!updated[index]) updated[index] = {} as TransactionInput; 
     
     const currentItem = { ...updated[index] };
 
@@ -493,7 +495,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             currentItem.expenseType = undefined;
             const incomeCat = incomeCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (incomeCategories.length > 0 ? incomeCategories[0] : undefined);
             currentItem.categoryId = incomeCat?.id;
-        } else { // expense
+        } else { 
             currentItem.source = undefined;
             const expenseCat = expenseCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (expenseCategories.length > 0 ? expenseCategories[0] : undefined);
             currentItem.categoryId = expenseCat?.id;
@@ -515,9 +517,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (parsedAITransactions.length > 0) {
       const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
         let catId, pmId;
-        let transactionDate = new Date(); // Default to now
+        let transactionDate = new Date(); 
         try {
-            if(aiTx.date) { // aiTx.date is YYYY-MM-DD string from AI
+            if(aiTx.date) { 
                 const parsed = parseDateFns(aiTx.date, 'yyyy-MM-dd', new Date());
                 if(!isNaN(parsed.getTime())) transactionDate = parsed;
             }
@@ -527,21 +529,21 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         if (aiTx.type === 'expense') {
           catId = expenseCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
           pmId = paymentMethods.find(p => p.name.toLowerCase() === aiTx.paymentMethodNameGuess?.toLowerCase())?.id;
-        } else { // income
+        } else { 
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
 
         return {
-          date: transactionDate, // This will be a Date object
+          date: transactionDate, 
           description: aiTx.description || "AI Parsed Transaction",
           amount: aiTx.amount || 0,
           type: aiTx.type || 'expense',
-          categoryId: catId, // Will be undefined if no match
-          paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, // Will be undefined if no match or not an expense
+          categoryId: catId, 
+          paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, 
           expenseType: aiTx.type === 'expense' ? (aiTx.expenseTypeNameGuess || 'need') : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
-      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); // Basic filter for plausible transactions
+      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
       setAiReviewTransactions(initialReviewItems);
     } else {
       setAiReviewTransactions([]);
@@ -552,7 +554,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
-    const submissionErrors: string[] = [];
+    const submissionErrors: { description: string, error: string }[] = [];
 
     const transactionsToSubmit: TransactionInput[] = [];
     for(const [index, reviewItem] of aiReviewTransactions.entries()) {
@@ -566,7 +568,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 .join('; ');
             const itemDescription = reviewItem.description || `Item ${index + 1}`;
             const errorMsg = `Validation failed for "${itemDescription.substring(0,30)}...": ${readableErrors}`;
-            submissionErrors.push(errorMsg);
+            submissionErrors.push({description: itemDescription, error: errorMsg});
             toast({title: "AI Review Item Invalid", description: errorMsg, variant: "destructive"});
         }
     }
@@ -592,7 +594,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             errorCount++;
             const errorMessage = result.reason instanceof Error ? result.reason.message : "Unknown error saving transaction.";
             console.error(`AI submission error for "${originalTxDescription}":`, result.reason);
-            submissionErrors.push(`Failed to save "${originalTxDescription.substring(0,30)}...": ${errorMessage}`);
+            submissionErrors.push({ description: originalTxDescription, error: `Failed to save: ${errorMessage}`});
             toast({ title: "Save Error", description: `Could not save transaction "${originalTxDescription.substring(0,30)}...": ${errorMessage}`, variant: "destructive" });
         }
     });
@@ -630,7 +632,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setReceiptPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      setParsedReceiptTransaction(null); // Clear previous AI results
+      setParsedReceiptTransaction(null); 
       setAiReceiptReviewTransaction(null);
       setAiReceiptError(null);
     }
@@ -651,7 +653,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setAiReceiptError(null);
 
     try {
-      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'})); // Receipts are expenses
+      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'})); 
       const paymentMethodNamesForAI = paymentMethods.map(p => ({ id: p.id, name: p.name }));
 
       const result = await parseReceiptImage({
@@ -665,7 +667,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           toast({ title: "AI Receipt Scan Issue", description: result.parsedTransaction.error, variant: "default" });
       } else {
           setParsedReceiptTransaction(result.parsedTransaction);
-          if (result.parsedTransaction && (result.parsedTransaction.amount || result.parsedTransaction.description)) { // Looser check
+          if (result.parsedTransaction && (result.parsedTransaction.amount || result.parsedTransaction.description)) { 
             let catId, pmId;
             let transactionDate = new Date();
             try {
@@ -711,8 +713,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (field === 'date' && value instanceof Date) {
         updated.date = value;
       }
-      // If type changes, reset related fields if necessary (though receipts are usually expenses)
-      // if (field === 'type') { ... } 
       return updated;
     });
   };
@@ -898,23 +898,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </AlertDescription>
             </Alert>
           <ScrollArea className="h-[300px] border rounded-md p-2 bg-background/50">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Row</TableHead><TableHead>Date</TableHead><TableHead>Desc</TableHead><TableHead>Amt</TableHead><TableHead>Cat</TableHead><TableHead>PM</TableHead><TableHead>ExpType</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {parsedBulkTransactions.map((pt, i) => (
                   <TableRow key={i} className={pt.errors && pt.errors.length > 0 ? "bg-destructive/10" : "hover:bg-accent/5"}>
                     <TableCell className="text-xs">{pt.rowIndex + 1}</TableCell>
-                    <TableCell className="text-xs">{pt.date ? format(pt.date, 'dd/MM/yy') : 'N/A'}</TableCell>
-                    <TableCell className="text-xs max-w-[150px] truncate" title={pt.description}>{pt.description || 'N/A'}</TableCell>
-                    <TableCell className="text-xs">₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{pt.date ? format(pt.date, 'dd/MM/yy') : 'N/A'}</TableCell>
+                    <TableCell className="text-xs max-w-[150px] sm:max-w-[200px] truncate" title={pt.description}>{pt.description || 'N/A'}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
                     <TableCell className="text-xs max-w-[100px] truncate" title={pt.categoryName}>{pt.categoryName}</TableCell>
                     <TableCell className="text-xs max-w-[100px] truncate" title={pt.paymentMethodName}>{pt.paymentMethodName}</TableCell>
-                    <TableCell className="text-xs">{pt.expenseType}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{pt.expenseType}</TableCell>
                     <TableCell className="text-xs">{pt.errors && pt.errors.length > 0 ? <span className="text-red-500">{pt.errors.join(', ')}</span> : <span className="text-green-500">Valid</span>}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           </ScrollArea>
           <Button onClick={handleSubmitBulk} disabled={isLoading || parsedBulkTransactions.filter(t => !t.errors || t.errors.length === 0).length === 0} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
@@ -972,7 +974,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <div className="space-y-4 p-3">
             {aiReviewTransactions.map((tx, index) => (
               <Card key={index} className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div>
                     <Label className={cn(labelClasses, "text-xs")}>Date</Label>
                     <Popover>
@@ -1004,7 +1006,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
                 {tx.type === 'expense' && (
                     <>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                             <Label className={cn(labelClasses, "text-xs")}>Category</Label>
                             <Select value={tx.categoryId} onValueChange={(val) => handleAIReviewChange(index, 'categoryId', val)}>
@@ -1032,7 +1034,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     </>
                 )}
                 {tx.type === 'income' && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                             <Label className={cn(labelClasses, "text-xs")}>Category</Label>
                              <Select value={tx.categoryId} onValueChange={(val) => handleAIReviewChange(index, 'categoryId', val)}>
@@ -1068,7 +1070,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const renderAIReceiptForm = () => (
     <div className="space-y-4">
         <Label htmlFor="ai-receipt-input" className={labelClasses}>Upload Receipt Image</Label>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
             <Input
                 id="ai-receipt-input"
                 type="file"
@@ -1077,7 +1079,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 className={cn("block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20", inputClasses)}
                 disabled={isProcessingAIReceipt || isLoading}
             />
-             <Button onClick={handleProcessAIReceipt} disabled={isProcessingAIReceipt || isLoading || !receiptFile} className="bg-primary text-primary-foreground whitespace-nowrap" withMotion>
+             <Button onClick={handleProcessAIReceipt} disabled={isProcessingAIReceipt || isLoading || !receiptFile} className="bg-primary text-primary-foreground whitespace-nowrap w-full sm:w-auto" withMotion>
                 {isProcessingAIReceipt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileImage className="mr-2 h-4 w-4" />}
                 Scan with AI
             </Button>
@@ -1086,7 +1088,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         {receiptPreview && (
             <div className="mt-2 border rounded-md p-2 bg-background/50 flex flex-col items-center">
                 <p className="text-sm text-muted-foreground mb-1">Receipt Preview:</p>
-                <Image src={receiptPreview} alt="Receipt preview" width={200} height={300} className="max-w-full max-h-[250px] object-contain rounded-md border" data-ai-hint="receipt image" />
+                <Image src={receiptPreview} alt="Receipt preview" width={200} height={300} className="max-w-full max-h-[200px] sm:max-h-[250px] object-contain rounded-md border" data-ai-hint="receipt image" />
             </div>
         )}
 
@@ -1118,7 +1120,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     </AlertDescription>
                 </Alert>
                 <Card className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                         <div>
                             <Label className={cn(labelClasses, "text-xs")}>Date</Label>
                             <Popover>
@@ -1140,7 +1142,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <Label className={cn(labelClasses, "text-xs")}>Description (Merchant)</Label>
                         <Input value={aiReceiptReviewTransaction.description || ''} onChange={(e) => handleAIReceiptReviewChange('description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                             <Label className={cn(labelClasses, "text-xs")}>Category</Label>
                             <Select value={aiReceiptReviewTransaction.categoryId} onValueChange={(val) => handleAIReceiptReviewChange('categoryId', val)}>
@@ -1168,7 +1170,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     {parsedReceiptTransaction?.confidenceScore !== undefined && (
                         <p className="text-xs text-muted-foreground">AI Confidence: {(parsedReceiptTransaction.confidenceScore * 100).toFixed(0)}%</p>
                     )}
-                    {parsedReceiptTransaction?.error && ( // Display specific error from parsed receipt transaction
+                    {parsedReceiptTransaction?.error && ( 
                         <p className="text-xs text-red-500">AI Note: {parsedReceiptTransaction.error}</p>
                     )}
                 </Card>
@@ -1185,23 +1187,23 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   return (
     <FormWrapperComponent {...formWrapperProps}>
       {!initialTransactionData && (
-        <CardHeader className="p-6 pb-4">
-          <CardTitle className="flex items-center gap-2 text-xl text-primary">
-            <Paperclip className="h-6 w-6 text-accent" /> {cardTitleText}
+        <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl text-primary">
+            <Paperclip className="h-5 w-5 sm:h-6 sm:w-6 text-accent" /> {cardTitleText}
           </CardTitle>
-          <CardDescription className="text-muted-foreground">{cardDescriptionText}</CardDescription>
+          <CardDescription className="text-xs sm:text-sm text-muted-foreground">{cardDescriptionText}</CardDescription>
         </CardHeader>
       )}
-      <CardContent className={cn(initialTransactionData ? 'p-0' : 'p-6 pt-4', "bg-card rounded-b-xl")}>
+      <CardContent className={cn(initialTransactionData ? 'p-4 sm:p-6' : 'p-4 sm:p-6 pt-2 sm:pt-4', "bg-card rounded-b-xl")}>
         {initialTransactionData ? (
             renderSingleTransactionForm()
         ) : (
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'single' | 'bulk' | 'ai_text' | 'ai_receipt')} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
-                    <TabsTrigger value="single">Single Entry</TabsTrigger>
-                    <TabsTrigger value="bulk">Bulk Paste</TabsTrigger>
-                    <TabsTrigger value="ai_text">AI Text Input</TabsTrigger>
-                    <TabsTrigger value="ai_receipt">AI Receipt Scan</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4 h-auto flex-wrap md:h-10">
+                    <TabsTrigger value="single" className="text-xs sm:text-sm">Single Entry</TabsTrigger>
+                    <TabsTrigger value="bulk" className="text-xs sm:text-sm">Bulk Paste</TabsTrigger>
+                    <TabsTrigger value="ai_text" className="text-xs sm:text-sm">AI Text Input</TabsTrigger>
+                    <TabsTrigger value="ai_receipt" className="text-xs sm:text-sm">AI Receipt Scan</TabsTrigger>
                 </TabsList>
                 <TabsContent value="single">
                     {renderSingleTransactionForm()}
@@ -1221,4 +1223,3 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
-
