@@ -28,10 +28,10 @@ interface ExpenseTypeSplitChartProps {
 }
 
 const CHART_COLORS_EXPENSE_TYPE = {
-  need: "hsl(var(--chart-3))", // Bluish
-  want: "hsl(var(--chart-4))", // Orange-ish
-  investment_expense: "hsl(var(--chart-2))", // Greenish
-  other: "hsl(var(--muted))", // Muted for anything not categorized
+  need: "hsl(var(--chart-3))", 
+  want: "hsl(var(--chart-4))", 
+  investment_expense: "hsl(var(--chart-2))", 
+  other: "hsl(var(--muted))", 
 };
 
 const glowClass = "shadow-[var(--chart-glow-accent)]";
@@ -45,21 +45,31 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
       return acc;
     }, {} as Record<string, number>);
 
+  const totalExpenses = Object.values(expenseData).reduce((sum, value) => sum + value, 0);
+
   const chartData = Object.entries(expenseData)
-    .map(([name, value]) => ({
-      name: name === 'investment_expense' ? 'Investment' : name.charAt(0).toUpperCase() + name.slice(1), // Capitalize and rename
-      value,
-      fill: CHART_COLORS_EXPENSE_TYPE[name as keyof typeof CHART_COLORS_EXPENSE_TYPE] || CHART_COLORS_EXPENSE_TYPE.other,
-    }))
+    .map(([name, value]) => {
+      const percentage = totalExpenses > 0 ? (value / totalExpenses) * 100 : 0;
+      const displayName = name === 'investment_expense' ? 'Investment' : name.charAt(0).toUpperCase() + name.slice(1);
+      return {
+        name: displayName,
+        value,
+        percentage: parseFloat(percentage.toFixed(1)), // Store percentage
+        fill: CHART_COLORS_EXPENSE_TYPE[name as keyof typeof CHART_COLORS_EXPENSE_TYPE] || CHART_COLORS_EXPENSE_TYPE.other,
+      };
+    })
     .sort((a, b) => b.value - a.value);
 
 
   const chartConfig = chartData.reduce((acc, item) => {
-    acc[item.name] = { label: item.name, color: item.fill };
+    acc[item.name] = { 
+      label: `${item.name} (${item.percentage}%)`, // Label for legend
+      color: item.fill 
+    };
     return acc;
   }, {} as any);
 
-  const totalExpenses = chartData.reduce((sum, item) => sum + item.value, 0);
+  const topExpenseType = chartData.length > 0 ? chartData[0] : null;
 
   if (chartData.length === 0) {
     return (
@@ -79,7 +89,10 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
     <Card className={cn("flex flex-col shadow-lg", glowClass)}>
       <CardHeader className="items-center pb-0">
         <CardTitle>Expense Split (Need/Want/Investment)</CardTitle>
-        <CardDescription>Distribution for {selectedMonthName} {selectedYear}.</CardDescription>
+        <CardDescription>
+          Distribution for {selectedMonthName} {selectedYear}.
+          {topExpenseType && ` Top: ${topExpenseType.name} (${topExpenseType.percentage}%)`}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
         <ChartContainer
@@ -89,12 +102,19 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
           <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel nameKey="name" formatter={(value, name, props) => ([`₹${(props.payload?.value as number || 0).toLocaleString()}`, name])} />}
+              content={<ChartTooltipContent 
+                hideLabel 
+                nameKey="name" 
+                formatter={(value, name, props) => {
+                  const percentage = props.payload?.percentage || 0;
+                  return [`₹${(value as number || 0).toLocaleString()} (${percentage}%)`, name];
+                }} 
+              />}
             />
             <Pie
               data={chartData}
               dataKey="value"
-              nameKey="name"
+              nameKey="name" // This will be used by ChartLegendContent if not overridden
               innerRadius="30%"
               outerRadius="80%"
               strokeWidth={2}
@@ -104,7 +124,14 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}
             </Pie>
-            <ChartLegend content={<ChartLegendContent nameKey="name" className="flex-wrap justify-center" />} />
+            <ChartLegend 
+              content={<ChartLegendContent nameKey="name" formatter={(value, entry: any) => {
+                 // entry.payload here is the actual item from chartData
+                 const item = chartData.find(d => d.name === entry.payload.name);
+                 return item ? `${item.name} (${item.percentage}%)` : value;
+              }} />} 
+              className="flex-wrap justify-center" 
+            />
           </PieChart>
         </ChartContainer>
       </CardContent>

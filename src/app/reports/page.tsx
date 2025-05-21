@@ -14,7 +14,7 @@ import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
-import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart'; // Import new chart
+import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { comparativeExpenseAnalysis, type ComparativeExpenseAnalysisInput } from '@/ai/flows/comparative-expense-analysis';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -202,9 +202,9 @@ export default function ReportsPage() {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: document.documentElement.classList.contains('dark')
-            ? getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
-            : "#FFFFFF",
+         backgroundColor: document.documentElement.classList.contains('dark')
+            ? getComputedStyle(document.documentElement).getPropertyValue('--background').trim() // Get dark mode bg color
+            : "#FFFFFF", // Default to white for light mode
       });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
@@ -219,8 +219,8 @@ export default function ReportsPage() {
       const imgHeight = canvas.height;
 
       const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const newImgWidth = imgWidth * ratio * 0.95;
-      const newImgHeight = imgHeight * ratio * 0.95;
+      const newImgWidth = imgWidth * ratio * 0.95; // Add some padding
+      const newImgHeight = imgHeight * ratio * 0.95; // Add some padding
 
       const x = (pdfWidth - newImgWidth) / 2;
       const y = (pdfHeight - newImgHeight) / 2;
@@ -292,10 +292,10 @@ export default function ReportsPage() {
                   <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading report data...</p>
                 </div>
               ) : filteredTransactionsForPeriod.length === 0 && !isLoadingData ? (
-                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
+                <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 dark:border-yellow-400/50 shadow-md">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                   <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for this Period</AlertTitle>
-                  <AlertDescription>
+                  <AlertDescription className="text-yellow-700 dark:text-yellow-300">
                     No transactions found for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}. Try a different period or add some transactions.
                   </AlertDescription>
                 </Alert>
@@ -327,7 +327,7 @@ export default function ReportsPage() {
                         />
                     </motion.div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6"> {/* Changed from md:grid-cols-2 */}
                       <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                       <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                   </div>
