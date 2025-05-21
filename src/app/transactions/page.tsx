@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { AppTransaction, Category, PaymentMethod } from '@/lib/types';
+import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List } from "lucide-react";
@@ -29,6 +29,7 @@ import {
 import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -50,9 +51,10 @@ const tableRowVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
 };
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 
 type ViewMode = 'selected_month' | 'full_year';
+type SortableKeys = keyof AppTransaction | 'categoryName' | 'paymentMethodName';
 
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
@@ -64,15 +66,18 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState<string | 'all'>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
   const [filterPaymentMethodId, setFilterPaymentMethodId] = useState<string | 'all'>('all');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof AppTransaction | 'categoryName' | 'paymentMethodName' | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
+  const [filterExpenseType, setFilterExpenseType] = useState<string | 'all'>('all');
+  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
 
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast } = useToast();
-  const { selectedMonth, selectedYear, monthNamesList } = useDateSelection();
+  const { selectedMonth, selectedYear, monthNamesList, handleMonthChange, handleYearChange } = useDateSelection();
   const [viewMode, setViewMode] = useState<ViewMode>('selected_month');
+  const searchParams = useSearchParams();
+  const hasAppliedInitialParams = useRef(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -101,22 +106,61 @@ export default function TransactionsPage() {
   }, [fetchData]);
 
   useEffect(() => {
+    if (!isLoading && !hasAppliedInitialParams.current) {
+      const paramMonth = searchParams.get('month');
+      const paramYear = searchParams.get('year');
+      const paramType = searchParams.get('type');
+      const paramExpenseType = searchParams.get('expenseType');
+
+      let dateChangedByParams = false;
+
+      if (paramMonth !== null && paramYear !== null) {
+        const monthNum = parseInt(paramMonth, 10);
+        const yearNum = parseInt(paramYear, 10);
+        if (!isNaN(monthNum) && monthNum >= 0 && monthNum < 12 && !isNaN(yearNum)) {
+          if (selectedMonth !== monthNum) {
+            handleMonthChange(monthNum.toString());
+            dateChangedByParams = true;
+          }
+          if (selectedYear !== yearNum) {
+            handleYearChange(yearNum.toString());
+            dateChangedByParams = true;
+          }
+          setViewMode('selected_month'); // Ensure view mode matches linked KPI
+        }
+      }
+      
+      if (paramType) {
+        setFilterType(paramType);
+      }
+      if (paramExpenseType) {
+        setFilterExpenseType(paramExpenseType);
+      }
+      
+      // Only mark as applied if we actually read some params, 
+      // or if no params were present on first load.
+      if (paramMonth || paramYear || paramType || paramExpenseType || searchParams.toString() === '') {
+         hasAppliedInitialParams.current = true;
+      }
+    }
+  }, [searchParams, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear]);
+
+
+  useEffect(() => {
     let tempTransactions = [...allTransactions];
 
-    // Apply global date filter based on viewMode
     if (viewMode === 'selected_month') {
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = new Date(t.date);
         return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
       });
-    } else { // 'full_year'
+    } else { 
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = new Date(t.date);
         return transactionDate.getFullYear() === selectedYear;
       });
     }
 
-    // Apply other filters
     if (searchTerm) {
       tempTransactions = tempTransactions.filter(t =>
         (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -128,6 +172,11 @@ export default function TransactionsPage() {
     if (filterType !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.type === filterType);
     }
+    
+    if (filterExpenseType !== 'all' && filterType === 'expense') {
+      tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
+    }
+
 
     if (filterCategoryId !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.category?.id === filterCategoryId);
@@ -137,7 +186,6 @@ export default function TransactionsPage() {
       tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
 
-    // Apply sorting
     if (sortConfig.key) {
       tempTransactions.sort((a, b) => {
         let aValue, bValue;
@@ -169,7 +217,7 @@ export default function TransactionsPage() {
     }
 
     setFilteredTransactions(tempTransactions);
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, sortConfig, selectedMonth, selectedYear, viewMode]);
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, sortConfig, selectedMonth, selectedYear, viewMode]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -199,7 +247,7 @@ export default function TransactionsPage() {
     }
   };
 
-  const requestSort = (key: keyof AppTransaction | 'categoryName' | 'paymentMethodName') => {
+  const requestSort = (key: SortableKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
@@ -207,7 +255,7 @@ export default function TransactionsPage() {
     setSortConfig({ key, direction });
   };
 
-  const getSortIndicator = (key: keyof AppTransaction | 'categoryName' | 'paymentMethodName') => {
+  const getSortIndicator = (key: SortableKeys) => {
     if (sortConfig.key === key) {
       return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
     }
@@ -276,7 +324,7 @@ export default function TransactionsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
               />
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
                 <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
                   <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
@@ -290,6 +338,15 @@ export default function TransactionsPage() {
                     <SelectItem value="all" className="text-xs md:text-sm">All Types</SelectItem>
                     <SelectItem value="income" className="text-xs md:text-sm">Income</SelectItem>
                     <SelectItem value="expense" className="text-xs md:text-sm">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+                 <Select value={filterExpenseType} onValueChange={setFilterExpenseType} disabled={filterType !== 'expense'}>
+                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Filter by Expense Type" /></SelectTrigger>
+                  <SelectContent className="bg-card border-primary/60 text-foreground">
+                    <SelectItem value="all" className="text-xs md:text-sm">All Expense Types</SelectItem>
+                    <SelectItem value="need" className="text-xs md:text-sm">Need</SelectItem>
+                    <SelectItem value="want" className="text-xs md:text-sm">Want</SelectItem>
+                    <SelectItem value="investment_expense" className="text-xs md:text-sm">Investment</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
@@ -385,6 +442,7 @@ export default function TransactionsPage() {
                                   `capitalize border-opacity-50 text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5`,
                                   transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
                                   transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
+                                  transaction.expenseType === 'investment_expense' ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40' :
                                   'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
                                 )}
                               >
