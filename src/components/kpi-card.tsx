@@ -15,12 +15,12 @@ interface KpiCardProps {
   className?: string;
   valueClassName?: string;
   kpiKey: string;
-  insightText: string; // Kept for prop consistency, but not displayed
+  insightText: string; 
   selectedMonth: number;
   selectedYear: number;
 }
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[var(--card-glow)]"; // Removed dark:shadow-part for simplicity if not defined in globals
 
 export function KpiCard({
   title,
@@ -30,7 +30,7 @@ export function KpiCard({
   className,
   valueClassName,
   kpiKey,
-  insightText, // Not visually used anymore
+  insightText,
   selectedMonth,
   selectedYear
 }: KpiCardProps) {
@@ -41,22 +41,35 @@ export function KpiCard({
     queryParams.append('month', selectedMonth.toString());
     queryParams.append('year', selectedYear.toString());
 
+    // Updated kpiKey logic
     if (kpiKey === 'totalIncome') {
       queryParams.append('type', 'income');
-    } else if (kpiKey === 'totalExpenses') {
+    } else if (kpiKey === 'coreExpenses') { // Changed from totalExpenses
       queryParams.append('type', 'expense');
-    } else if (kpiKey === 'investmentPercentage') {
+      // Optionally, filter out investment_expense if you want to be strict
+      // queryParams.append('expenseType', 'need'); 
+      // queryParams.append('expenseType', 'want'); // This is tricky with multi-select via URL
+    } else if (kpiKey === 'totalInvestments') { // New key
+      queryParams.append('type', 'expense');
+      queryParams.append('expenseType', 'investment_expense');
+    } else if (kpiKey === 'investmentPercentage') { // For consistency if this key remains
       queryParams.append('type', 'expense');
       queryParams.append('expenseType', 'investment_expense');
     } else if (kpiKey === 'cashbackInterests') {
-      // For 'cashbackInterests', we might want to filter by income type and relevant categories
-      // However, simple filtering by type 'income' is a start.
-      // The transactions page doesn't currently support multiple category pre-filters via URL.
       queryParams.append('type', 'income');
+      // Further filtering by category for cashback/interests would require more complex logic
+      // in transactions page or a dedicated filter key.
     }
-    // Add more specific kpiKey conditions if needed for other KPIs that navigate
-
-    router.push(`/transactions?${queryParams.toString()}`);
+    // For 'availableToSaveInvest' and 'netMonthlyCashflow', navigation might not be direct transaction filters
+    // as they are derived values. Could navigate to a general view or a report.
+    // For now, they won't navigate or will navigate to a general transaction view for the month.
+    if (kpiKey !== 'availableToSaveInvest' && kpiKey !== 'netMonthlyCashflow') {
+       router.push(`/transactions?${queryParams.toString()}`);
+    } else {
+      // Optionally handle navigation for these derived KPIs differently or not at all
+      console.log(`KPI clicked: ${kpiKey} - Navigation not specifically implemented for this derived KPI.`);
+      router.push(`/transactions?${queryParams.toString()}`); // Default to general month view
+    }
   };
 
   return (
@@ -67,7 +80,7 @@ export function KpiCard({
         className
       )}
       onClick={handleCardClick}
-      whileHover={{ scale: 1.02, transition: { duration: 0.1 } }} // Optional: subtle hover scale
+      whileHover={{ scale: 1.02, transition: { duration: 0.1 } }}
       whileTap={{ scale: 0.98 }}
     >
       <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
@@ -79,7 +92,7 @@ export function KpiCard({
         </CardHeader>
         <CardContent className="flex-1 flex flex-col justify-center">
           <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>
-            {typeof value === 'number' ? value.toLocaleString() : value}
+            {typeof value === 'number' ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : value}
           </div>
           {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
         </CardContent>
@@ -87,3 +100,6 @@ export function KpiCard({
     </motion.div>
   );
 }
+
+
+    
