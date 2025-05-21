@@ -13,7 +13,7 @@ import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-tren
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
-import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Gift } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -48,7 +48,7 @@ const sectionVariants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[var(--card-glow)]"; // Use the CSS variable directly
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
@@ -107,29 +107,49 @@ export default function DashboardPage() {
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const coreSpending = currentMonthTransactions
+    const coreExpenses = currentMonthTransactions
       .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want'))
       .reduce((sum, t) => sum + t.amount, 0);
+    
+    const investmentExpenses = currentMonthTransactions
+      .filter(t => t.type === 'expense' && 
+                   (t.expenseType === 'investment_expense' || 
+                    (t.category && investmentCategoryNames.includes(t.category.name)))
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    const savings = income - coreSpending; // Savings is income minus core expenses
-    const savingsRate = income > 0 ? (savings / income) * 100 : 0;
+    const totalExpensesKPI = coreExpenses + investmentExpenses;
+    
+    const netSavingsKPIValue = income - totalExpensesKPI;
+    const savingsRateKPIValue = income > 0 ? (netSavingsKPIValue / income) * 100 : 0;
+
+    const savingsPlusInvestmentForDescription = income - coreExpenses;
+    const savingsPlusInvestmentRateForDescription = income > 0 ? (savingsPlusInvestmentForDescription / income) * 100 : 0;
+
 
     const totalCashbackInterestsDividends = currentMonthTransactions
       .filter(t => t.type === 'income' && t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const totalInvestment = currentMonthTransactions
-      .filter(t => t.type === 'expense' &&
-                   (t.expenseType === 'investment_expense' ||
-                    (t.category && investmentCategoryNames.includes(t.category.name)))
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+    const totalInvestmentForInvestmentKPI = investmentExpenses; // Use already calculated investmentExpenses
+    const investmentPercentage = income > 0 ? (totalInvestmentForInvestmentKPI / income) * 100 : 0;
 
-    const investmentPercentage = income > 0 ? (totalInvestment / income) * 100 : 0;
-
-    return { income, spending: coreSpending, savings, savingsRate, totalCashbackInterestsDividends, totalInvestment, investmentPercentage };
+    return { 
+      income, 
+      coreExpenses,
+      investmentExpenses,
+      totalExpensesKPI,
+      netSavingsKPIValue, 
+      savingsRateKPIValue, 
+      savingsPlusInvestmentForDescription,
+      savingsPlusInvestmentRateForDescription,
+      totalCashbackInterestsDividends, 
+      totalInvestmentForInvestmentKPI, 
+      investmentPercentage 
+    };
   }, [currentMonthTransactions]);
 
+  // This is for the AI Insights, which should still focus on 'spending habits' (core expenses)
   const lastMonthTotalCoreSpending = useMemo(() => {
     const prevMonthDate = new Date(selectedDate);
     prevMonthDate.setDate(1); 
@@ -142,7 +162,7 @@ export default function DashboardPage() {
       .filter(t => {
         const transactionDate = new Date(t.date);
         return t.type === 'expense' && 
-               (t.expenseType === 'need' || t.expenseType === 'want') &&
+               (t.expenseType === 'need' || t.expenseType === 'want') && // Core expenses only
                transactionDate.getMonth() === lastMonth && 
                transactionDate.getFullYear() === yearForLastMonth;
       })
@@ -185,13 +205,13 @@ export default function DashboardPage() {
         <motion.div variants={itemVariants}>
           <KpiCard 
             title="Total Expenses" 
-            value={`₹${monthlyMetrics.spending.toFixed(2)}`} 
+            value={`₹${monthlyMetrics.totalExpensesKPI.toFixed(2)}`} 
             icon={TrendingDown} 
-            description={`${monthNamesList[selectedMonth]} ${selectedYear} (Needs & Wants)`} 
+            description={`Core: ₹${monthlyMetrics.coreExpenses.toFixed(2)} + Invest: ₹${monthlyMetrics.investmentExpenses.toFixed(2)}`}
             valueClassName="text-red-500 dark:text-red-400" 
             className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20 dark:border-red-700/50 dark:bg-red-900/20 dark:hover:bg-red-800/30"
-            kpiKey="totalExpenses"
-            insightText="Represents your core monthly spending. Keeping this in check helps savings."
+            kpiKey="totalExpenses" // This key might need adjustment if it's used for filtering to specifically show all expenses.
+            insightText="Represents your total outgoings, including investments."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
@@ -199,13 +219,13 @@ export default function DashboardPage() {
         <motion.div variants={itemVariants}>
           <KpiCard 
             title="Net Savings" 
-            value={`₹${monthlyMetrics.savings.toFixed(2)}`} 
+            value={`₹${monthlyMetrics.netSavingsKPIValue.toFixed(2)}`} 
             icon={PiggyBank} 
-            description={`${monthNamesList[selectedMonth]} ${selectedYear} (Income - Core Expenses)`} 
-            valueClassName={monthlyMetrics.savings >= 0 ? "text-blue-500 dark:text-blue-400" : "text-orange-500 dark:text-orange-400"} 
+            description={`Savings + Investment: ₹${monthlyMetrics.savingsPlusInvestmentForDescription.toFixed(2)}`}
+            valueClassName={monthlyMetrics.netSavingsKPIValue >= 0 ? "text-blue-500 dark:text-blue-400" : "text-orange-500 dark:text-orange-400"} 
             className="border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 dark:border-blue-700/50 dark:bg-blue-900/20 dark:hover:bg-blue-800/30"
-            kpiKey="netSavings" // Note: This kpiKey might not directly map to a simple filter.
-            insightText="This is what's left after core expenses, available for saving or investing."
+            kpiKey="netSavings"
+            insightText="Income after ALL expenses (incl. investments). Description shows what's available for saving/investing after core costs."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
@@ -213,13 +233,13 @@ export default function DashboardPage() {
         <motion.div variants={itemVariants}>
           <KpiCard 
             title="Savings Rate" 
-            value={`${monthlyMetrics.savingsRate.toFixed(1)}%`} 
+            value={`${monthlyMetrics.savingsRateKPIValue.toFixed(1)}%`} 
             icon={Percent} 
-            description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
-            valueClassName={monthlyMetrics.savingsRate >=0 ? "text-purple-500 dark:text-purple-400" : "text-yellow-500 dark:text-yellow-400"} 
+            description={`Effective Rate (Saving+Invest): ${monthlyMetrics.savingsPlusInvestmentRateForDescription.toFixed(1)}%`}
+            valueClassName={monthlyMetrics.savingsRateKPIValue >=0 ? "text-purple-500 dark:text-purple-400" : "text-yellow-500 dark:text-yellow-400"} 
             className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 dark:border-purple-700/50 dark:bg-purple-900/20 dark:hover:bg-purple-800/30"
-            kpiKey="savingsRate" // Note: This kpiKey might not directly map to a simple filter.
-            insightText="Percentage of income saved. Higher is better for financial goals!"
+            kpiKey="savingsRate"
+            insightText="Percentage of income saved after ALL expenses (incl. investments). Description shows rate based on income minus core costs."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
@@ -232,7 +252,7 @@ export default function DashboardPage() {
             description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
             className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"
             kpiKey="cashbackInterests"
-            insightText="Extra income from rewards and investments. A nice bonus!"
+            insightText="Extra income from rewards and passive investments."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
@@ -242,7 +262,7 @@ export default function DashboardPage() {
             title="Investment %" 
             value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
             icon={Target} 
-            description={`Amount: ₹${monthlyMetrics.totalInvestment.toFixed(2)} (${monthNamesList[selectedMonth]} ${selectedYear})`} 
+            description={`Amount: ₹${monthlyMetrics.totalInvestmentForInvestmentKPI.toFixed(2)} (${monthNamesList[selectedMonth]} ${selectedYear})`} 
             className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"
             kpiKey="investmentPercentage"
             insightText="Percentage of income allocated to investments. Key for long-term growth."
@@ -252,13 +272,13 @@ export default function DashboardPage() {
         </motion.div>
       </motion.div>
 
-       {monthlyMetrics.spending > monthlyMetrics.income && (
+       {monthlyMetrics.totalExpensesKPI > monthlyMetrics.income && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <Alert variant="destructive" className={cn("shadow-md border-red-700/50 bg-red-600/20 text-red-100 dark:bg-red-900/30 dark:text-red-200", glowClass)}>
             <AlertTriangle className="h-5 w-5 text-red-300 dark:text-red-400" />
             <AlertTitle className="text-red-200 dark:text-red-300">Spending Alert!</AlertTitle>
             <AlertDescription className="text-red-300 dark:text-red-400">
-              You've spent more than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your expenses.
+              You've spent more (incl. investments) than your income in {monthNamesList[selectedMonth]} {selectedYear}. Review your expenses.
             </AlertDescription>
           </Alert>
         </motion.div>
@@ -276,8 +296,8 @@ export default function DashboardPage() {
       >
         <motion.div variants={itemVariants}>
           <SpendingInsights
-            currentMonthTransactions={currentMonthTransactions}
-            lastMonthTotalSpending={lastMonthTotalCoreSpending}
+            currentMonthTransactions={currentMonthTransactions} // This will correctly filter for core expenses inside the component if needed
+            lastMonthTotalSpending={lastMonthTotalCoreSpending} // Pass core spending for relevant AI comparison
             selectedMonthName={monthNamesList[selectedMonth]}
             selectedYear={selectedYear}
           />
@@ -318,3 +338,5 @@ export default function DashboardPage() {
     </main>
   );
 }
+
+    
