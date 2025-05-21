@@ -25,7 +25,7 @@ interface MonthlySpendingTrendChartProps {
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 
 export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: MonthlySpendingTrendChartProps) {
   const chartData = useMemo(() => {
@@ -61,12 +61,12 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
 
   if (!transactions || transactions.length === 0) {
     return (
-      <Card className={cn("shadow-lg", glowClass)}>
+      <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
         <CardHeader>
           <CardTitle>Monthly Spending Trend</CardTitle>
           <CardDescription>Spending over the last {numberOfMonths} months.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-[300px]">
+        <CardContent className="flex-1 flex items-center justify-center h-[300px]">
           <p className="text-muted-foreground">No transaction data available for trend analysis.</p>
         </CardContent>
       </Card>
@@ -74,12 +74,12 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
   }
   
   return (
-    <Card className={cn("shadow-lg", glowClass)}>
+    <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
         <CardTitle>Monthly Spending Trend</CardTitle>
         <CardDescription>Spending over the last {numberOfMonths} months.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1">
         <ChartContainer config={chartConfig} className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
