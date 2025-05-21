@@ -48,7 +48,7 @@ const sectionVariants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-const glowClass = "shadow-card-glow";
+const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
@@ -118,10 +118,10 @@ export default function DashboardPage() {
       )
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalOutgoings = coreExpenses + totalInvestments;
+    const totalOutgoings = coreExpenses + totalInvestments; // Total expenses including investments
     
     const availableToSaveOrInvest = income - coreExpenses; 
-    const netMonthlyCashflow = income - totalOutgoings; 
+    const netMonthlyCashflow = income - totalOutgoings; // This is cash savings
     
     const investmentPercentage = income > 0 ? (totalInvestments / income) * 100 : 0;
 
@@ -130,7 +130,8 @@ export default function DashboardPage() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     const cashSavingsPercentage = income > 0 ? (netMonthlyCashflow / income) * 100 : 0;
-    const totalSavingsAndInvestmentPercentage = income > 0 ? (availableToSaveOrInvest / income) * 100 : 0;
+    // Total pool available for saving or investing, as a percentage of income
+    const totalSavingsAndInvestmentPercentage = income > 0 ? ((income - coreExpenses) / income) * 100 : 0;
 
 
     return { 
@@ -138,12 +139,12 @@ export default function DashboardPage() {
       coreExpenses,
       totalInvestments,
       totalOutgoings,
-      availableToSaveOrInvest,
-      netMonthlyCashflow, 
+      availableToSaveOrInvest, // Amount after core expenses, which can be saved or invested
+      netMonthlyCashflow, // Cash savings after all expenses (core + investment)
       investmentPercentage,
       totalCashbackInterestsDividends,
-      cashSavingsPercentage,
-      totalSavingsAndInvestmentPercentage
+      cashSavingsPercentage, // Percentage of income saved as cash
+      totalSavingsAndInvestmentPercentage // Percentage of income available for saving/investing
     };
   }, [currentMonthTransactions]);
 
@@ -242,17 +243,19 @@ export default function DashboardPage() {
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Cash Savings" 
-            value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
-            icon={Wallet} 
-            description="Actual cash saved after all outgoings"
-            valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
-            className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
-            kpiKey="cashSavings" 
-            insightText="Actual cash saved after all income and all outgoings (including investments)."
+           <KpiCard
+            title="Cash Savings %"
+            value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
+            icon={Percent}
+            description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
+            valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
+            className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
+            kpiKey="savingsPercentage" 
+            insightText="Percentage of income saved as cash after all expenses and investments."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
+            secondaryTitle="Total Saved/Invested %"
+            secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -283,29 +286,33 @@ export default function DashboardPage() {
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-           <KpiCard
-            title="Cash Savings %"
-            value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
-            icon={Percent}
-            description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
-            valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
-            className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
-            kpiKey="savingsPercentage" 
-            insightText="Percentage of income saved as cash after all expenses and investments."
+          <KpiCard 
+            title="Cash Savings" 
+            value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
+            icon={Wallet} 
+            description="Actual cash saved after all outgoings"
+            valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
+            className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
+            kpiKey="cashSavings" 
+            insightText="Actual cash saved after all income and all outgoings (including investments)."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
-            secondaryTitle="Total Saved/Invested %"
-            secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
           />
         </motion.div>
       </motion.div>
 
        {(monthlyMetrics.totalOutgoings) > monthlyMetrics.income && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <Alert variant="destructive" className={cn("shadow-md border-red-700/50 bg-red-600/20 text-red-100 dark:bg-red-900/30 dark:text-red-200", glowClass)}>
-            <AlertTriangle className="h-5 w-5 text-red-300 dark:text-red-400" />
-            <AlertTitle className="text-red-200 dark:text-red-300">Spending Alert!</AlertTitle>
-            <AlertDescription className="text-red-300 dark:text-red-400">
+          <Alert 
+            variant="destructive" 
+            className={cn(
+              "shadow-md border-destructive/50 bg-red-500/10 dark:bg-destructive/20", 
+              glowClass
+            )}
+          >
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <AlertTitle className="text-red-700 dark:text-red-300">Spending Alert!</AlertTitle>
+            <AlertDescription className="text-red-600 dark:text-red-400">
               Your total outgoings (core expenses + investments) exceeded your income in {monthNamesList[selectedMonth]} {selectedYear}.
             </AlertDescription>
           </Alert>
@@ -366,5 +373,7 @@ export default function DashboardPage() {
     </main>
   );
 }
+
+    
 
     
