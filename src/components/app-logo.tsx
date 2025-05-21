@@ -17,26 +17,41 @@ export function AppLogo({ className, appName = "FinWise AI", ...props }: AppLogo
         xmlns="http://www.w3.org/2000/svg" 
         className="transform group-hover:scale-110 transition-transform duration-300 ease-in-out"
       >
-        {/* Chaotic & Colorful Design */}
-        {/* Shard 1 - Teal */}
-        <path d="M50 10 L40 40 L60 40 Z" fill="#00D0C0" transform="rotate(15 50 50)" />
-        <path d="M30 30 L20 60 L50 50 Z" fill="#0AD4D4" transform="rotate(-30 50 50) scale(0.9)" />
+        {/* Layer 1: Background Glow/Shape (Subtle) */}
+        <circle cx="50" cy="50" r="45" fill="url(#neonGradientBlue)" opacity="0.3" />
+
+        {/* Layer 2: Primary Neon Shapes - Suggesting upward trend / connection */}
+        <path d="M30 70 Q40 50 50 30" stroke="url(#neonGradientPink)" strokeWidth="8" strokeLinecap="round" />
+        <path d="M50 30 Q60 50 70 70" stroke="url(#neonGradientCyan)" strokeWidth="8" strokeLinecap="round" />
+        <path d="M40 70 H60" stroke="url(#neonGradientLime)" strokeWidth="6" strokeLinecap="round" />
         
-        {/* Shard 2 - Magenta */}
-        <path d="M80 25 L70 55 L90 50 Z" fill="#FF00A0" transform="rotate(120 50 50)" />
-        <path d="M65 70 L55 90 L85 80 Z" fill="#F000BA" transform="rotate(150 50 50) scale(0.85)" />
+        {/* Layer 3: Accent Dots/Elements */}
+        <circle cx="50" cy="30" r="5" fill="#FFFFFF" />
+        <circle cx="30" cy="70" r="4" fill="#FFFFFF" opacity="0.8"/>
+        <circle cx="70" cy="70" r="4" fill="#FFFFFF" opacity="0.8"/>
 
-        {/* Shard 3 - Yellow */}
-        <path d="M20 75 L10 95 L40 85 Z" fill="#FFD700" transform="rotate(240 50 50)" />
-        <path d="M45 20 L35 40 L65 30 Z" fill="#FFEA00" transform="rotate(270 50 50) scale(0.95)" />
-
-        {/* Central Element - Darker Accent */}
-        <circle cx="50" cy="50" r="12" fill="hsl(var(--accent))" opacity="0.7" />
-        <circle cx="50" cy="50" r="7" fill="hsl(var(--accent-foreground))" opacity="0.5" />
+        <defs>
+          <radialGradient id="neonGradientBlue" cx="0.5" cy="0.5" r="0.5" fx="0.5" fy="0.5">
+            <stop offset="0%" stopColor="#00FFFF" stopOpacity="0.7"/> {/* Neon Cyan */}
+            <stop offset="100%" stopColor="#0000FF" stopOpacity="0"/> {/* Transparent Blueish edge */}
+          </radialGradient>
+          <linearGradient id="neonGradientPink" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FF00FF"/> {/* Neon Magenta/Pink */}
+            <stop offset="100%" stopColor="#FF69B4"/> {/* Hot Pink */}
+          </linearGradient>
+          <linearGradient id="neonGradientCyan" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00FFFF"/> {/* Neon Cyan */}
+            <stop offset="100%" stopColor="#40E0D0"/> {/* Turquoise */}
+          </linearGradient>
+           <linearGradient id="neonGradientLime" x1="0" y1="0.5" x2="1" y2="0.5">
+            <stop offset="0%" stopColor="#39FF14"/> {/* Neon Lime Green */}
+            <stop offset="100%" stopColor="#ADFF2F"/> {/* GreenYellow */}
+          </linearGradient>
+        </defs>
       </svg>
       <span className={cn(
         "text-xl font-extrabold text-primary whitespace-nowrap tracking-tighter leading-tight",
-        "group-data-[collapsible=icon]:hidden" // Hides text when sidebar has data-collapsible="icon"
+        "group-data-[collapsible=icon]:hidden" // Hide text when sidebar has data-collapsible="icon"
       )}>
         {appName}
       </span>
