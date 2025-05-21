@@ -17,17 +17,21 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import type { AppTransaction } from "@/lib/types" 
+import type { AppTransaction } from "@/lib/types"
 import { subMonths, getMonth, getYear } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface IncomeExpenseTrendChartProps {
-  transactions: AppTransaction[]; 
+  transactions: AppTransaction[];
   numberOfMonths?: number;
 }
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-card-glow";
+// Investment category names, consistent with dashboard logic if needed for other calculations,
+// but for "Total Expense" we sum all expenses.
+const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+
 
 export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: IncomeExpenseTrendChartProps) {
   const chartData = useMemo(() => {
@@ -45,22 +49,21 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
             return t.type === 'income' && transactionDate.getMonth() === month && transactionDate.getFullYear() === year;
         })
         .reduce((sum, t) => sum + t.amount, 0);
-      
-      // This 'monthlyExpenses' refers to 'coreExpenses' as calculated in page.tsx
-      const monthlyExpenses = transactions
+
+      // Calculate Total Expenses: sum of all transactions with type 'expense'
+      const monthlyTotalExpenses = transactions
         .filter(t => {
             const transactionDate = new Date(t.date);
-            return t.type === 'expense' && 
-                   (t.expenseType === 'need' || t.expenseType === 'want') && // Ensure only core expenses
-                   transactionDate.getMonth() === month && 
+            return t.type === 'expense' &&
+                   transactionDate.getMonth() === month &&
                    transactionDate.getFullYear() === year;
         })
         .reduce((sum, t) => sum + t.amount, 0);
-      
+
       data.push({
         name: `${monthNames[month]} '${String(year).slice(-2)}`,
         income: monthlyIncome,
-        expense: monthlyExpenses,
+        expense: monthlyTotalExpenses, // Use total expenses now
       });
     }
     return data;
@@ -69,11 +72,11 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
   const chartConfig = {
     income: {
       label: "Income (₹)",
-      color: "hsl(var(--chart-2))", // chart-2 is a greenish/teal color in your theme
+      color: "hsl(120, 60%, 65%)", // Light Green
     },
     expense: {
-      label: "Core Expense (₹)", // Clarified label to reflect it's core expenses
-      color: "hsl(var(--destructive))", // Using destructive (red) color for expenses
+      label: "Total Expense (₹)", // Updated label
+      color: "hsl(0, 65%, 45%)",   // Blood Red
     },
   }
 
@@ -81,7 +84,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
      return (
       <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
         <CardHeader>
-          <CardTitle>Income vs. Expense Trend</CardTitle>
+          <CardTitle>Income vs. Total Expense Trend</CardTitle>
           <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 flex items-center justify-center h-[300px]">
@@ -94,7 +97,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
   return (
     <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
-        <CardTitle>Income vs. Expense Trend</CardTitle>
+        <CardTitle>Income vs. Total Expense Trend</CardTitle>
         <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
@@ -108,19 +111,19 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 tickMargin={10}
                 axisLine={false}
                 tickFormatter={(value) => value.slice(0, 6)}
-                className="fill-foreground" 
+                className="fill-foreground"
               />
-              <YAxis 
-                tickFormatter={(value) => `₹${value / 1000}k`} 
+              <YAxis
+                tickFormatter={(value) => `₹${value / 1000}k`}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
                 width={50}
-                className="fill-foreground" 
+                className="fill-foreground"
               />
               <ChartTooltip
                 cursor={false}
-                content={<ChartTooltipContent 
+                content={<ChartTooltipContent
                     formatter={(value, name, props) => ([`₹${(value as number).toLocaleString()}`, chartConfig[name as keyof typeof chartConfig]?.label || name])}
                 />}
               />
