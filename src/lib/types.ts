@@ -41,7 +41,6 @@ export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'pay
 }
 
 // Zod schema for validating transaction input for Server Actions
-// This is for single transaction entry and for the final validated data from bulk/AI
 export const TransactionInputSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date(),
@@ -107,8 +106,6 @@ export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSc
 
 
 // AI Goal Forecaster Schemas
-// Input schema is directly defined in goal-forecaster-flow.ts for internal use
-// but we export the TypeScript type for the page component.
 export interface GoalForecasterInput {
   goalDescription: string;
   goalAmount: number;
@@ -147,4 +144,22 @@ export interface BudgetingAssistantOutput {
     generalTips: string[]; // e.g., "Automate savings transfers."
   };
   analysisSummary: string; // General commentary
+}
+
+// Goal Tracking Schemas
+export const GoalInputSchema = z.object({
+  description: z.string().min(1, "Goal description is required."),
+  targetAmount: z.number().min(0.01, "Target amount must be positive."),
+  targetDurationMonths: z.number().int().min(1, "Duration must be at least 1 month."),
+  // Optional: calculated required monthly savings from AI, stored for reference
+  initialRequiredMonthlySavings: z.number().min(0).optional(),
+});
+export type GoalInput = z.infer<typeof GoalInputSchema>;
+
+export interface Goal extends GoalInput {
+  id: string;
+  amountSavedSoFar: number;
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+  status?: 'active' | 'completed' | 'on_hold'; // Optional status
 }
