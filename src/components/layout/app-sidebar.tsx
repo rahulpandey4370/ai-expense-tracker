@@ -17,10 +17,11 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties } from "lucide-react";
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties } from "lucide-react"; // Added FlaskConical
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/ai-playground", label: "AI Playground", icon: FlaskConical },
   { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/yearly-overview", label: "Yearly Overview", icon: TableProperties },
