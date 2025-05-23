@@ -23,29 +23,30 @@ interface SavingsTrendChartProps {
   monthlyData: MonthlySummary[];
 }
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-card-glow";
 
 export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
+  // totalSavings here is Income - Core Spend
   const chartData = monthlyData.map(data => ({
     name: `${data.monthShortName} '${String(data.year).slice(-2)}`,
-    savings: data.totalSavings,
+    savings: data.totalSavings, 
   }));
 
   const chartConfig = {
     savings: {
-      label: "Savings (₹)",
-      color: "hsl(var(--chart-4))", // Example: use chart-4 color
+      label: "Savings (Income - Core Spend) (₹)",
+      color: "hsl(var(--chart-4))", 
     },
   }
 
   if (!monthlyData || monthlyData.length === 0) {
     return (
-      <Card className={cn("shadow-lg", glowClass)}>
+      <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
         <CardHeader>
           <CardTitle>Monthly Savings Trend</CardTitle>
-          <CardDescription>Savings trend over the months.</CardDescription>
+          <CardDescription>Savings (Income - Core Spend) trend over the months.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-[300px]">
+        <CardContent className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">No data available for savings trend.</p>
         </CardContent>
       </Card>
@@ -53,13 +54,13 @@ export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
   }
   
   return (
-    <Card className={cn("shadow-lg", glowClass)}>
+    <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
         <CardTitle>Monthly Savings Trend</CardTitle>
-        <CardDescription>Savings trend for {monthlyData[0]?.year}.</CardDescription>
+        <CardDescription>Savings (Income - Core Spend) trend for {monthlyData[0]?.year}.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+      <CardContent className="flex-1">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               accessibilityLayer

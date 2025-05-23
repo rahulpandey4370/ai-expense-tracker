@@ -1,7 +1,7 @@
 
 "use client"
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Legend } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import {
   Card,
   CardContent,
@@ -23,30 +23,30 @@ interface MonthlyIncomeExpenseSavingsChartProps {
   monthlyData: MonthlySummary[];
 }
 
-const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const glowClass = "shadow-card-glow";
 
 export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeExpenseSavingsChartProps) {
   const chartData = monthlyData.map(data => ({
     name: `${data.monthShortName} '${String(data.year).slice(-2)}`,
     income: data.totalIncome,
-    spend: data.totalSpend,
-    savings: data.totalSavings,
+    spend: data.totalSpend, // This now represents Core Spend
+    savings: data.totalSavings, // This is Income - Core Spend
   }));
 
   const chartConfig = {
-    income: { label: "Income (₹)", color: "hsl(var(--chart-2))" }, // Greenish
-    spend: { label: "Spend (₹)", color: "hsl(var(--chart-1))" }, // Reddish
-    savings: { label: "Savings (₹)", color: "hsl(var(--chart-3))" }, // Bluish/Purplish
+    income: { label: "Income (₹)", color: "hsl(var(--chart-2))" }, 
+    spend: { label: "Core Spend (₹)", color: "hsl(var(--chart-1))" }, 
+    savings: { label: "Savings (Inc-CoreSpend) (₹)", color: "hsl(var(--chart-3))" }, 
   }
 
   if (!monthlyData || monthlyData.length === 0) {
      return (
-      <Card className={cn("shadow-lg", glowClass)}>
+      <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
         <CardHeader>
           <CardTitle>Monthly Financial Summary</CardTitle>
-          <CardDescription>Income, spend, and savings per month.</CardDescription>
+          <CardDescription>Income, core spend, and savings per month.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-[300px]">
+        <CardContent className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">No data available for summary chart.</p>
         </CardContent>
       </Card>
@@ -54,13 +54,13 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
   }
 
   return (
-    <Card className={cn("shadow-lg", glowClass)}>
+    <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
         <CardTitle>Monthly Financial Summary</CardTitle>
-        <CardDescription>Income, spend, and savings per month for {monthlyData[0]?.year}.</CardDescription>
+        <CardDescription>Income, core spend, and savings per month for {monthlyData[0]?.year}.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+      <CardContent className="flex-1">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart accessibilityLayer data={chartData} margin={{left:12, right: 12}}>
               <CartesianGrid vertical={false} />

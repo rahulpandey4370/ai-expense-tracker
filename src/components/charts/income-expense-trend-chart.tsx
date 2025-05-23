@@ -28,10 +28,6 @@ interface IncomeExpenseTrendChartProps {
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const glowClass = "shadow-card-glow";
-// Investment category names, consistent with dashboard logic if needed for other calculations,
-// but for "Total Expense" we sum all expenses.
-const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
-
 
 export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: IncomeExpenseTrendChartProps) {
   const chartData = useMemo(() => {
@@ -50,11 +46,10 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
         })
         .reduce((sum, t) => sum + t.amount, 0);
 
-      // Calculate Total Expenses: sum of all transactions with type 'expense'
       const monthlyTotalExpenses = transactions
         .filter(t => {
             const transactionDate = new Date(t.date);
-            return t.type === 'expense' &&
+            return t.type === 'expense' && // All expense types
                    transactionDate.getMonth() === month &&
                    transactionDate.getFullYear() === year;
         })
@@ -63,7 +58,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
       data.push({
         name: `${monthNames[month]} '${String(year).slice(-2)}`,
         income: monthlyIncome,
-        expense: monthlyTotalExpenses, // Use total expenses now
+        expense: monthlyTotalExpenses,
       });
     }
     return data;
@@ -75,7 +70,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
       color: "hsl(120, 60%, 65%)", // Light Green
     },
     expense: {
-      label: "Total Expense (₹)", // Updated label
+      label: "Total Expense (₹)",
       color: "hsl(0, 65%, 45%)",   // Blood Red
     },
   }
@@ -87,7 +82,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
           <CardTitle>Income vs. Total Expense Trend</CardTitle>
           <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 flex items-center justify-center h-[300px]">
+        <CardContent className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">No transaction data available for trend analysis.</p>
         </CardContent>
       </Card>
@@ -101,7 +96,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
         <CardDescription>Comparison over the last {numberOfMonths} months.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart accessibilityLayer data={chartData} margin={{left:12, right: 12}}>
               <CartesianGrid vertical={false} />
