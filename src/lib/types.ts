@@ -106,45 +106,53 @@ export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSc
 
 
 // AI Goal Forecaster Schemas
-export interface GoalForecasterInput {
-  goalDescription: string;
-  goalAmount: number;
-  goalDurationMonths: number;
-  averageMonthlyIncome: number;
-  averageMonthlyExpenses: number;
-  currentSavingsRate: number;
-}
+export const GoalForecasterInputSchema = z.object({
+  goalDescription: z.string().describe("The user's description of their financial goal (e.g., 'Save for a vacation to Europe', 'Buy a new gaming laptop')."),
+  goalAmount: z.number().min(0.01).optional().describe("The target monetary amount for the goal in INR. If not provided, AI should estimate this based on the description."),
+  goalDurationMonths: z.number().int().min(1).describe("The desired duration in months to achieve the goal."),
+  averageMonthlyIncome: z.number().min(0).describe("The user's average monthly income in INR based on recent data. Can be 0."),
+  averageMonthlyExpenses: z.number().min(0).describe("The user's average monthly expenses (excluding dedicated savings/investments for this specific goal) in INR based on recent data. Can be 0."),
+  currentSavingsRate: z.number().min(0).max(100).describe("The user's current approximate savings rate as a percentage of income (e.g., 20 for 20%)."),
+});
+export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
-export interface GoalForecasterOutput {
-  feasibilityAssessment: string;
-  projectedMonthsToGoal?: number;
-  requiredMonthlySavings: number;
-  suggestedActions: string[];
-  motivationalMessage?: string;
-}
+export const GoalForecasterOutputSchema = z.object({
+  feasibilityAssessment: z.string().describe("A brief assessment of whether the goal is feasible within the given timeframe based on current financials (e.g., 'Highly Feasible', 'Challenging but Possible', 'Likely Unfeasible without changes')."),
+  projectedMonthsToGoal: z.number().int().min(1).optional().describe("If feasible or challenging, the AI's projected number of months to reach the goal with current savings habits. Omit if unfeasible. Must be a positive integer if provided."),
+  requiredMonthlySavings: z.number().min(0.01).describe("The amount the user would need to save specifically for this goal each month to achieve it in the desired duration. Must be a positive number."),
+  suggestedActions: z.array(z.string()).describe("A list of 2-4 actionable suggestions to help achieve the goal. These could include increasing savings by a certain amount, or reducing spending in specific categories (e.g., 'Reduce 'Food and Dining' by X%', 'Increase monthly savings by ₹Y'). Be specific with INR amounts where possible."),
+  motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
+  estimatedOrProvidedGoalAmount: z.number().min(0.01).describe("The goal amount used for forecasting, either user-provided or AI-estimated, in INR."),
+  wasAmountEstimatedByAI: z.boolean().describe("True if the goal amount was estimated by the AI, false if provided by the user."),
+});
+export type GoalForecasterOutput = z.infer<typeof GoalForecasterOutputSchema>;
+
 
 // AI Budgeting Assistant Schemas
-export interface BudgetingAssistantInput {
-  statedMonthlyIncome: number;
-  statedMonthlySavingsGoalPercentage: number; // e.g., 20 for 20%
-  averagePastMonthlyExpenses: number; // calculated from user's last 3 months data
-  pastSpendingBreakdown: string; // e.g., "Needs: X (Rent: A, Groceries: B), Wants: Y (Dining: C), Investments_Expenses: Z"
-}
+export const BudgetingAssistantInputSchema = z.object({
+  statedMonthlyIncome: z.number().min(0).describe("User's stated monthly income in INR. Can be 0 if not provided recently."),
+  statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
+  averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
+  pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments_Expenses: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
+});
+export type BudgetingAssistantInput = z.infer<typeof BudgetingAssistantInputSchema>;
 
-export interface BudgetingAssistantOutput {
-  recommendedMonthlyBudget: {
-    needs: number;
-    wants: number;
-    investmentsAsSpending: number; // e.g. regular MF/stock purchases
-    targetSavings: number; // From user's goal %
-    discretionarySpendingOrExtraSavings: number; // Income - (needs + wants + investments + targetSavings)
-  };
-  detailedSuggestions: {
-    categoryAdjustments: string[]; // e.g., "Consider reducing 'Dining Out' by approx ₹P"
-    generalTips: string[]; // e.g., "Automate savings transfers."
-  };
-  analysisSummary: string; // General commentary
-}
+export const BudgetingAssistantOutputSchema = z.object({
+  recommendedMonthlyBudget: z.object({
+    needs: z.number().min(0).describe("Recommended monthly spending for 'Needs' in INR."),
+    wants: z.number().min(0).describe("Recommended monthly spending for 'Wants' in INR."),
+    investmentsAsSpending: z.number().min(0).describe("Recommended monthly allocation for 'Investments' (treated as an expense category like SIPs, stock purchases) in INR. This is separate from pure 'Savings'."),
+    targetSavings: z.number().min(0).describe("The target amount to be saved each month based on the user's income and savings goal percentage, in INR. This is pure cash savings or unallocated investment funds."),
+    discretionarySpendingOrExtraSavings: z.number().min(0).describe("Remaining amount after allocating to needs, wants, investments (as spending), and target savings. This can be used for flexible spending or additional savings/investments, in INR."),
+  }).describe("The AI's recommended monthly budget breakdown in INR."),
+  detailedSuggestions: z.object({
+    categoryAdjustments: z.array(z.string()).describe("Specific suggestions for adjusting spending in certain categories to meet the budget and savings goals. E.g., 'Consider reducing 'Dining Out' expenses by approximately ₹500.' or 'Allocate ₹X towards your Mutual Fund SIP.'"),
+    generalTips: z.array(z.string()).describe("General financial tips to help the user stick to the budget and improve savings. E.g., 'Review subscriptions for potential cuts.' or 'Set up automatic transfers to your savings account on payday.'"),
+  }).describe("Actionable advice to help the user achieve their financial plan."),
+  analysisSummary: z.string().describe("A brief overall analysis comparing the suggested budget to past spending habits and explaining how it helps achieve the savings goal. Mention any significant changes required."),
+});
+export type BudgetingAssistantOutput = z.infer<typeof BudgetingAssistantOutputSchema>;
+
 
 // Goal Tracking Schemas
 export const GoalInputSchema = z.object({
@@ -165,15 +173,17 @@ export interface Goal extends GoalInput {
 
 
 // AI Financial Health Check Schemas
-export interface FinancialHealthCheckInput {
-  periodDescription: string;
-  currentTotalIncome: number;
-  currentTotalExpenses: number;
-  currentSpendingBreakdown: string; // Summary: Needs: ₹X, Wants: ₹Y, Investments: ₹Z. Top categories: Food (₹A), Transport (₹B).
-  previousTotalIncome: number;
-  previousTotalExpenses: number;
-}
+export const FinancialHealthCheckInputSchema = z.object({
+  periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
+  currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
+  currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
+  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments_Expenses: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
+  previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
+  previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
+});
+export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInputSchema>;
 
-export interface FinancialHealthCheckOutput {
-  healthSummary: string; // The AI-generated natural language summary
-}
+export const FinancialHealthCheckOutputSchema = z.object({
+  healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (e.g., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+});
+export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;

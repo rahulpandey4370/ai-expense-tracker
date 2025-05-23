@@ -56,7 +56,7 @@ export default function AIPlaygroundPage() {
 
   // Goal Planner State
   const [goalDescription, setGoalDescription] = useState<string>('');
-  const [goalAmount, setGoalAmount] = useState<string>('');
+  const [goalAmount, setGoalAmount] = useState<string>(''); // User input, can be empty
   const [goalDurationMonths, setGoalDurationMonths] = useState<string>('');
   const [isAILoadingGoal, setIsAILoadingGoal] = useState<boolean>(false);
   const [aiForecast, setAiForecast] = useState<GoalForecasterOutput | null>(null);
@@ -114,8 +114,10 @@ export default function AIPlaygroundPage() {
   const calculateGoalPlannerAverages = useCallback(() => {
     const today = new Date();
     let totalIncomeLast6Months = 0;
-    let totalExpensesLast6Months = 0;
+    let totalCoreExpensesLast6Months = 0; // Changed to core expenses
     const monthSet = new Set<string>();
+    const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+
 
     for (let i = 0; i < 6; i++) {
       const targetDate = subMonths(today, i);
@@ -127,7 +129,9 @@ export default function AIPlaygroundPage() {
         if (transactionDate.getFullYear() === getYear(targetDate) && transactionDate.getMonth() === getMonth(targetDate)) {
           monthHasData = true;
           if (t.type === 'income') totalIncomeLast6Months += t.amount;
-          if (t.type === 'expense') totalExpensesLast6Months += t.amount;
+          if (t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name))) {
+             totalCoreExpensesLast6Months += t.amount;
+          }
         }
       });
       if (monthHasData) monthSet.add(monthKey);
@@ -136,28 +140,33 @@ export default function AIPlaygroundPage() {
     const numberOfMonthsWithData = monthSet.size > 0 ? monthSet.size : 1;
 
     const averageMonthlyIncome = totalIncomeLast6Months / numberOfMonthsWithData;
-    const averageMonthlyExpenses = totalExpensesLast6Months / numberOfMonthsWithData;
-    const currentSavingsRate = averageMonthlyIncome > 0 ? ((averageMonthlyIncome - averageMonthlyExpenses) / averageMonthlyIncome) * 100 : 0;
+    const averageMonthlyCoreExpenses = totalCoreExpensesLast6Months / numberOfMonthsWithData; // Changed
+    const currentSavingsRate = averageMonthlyIncome > 0 ? ((averageMonthlyIncome - averageMonthlyCoreExpenses) / averageMonthlyIncome) * 100 : 0;
 
     return {
       averageMonthlyIncome: parseFloat(averageMonthlyIncome.toFixed(2)),
-      averageMonthlyExpenses: parseFloat(averageMonthlyExpenses.toFixed(2)),
+      averageMonthlyExpenses: parseFloat(averageMonthlyCoreExpenses.toFixed(2)), // Renamed from averageMonthlyCoreExpenses
       currentSavingsRate: parseFloat(currentSavingsRate.toFixed(1)),
     };
   }, [allTransactions]);
 
   const handleGetForecast = async () => {
-    if (!goalDescription.trim() || !goalAmount || !goalDurationMonths) {
-      toast({ title: "Missing Information", description: "Please fill in all goal details.", variant: "destructive" });
+    if (!goalDescription.trim() || !goalDurationMonths) { // Amount is now optional
+      toast({ title: "Missing Information", description: "Please fill in goal description and duration.", variant: "destructive" });
       return;
     }
-    const amountNum = parseFloat(goalAmount);
+    const amountNum = goalAmount ? parseFloat(goalAmount) : undefined; // Pass undefined if empty
     const durationNum = parseInt(goalDurationMonths, 10);
 
-    if (isNaN(amountNum) || amountNum <= 0 || isNaN(durationNum) || durationNum <= 0) {
-      toast({ title: "Invalid Input", description: "Goal amount and duration must be positive numbers.", variant: "destructive" });
+    if (amountNum !== undefined && (isNaN(amountNum) || amountNum <= 0)) {
+      toast({ title: "Invalid Input", description: "If providing a target amount, it must be a positive number.", variant: "destructive" });
       return;
     }
+     if (isNaN(durationNum) || durationNum <= 0) {
+      toast({ title: "Invalid Input", description: "Goal duration must be a positive number.", variant: "destructive" });
+      return;
+    }
+
 
     if (allTransactions.length < 3 && !isLoadingTransactions) {
       toast({ title: "Insufficient Data", description: "Not enough transaction history for an accurate forecast. Please add more transactions.", variant: "default" });
@@ -168,17 +177,17 @@ export default function AIPlaygroundPage() {
     setAiGoalError(null);
 
     const averages = calculateGoalPlannerAverages();
-     if (averages.averageMonthlyIncome <= 0 && allTransactions.length > 0) {
-      toast({ title: "Data Issue", description: "Average monthly income could not be calculated (is it zero or negative?). Please check your recent transaction data.", variant: "destructive" });
+     if (averages.averageMonthlyIncome <= 0 && allTransactions.length > 0 && (!amountNum || amountNum <=0)) { // Check if AI needs to estimate amount but no income
+      toast({ title: "Data Issue", description: "Average monthly income is zero or negative. AI cannot estimate goal amount or forecast without income data. Please check your recent transaction data.", variant: "destructive" });
       setIsAILoadingGoal(false);
       return;
     }
 
     const input: GoalForecasterInput = {
       goalDescription,
-      goalAmount: amountNum,
+      goalAmount: amountNum, // Can be undefined
       goalDurationMonths: durationNum,
-      averageMonthlyIncome: averages.averageMonthlyIncome || 1, // Ensure non-zero for AI
+      averageMonthlyIncome: averages.averageMonthlyIncome || 0.01, // Send a tiny amount if zero to avoid AI issues, flow handles 0 better
       averageMonthlyExpenses: averages.averageMonthlyExpenses || 0,
       currentSavingsRate: Math.max(0, Math.min(100, averages.currentSavingsRate || 0)),
     };
@@ -186,8 +195,9 @@ export default function AIPlaygroundPage() {
     try {
       const result = await forecastFinancialGoal(input);
       if (result.feasibilityAssessment === "Error" || result.feasibilityAssessment === "Input Error" || result.feasibilityAssessment.toLowerCase().includes("error")) {
-        setAiGoalError(result.suggestedActions.join(' ') || "Could not generate forecast.");
-        toast({ title: "AI Forecast Error", description: result.suggestedActions.join(' ') || "Could not generate forecast.", variant: "destructive" })
+        const errorMsg = result.suggestedActions.join(' ') || result.motivationalMessage || "Could not generate forecast.";
+        setAiGoalError(errorMsg);
+        toast({ title: "AI Forecast Error", description: errorMsg, variant: "destructive" })
       } else {
         setAiForecast(result);
       }
@@ -202,21 +212,21 @@ export default function AIPlaygroundPage() {
   };
 
   const handleSaveGoal = async () => {
-    if (!aiForecast || !goalDescription.trim() || !goalAmount || !goalDurationMonths) {
+    if (!aiForecast || !goalDescription.trim() || !goalDurationMonths) {
       toast({ title: "No Forecast to Save", description: "Please generate an AI forecast first.", variant: "destructive" });
       return;
     }
     setIsSavingGoal(true);
     const goalData: GoalInput = {
       description: goalDescription,
-      targetAmount: parseFloat(goalAmount),
+      targetAmount: aiForecast.estimatedOrProvidedGoalAmount, // Use amount from AI forecast
       targetDurationMonths: parseInt(goalDurationMonths, 10),
       initialRequiredMonthlySavings: aiForecast.requiredMonthlySavings,
     };
     try {
       await addGoal(goalData);
       toast({ title: "Goal Saved!", description: `'${goalDescription}' has been added to your goals.` });
-      fetchInitialDataCallback(); 
+      fetchInitialDataCallback();
       setAiForecast(null);
       setGoalDescription('');
       setGoalAmount('');
@@ -266,13 +276,14 @@ export default function AIPlaygroundPage() {
 
   const calculateBudgetingAssistantInputs = useCallback(() => {
     const today = new Date();
-    let totalExpensesLast3Months = 0;
+    let totalCoreExpensesLast3Months = 0;
     const spendingByTypeLast3Months: Record<string, number> = { need: 0, want: 0, investment_expense: 0 };
     const spendingByCategoryLast3Months: Record<string, number> = {};
     const monthSet = new Set<string>();
+    const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 
     for (let i = 0; i < 3; i++) {
-      const targetMonthDate = subMonths(today, i + 1); // Analyze last 3 full months, not including current partial month
+      const targetMonthDate = subMonths(today, i + 1); // Analyze last 3 full months
       const monthStart = startOfMonth(targetMonthDate);
       const monthEnd = endOfMonth(targetMonthDate);
 
@@ -282,7 +293,11 @@ export default function AIPlaygroundPage() {
         if (transactionDate >= monthStart && transactionDate <= monthEnd) {
           monthHasData = true;
           if (t.type === 'expense') {
-            totalExpensesLast3Months += t.amount;
+            if (t.expenseType === 'need' || t.expenseType === 'want') {
+                if (!(t.category && investmentCategoryNames.includes(t.category.name))) {
+                     totalCoreExpensesLast3Months += t.amount;
+                }
+            }
             if (t.expenseType) {
               spendingByTypeLast3Months[t.expenseType] = (spendingByTypeLast3Months[t.expenseType] || 0) + t.amount;
             }
@@ -296,7 +311,7 @@ export default function AIPlaygroundPage() {
     }
 
     const numberOfMonthsWithData = monthSet.size > 0 ? monthSet.size : 1;
-    const averagePastMonthlyExpenses = totalExpensesLast3Months / numberOfMonthsWithData;
+    const averagePastMonthlyCoreExpenses = totalCoreExpensesLast3Months / numberOfMonthsWithData;
 
     const topCategories = Object.entries(spendingByCategoryLast3Months)
       .sort(([, a], [, b]) => b - a)
@@ -306,7 +321,7 @@ export default function AIPlaygroundPage() {
 
     const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ₹${(spendingByTypeLast3Months.need / numberOfMonthsWithData).toFixed(0)}, Wants: ₹${(spendingByTypeLast3Months.want / numberOfMonthsWithData).toFixed(0)}, Investments (as expense): ₹${(spendingByTypeLast3Months.investment_expense / numberOfMonthsWithData).toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
 
-    return { averagePastMonthlyExpenses, pastSpendingBreakdown };
+    return { averagePastMonthlyExpenses: averagePastMonthlyCoreExpenses, pastSpendingBreakdown };
   }, [allTransactions]);
 
   const handleGetBudgetPlan = async () => {
@@ -373,13 +388,12 @@ export default function AIPlaygroundPage() {
       if (t.category?.name) spendingByCategory[t.category.name] = (spendingByCategory[t.category.name] || 0) + t.amount;
     });
 
-    // Get top 4 categories
     const topCategoriesString = Object.entries(spendingByCategory)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 4) // Changed from 2 to 4
+      .slice(0, 4)
       .map(([name, total]) => `${name}: ₹${total.toFixed(0)}`)
       .join(', ');
-    
+
     return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments_Expenses: ₹${spendingByType.investment_expense.toFixed(0)}. Top categories: ${topCategoriesString || 'N/A'}.`;
   };
 
@@ -392,14 +406,16 @@ export default function AIPlaygroundPage() {
     let currentPeriodStart: Date, currentPeriodEnd: Date;
     let previousPeriodStart: Date, previousPeriodEnd: Date;
     let periodDescription = "";
+    const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+
 
     if (healthCheckPeriodType === 'current_week') {
-      currentPeriodStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
-      currentPeriodEnd = endOfWeek(today, { weekStartsOn: 1 }); // Sunday
-      previousPeriodStart = startOfWeek(subMonths(currentPeriodStart, 0.25), { weekStartsOn: 1 }); // Previous week start
-      previousPeriodEnd = endOfWeek(previousPeriodStart, { weekStartsOn: 1 }); // Previous week end
+      currentPeriodStart = startOfWeek(today, { weekStartsOn: 1 }); 
+      currentPeriodEnd = endOfWeek(today, { weekStartsOn: 1 }); 
+      previousPeriodStart = startOfWeek(subMonths(currentPeriodStart, 0.25), { weekStartsOn: 1 }); 
+      previousPeriodEnd = endOfWeek(previousPeriodStart, { weekStartsOn: 1 }); 
       periodDescription = `This Week (${format(currentPeriodStart, "MMM d")} - ${format(currentPeriodEnd, "MMM d, yyyy")})`;
-    } else { // current_month
+    } else { 
       currentPeriodStart = startOfMonth(today);
       currentPeriodEnd = endOfMonth(today);
       const prevMonthDate = subMonths(today,1);
@@ -417,16 +433,24 @@ export default function AIPlaygroundPage() {
         setIsAILoadingHealthCheck(false);
         return;
     }
+    
+    const currentCoreExpenses = currentTransactions
+        .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))
+        .reduce((sum, t) => sum + t.amount, 0);
+    const previousCoreExpenses = previousTransactions
+        .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))
+        .reduce((sum, t) => sum + t.amount, 0);
+
 
     const input: FinancialHealthCheckInput = {
       periodDescription,
       currentTotalIncome: currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
-      currentTotalExpenses: currentTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
-      currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions),
+      currentTotalExpenses: currentCoreExpenses, // Use core expenses
+      currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions.filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))), // Pass only core expenses for breakdown
       previousTotalIncome: previousTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
-      previousTotalExpenses: previousTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+      previousTotalExpenses: previousCoreExpenses, // Use core expenses
     };
-    
+
     try {
       const result = await getFinancialHealthCheck(input);
       if (result.healthSummary.toLowerCase().includes("error") || result.healthSummary.toLowerCase().includes("could not generate")) {
@@ -458,7 +482,8 @@ export default function AIPlaygroundPage() {
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
               Define your financial goal, get an AI forecast, and save it for tracking.
-              Analysis is based on your average income/expenses from the last 6 months.
+              Analysis is based on your average income/core expenses from the last 6 months.
+              Target amount is optional; AI will estimate if left blank.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -469,20 +494,20 @@ export default function AIPlaygroundPage() {
                   id="goalDescription"
                   value={goalDescription}
                   onChange={(e) => setGoalDescription(e.target.value)}
-                  placeholder="e.g., Save for a down payment on a new car, Trip to Bali, New Gaming Laptop"
+                  placeholder="e.g., Save for a down payment on a new car, Trip to Bali for 2, New Gaming Laptop"
                   className="mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary"
                   rows={2}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="goalAmount" className="text-foreground/90">Target Amount (₹)</Label>
+                  <Label htmlFor="goalAmount" className="text-foreground/90">Target Amount (₹) <span className="text-xs text-muted-foreground">(Optional - AI will estimate if blank)</span></Label>
                   <Input
                     id="goalAmount"
                     type="number"
                     value={goalAmount}
                     onChange={(e) => setGoalAmount(e.target.value)}
-                    placeholder="e.g., 50000"
+                    placeholder="e.g., 50000 (or leave blank)"
                     className="mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary"
                   />
                 </div>
@@ -531,7 +556,9 @@ export default function AIPlaygroundPage() {
                 <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Goal Forecast &amp; Plan</CardTitle>
                 <div className="space-y-3 text-sm">
                   <p><strong className="text-foreground">Goal:</strong> {goalDescription}</p>
-                  <p><strong className="text-foreground">Target:</strong> ₹{parseFloat(goalAmount).toLocaleString()} in {goalDurationMonths} months</p>
+                  <p><strong className="text-foreground">Target:</strong> ₹{aiForecast.estimatedOrProvidedGoalAmount.toLocaleString()} in {goalDurationMonths} months
+                    {aiForecast.wasAmountEstimatedByAI && <span className="text-xs text-muted-foreground italic ml-1">(AI Estimated Amount)</span>}
+                  </p>
                   <hr className="border-accent/30 my-2" />
                   <p><strong className="text-foreground">Feasibility:</strong> <span className={cn(
                     aiForecast.feasibilityAssessment.includes("Feasible") ? "text-green-600 dark:text-green-400" :
@@ -607,7 +634,7 @@ export default function AIPlaygroundPage() {
               const progress = goal.targetAmount > 0 ? (goal.amountSavedSoFar / goal.targetAmount) * 100 : 0;
               const targetDate = addMonths(new Date(goal.createdAt), goal.targetDurationMonths);
               const monthsRemaining = differenceInMonths(targetDate, new Date());
-              
+
               return (
                 <motion.div
                   key={goal.id}
@@ -707,7 +734,7 @@ export default function AIPlaygroundPage() {
               AI Budgeting Assistant
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Get a personalized budget plan based on your income, savings goals, and past spending (avg. last 3 months).
+              Get a personalized budget plan based on your income, savings goals, and past core spending (avg. last 3 months).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -835,6 +862,7 @@ export default function AIPlaygroundPage() {
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
               Get a quick AI summary of your financial activity for the current week or month. Includes top spends and optimization tips.
+              Analysis based on core expenses.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

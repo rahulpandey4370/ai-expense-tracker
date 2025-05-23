@@ -11,34 +11,21 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { GoalForecasterInput, GoalForecasterOutput } from '@/lib/types'; // Import types
+import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput } from '@/lib/types'; // Import types and schemas
 
 // Internal Zod schemas - not exported from this 'use server' file
-const GoalForecasterInputSchemaInternal = z.object({
-  goalDescription: z.string().describe("The user's description of their financial goal (e.g., 'Save for a vacation to Europe', 'Buy a new gaming laptop')."),
-  goalAmount: z.number().min(0.01).describe("The target monetary amount for the goal in INR."),
-  goalDurationMonths: z.number().int().min(1).describe("The desired duration in months to achieve the goal."),
-  averageMonthlyIncome: z.number().min(0).describe("The user's average monthly income in INR based on recent data. Can be 0."),
-  averageMonthlyExpenses: z.number().min(0).describe("The user's average monthly expenses (excluding dedicated savings/investments for this specific goal) in INR based on recent data. Can be 0."),
-  currentSavingsRate: z.number().min(0).max(100).describe("The user's current approximate savings rate as a percentage of income (e.g., 20 for 20%)."),
-});
+// These will now be based on the imported schemas to ensure alignment
+const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema;
 
-const GoalForecasterOutputSchemaInternal = z.object({
-  feasibilityAssessment: z.string().describe("A brief assessment of whether the goal is feasible within the given timeframe based on current financials (e.g., 'Highly Feasible', 'Challenging but Possible', 'Likely Unfeasible without changes')."),
-  projectedMonthsToGoal: z.number().int().min(1).optional().describe("If feasible or challenging, the AI's projected number of months to reach the goal with current savings habits. Omit if unfeasible. Must be a positive integer if provided."),
-  requiredMonthlySavings: z.number().min(0.01).describe("The amount the user would need to save specifically for this goal each month to achieve it in the desired duration. Must be a positive number."),
-  suggestedActions: z.array(z.string()).describe("A list of 2-4 actionable suggestions to help achieve the goal. These could include increasing savings by a certain amount, or reducing spending in specific categories (e.g., 'Reduce 'Food and Dining' by X%', 'Increase monthly savings by ₹Y'). Be specific with INR amounts where possible."),
-  motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
-});
+const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
 
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput
 ): Promise<GoalForecasterOutput> {
   try {
-    // Validate input against internal schema before passing to AI
-    // This is an extra safety check, usually types from GoalForecasterInput (from lib/types) should align
-    const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
+    // Validate input against the main schema before passing to AI
+    const validatedInput = GoalForecasterInputSchema.parse(input);
     return await financialGoalForecasterFlow(validatedInput);
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
@@ -47,14 +34,18 @@ export async function forecastFinancialGoal(
     if (flowError instanceof z.ZodError) {
        return {
         feasibilityAssessment: "Input Error",
-        requiredMonthlySavings: 0, // Default value
-        suggestedActions: [`Invalid input for AI: ${flowError.flatten().fieldErrors}`],
+        estimatedOrProvidedGoalAmount: input.goalAmount || 0,
+        wasAmountEstimatedByAI: !input.goalAmount,
+        requiredMonthlySavings: 0,
+        suggestedActions: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`],
         motivationalMessage: "Please check your input values."
       };
     }
     return {
       feasibilityAssessment: "Error",
-      requiredMonthlySavings: 0, // Default value
+      estimatedOrProvidedGoalAmount: input.goalAmount || 0,
+      wasAmountEstimatedByAI: !input.goalAmount,
+      requiredMonthlySavings: 0,
       suggestedActions: [`An unexpected error occurred: ${errorMessage}`],
       motivationalMessage: "Please try again later."
     };
@@ -80,45 +71,59 @@ The user wants to achieve a financial goal. Analyze their goal against their cur
 
 User's Goal:
 - Description: {{goalDescription}}
-- Target Amount: ₹{{goalAmount}}
+- Target Amount (User Provided, optional): ₹{{goalAmount}}
 - Desired Duration: {{goalDurationMonths}} months
 
 User's Financials (Recent Averages):
 - Average Monthly Income: ₹{{averageMonthlyIncome}}
-- Average Monthly Expenses: ₹{{averageMonthlyExpenses}}
-- Current Approximate Savings Rate: {{currentSavingsRate}}%
+- Average Monthly Expenses (Core Spending): ₹{{averageMonthlyExpenses}}
+- Current Approximate Savings Rate (after core expenses): {{currentSavingsRate}}%
 
 Your Task:
-1.  **Calculate Feasibility**: Determine if the goal is 'Highly Feasible', 'Challenging but Possible', or 'Likely Unfeasible without changes' within the {{goalDurationMonths}} months.
-    - Calculate required monthly savings for this goal: ({{goalAmount}} / {{goalDurationMonths}}). Ensure this is a positive value if goalAmount and goalDurationMonths are positive.
+1.  **Determine Goal Amount**:
+    - If a positive '{{goalAmount}}' is provided by the user, use that as the 'estimatedOrProvidedGoalAmount'. Set 'wasAmountEstimatedByAI' to false.
+    - If '{{goalAmount}}' is NOT provided (is zero or missing), you MUST estimate a realistic cost in INR for the '{{goalDescription}}'. This estimated amount becomes 'estimatedOrProvidedGoalAmount'. Set 'wasAmountEstimatedByAI' to true. For example, if description is "Vacation to Europe for 2 people", estimate a reasonable cost. If "New Gaming Laptop", estimate that. Be specific if possible.
+2.  **Calculate Feasibility**: Based on the 'estimatedOrProvidedGoalAmount', determine if the goal is 'Highly Feasible', 'Challenging but Possible', or 'Likely Unfeasible without changes' within the {{goalDurationMonths}} months.
+    - Calculate required monthly savings for this goal: ('estimatedOrProvidedGoalAmount' / {{goalDurationMonths}}). Ensure this is positive.
     - Compare this to their current average monthly net savings ({{averageMonthlyIncome}} - {{averageMonthlyExpenses}}).
-2.  **Projected Timeline (if applicable)**: If the goal seems feasible or challenging with their *current* average net savings (not the newly calculated required savings for the goal), estimate how many months it would take them to reach {{goalAmount}}. If unfeasible with current habits, omit this. Ensure this is a positive integer if provided.
-3.  **Required Monthly Savings**: Clearly state the amount (in INR) they need to save *specifically for this goal* each month to meet it in {{goalDurationMonths}} months. This should be a positive number.
-4.  **Actionable Suggestions (2-4 points)**: Provide specific, practical suggestions.
-    - If current savings are insufficient for the goal's required monthly savings, suggest how much *additional* monthly savings are needed.
-    - Suggest which typical expense categories (e.g., 'Food and Dining', 'Shopping', 'Entertainment', 'Subscriptions') they might consider reducing, and by what approximate percentage or amount (INR) if possible.
+3.  **Projected Timeline (if applicable)**: If the goal seems feasible or challenging with their *current* average net savings, estimate how many months it would take them to reach 'estimatedOrProvidedGoalAmount'. If unfeasible with current habits, omit this. Ensure this is a positive integer if provided.
+4.  **Required Monthly Savings**: Clearly state the amount (in INR) they need to save *specifically for this goal* each month to meet it in {{goalDurationMonths}} months, using the 'estimatedOrProvidedGoalAmount'. This should be a positive number.
+5.  **Actionable Suggestions (2-4 points)**: Provide specific, practical suggestions based on the 'estimatedOrProvidedGoalAmount'.
+    - If current savings are insufficient, suggest how much *additional* monthly savings are needed.
+    - Suggest which typical expense categories (e.g., 'Food and Dining', 'Shopping', 'Entertainment') they might consider reducing, and by what approximate percentage or amount (INR) if possible.
     - Suggest ways to increase income if relevant.
-    - Prioritize clear, actionable steps.
-5.  **Motivational Message**: End with a brief, encouraging note.
+6.  **Motivational Message**: End with a brief, encouraging note.
 
-Structure your output according to the defined schema.
-Example for a suggestion: "Consider reducing your 'Entertainment' spending by 15% (approx. ₹X) each month."
-Be realistic and positive.
+Structure your output according to the defined schema. Ensure all monetary values are positive.
+If average monthly income is ₹0, and goalAmount was not provided (AI needs to estimate), state that a goal cannot be estimated or planned without income, set feasibility to 'Insufficient Data for Full Forecast', estimatedOrProvidedGoalAmount to 0, and provide general saving tips.
+If goalAmount *was* provided but income is ₹0, calculate required monthly savings but state feasibility is 'Insufficient Data for Full Forecast'.
 `,
 });
 
 const financialGoalForecasterFlow = ai.defineFlow(
   {
     name: 'financialGoalForecasterFlow',
-    inputSchema: GoalForecasterInputSchemaInternal, // Use the internal schema
-    outputSchema: GoalForecasterOutputSchemaInternal, // Use the internal schema
+    inputSchema: GoalForecasterInputSchemaInternal,
+    outputSchema: GoalForecasterOutputSchemaInternal,
   },
   async (input) => {
-    if (input.averageMonthlyIncome <= 0 && input.goalAmount > 0 && input.goalDurationMonths > 0) { // Check if income is non-positive but goal exists
+    if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
+            estimatedOrProvidedGoalAmount: 0,
+            wasAmountEstimatedByAI: true, // Attempted estimation but failed due to no income
+            requiredMonthlySavings: 0,
+            suggestedActions: ["Average monthly income is zero or negative. A goal cannot be estimated or planned without positive income data. Please ensure you have recent income transactions recorded."],
+            motivationalMessage: "Update your transaction history for a more accurate forecast."
+        };
+    }
+     if (input.averageMonthlyIncome <= 0 && input.goalAmount && input.goalAmount > 0) {
+        return {
+            feasibilityAssessment: "Insufficient Data for Full Forecast",
+            estimatedOrProvidedGoalAmount: input.goalAmount,
+            wasAmountEstimatedByAI: false,
             requiredMonthlySavings: input.goalAmount / input.goalDurationMonths,
-            suggestedActions: ["Average monthly income is zero or negative. While we can calculate required monthly savings for the goal, a full feasibility assessment isn't possible without positive income data. Please ensure you have recent income transactions recorded."],
+            suggestedActions: ["Average monthly income is zero or negative. While we can calculate required monthly savings for the goal, a full feasibility assessment isn't possible without positive income data."],
             motivationalMessage: "Update your transaction history for a more accurate forecast."
         };
     }
