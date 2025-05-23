@@ -17,6 +17,7 @@ import { ParsedAITransactionSchema, type ParsedAITransaction } from '@/lib/types
 const CategorySchemaForAIInternal = z.object({
   id: z.string(),
   name: z.string(),
+  type: z.enum(['income', 'expense']),
 });
 
 // Internal schema for AI flow input, not exported
@@ -28,8 +29,8 @@ const PaymentMethodSchemaForAIInternal = z.object({
 // Internal schema for AI flow input, not exported
 const ParseTransactionTextInputSchemaInternal = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
-  expenseCategories: z.array(CategorySchemaForAIInternal).describe("A list of available expense categories (name, id) to help with mapping."),
-  incomeCategories: z.array(CategorySchemaForAIInternal).describe("A list of available income categories (name, id) to help with mapping."),
+  expenseCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
+  incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
 });
@@ -72,12 +73,15 @@ export async function parseTransactionsFromText(
         paymentMethods: input.paymentMethods,
         currentDate
     });
-  } catch (flowError: any) {
-    console.error("Error executing parseTransactionsFlow in wrapper:", flowError);
-    const errorMessage = flowError.message || 'Unknown error';
-    const userFriendlyMessage = errorMessage.includes("Handlebars error") || errorMessage.includes("unknown helper") || (errorMessage.includes("GoogleGenerativeAI Error") && errorMessage.includes("Invalid JSON payload")) || errorMessage.includes("The model is overloaded")
-      ? `AI model failed to process the text due to an internal or configuration error: ${errorMessage}. Please check server logs or try again later.`
-      : `An unexpected error occurred during AI processing: ${errorMessage}. Please check server logs.`;
+  } catch (error: any) {
+    console.error("Error executing parseTransactionsFlow in wrapper:", error);
+    const errorMessage = error.message || 'Unknown error';
+    let userFriendlyMessage = `An unexpected error occurred during AI processing: ${errorMessage}. Please check server logs.`;
+    if (errorMessage.includes("Handlebars error") || errorMessage.includes("unknown helper") || (errorMessage.includes("GoogleGenerativeAI Error") && errorMessage.includes("Invalid JSON payload")) || errorMessage.includes("The model is overloaded")) {
+      userFriendlyMessage = `AI model failed to process the text due to an internal or configuration error: ${errorMessage}. Please check server logs or try again later.`;
+    } else if (errorMessage.includes("503 Service Unavailable")) {
+      userFriendlyMessage = `AI model is currently overloaded: ${errorMessage}. Please try again in a few moments.`;
+    }
     return {
       parsedTransactions: [],
       summaryMessage: userFriendlyMessage
@@ -91,19 +95,19 @@ const parseTransactionsPrompt = ai.definePrompt({
   output: { schema: ParseTransactionTextOutputSchemaInternal },
   // Model configuration for potentially faster responses
   config: {
-    temperature: 0.3, // Lower temperature for more deterministic (and often faster) output
-    maxOutputTokens: 1500, // Limit output size to prevent excessive generation
-    safetySettings: [ // Copied from financial-chatbot-flow as a good default
+    temperature: 0.3, 
+    maxOutputTokens: 1500, 
+    safetySettings: [ 
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
     ],
   },
-  prompt: `You are an expert financial assistant. Parse the following text for financial transactions.
+  prompt: `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
 Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yesterday", "last Tuesday") to YYYY-MM-DD format.
 
-**Handle imperfect input:** Prioritize accuracy. Understand user intent, correct common typos (e.g., "groaries" to "Groceries"), and map to the closest category/payment method from the lists below.
+**Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
 
 Available Expense Categories:
 {{#each expenseCategories}}
@@ -122,14 +126,18 @@ Available Payment Methods (for expenses):
 
 For each transaction identified, provide:
 - date: Transaction date (YYYY-MM-DD).
-- description: Detailed description. For purchases (e.g., groceries), include merchant and a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana").
+- description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.").
 - amount: Positive numeric amount (e.g., 50.75). Interpret ₹, INR, Rs. correctly.
 - type: 'income' or 'expense'.
 - categoryNameGuess: (Optional) Map to a provided category name. If unsure, use "Others" or leave blank.
 - paymentMethodNameGuess: (Optional, for expenses) Map to a provided payment method name. If unsure, leave blank.
-- expenseTypeNameGuess: (Optional, for expenses) 'need', 'want', or 'investment_expense'. If unsure or income, leave blank.
+- expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment_expense'.
+    Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
+    Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions (Netflix, Spotify if not considered essential).
+    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
+    If unsure or if it's an income transaction, leave blank or default to 'need' if it seems essential.
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.
-- confidenceScore: Your confidence (0.0-1.0) for this transaction.
+- confidenceScore: Your confidence (0.0-1.0) for this transaction. 1.0 means very confident.
 - error: (Optional, concise) If a part is unparseable/missing info, note the error briefly.
 
 Input Text:
@@ -155,7 +163,6 @@ const parseTransactionsFlow = ai.defineFlow(
 
     let output;
     try {
-      // Retry logic handles transient errors, not inherent model slowness for a specific prompt.
       const result = await retryableAIGeneration(() => parseTransactionsPrompt(input), 3, 1500);
       output = result.output;
     } catch (aiError: any) {
@@ -180,22 +187,22 @@ const parseTransactionsFlow = ai.defineFlow(
         if (tx.date) {
           const parsedD = parseDateFns(tx.date, 'yyyy-MM-dd', new Date());
           if (isNaN(parsedD.getTime())) {
-            finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to current date if AI date is invalid
+            finalDate = format(new Date(), 'yyyy-MM-dd'); 
           } else {
-            finalDate = tx.date; // Keep valid YYYY-MM-DD from AI
+            finalDate = tx.date; 
           }
         } else {
-           finalDate = format(new Date(), 'yyyy-MM-dd'); // Default to current date if AI provides no date
+           finalDate = format(new Date(), 'yyyy-MM-dd'); 
         }
       } catch (e) {
-        finalDate = format(new Date(), 'yyyy-MM-dd'); // Default on any parsing error
+        finalDate = format(new Date(), 'yyyy-MM-dd'); 
       }
       return {
         ...tx,
         date: finalDate,
-        amount: tx.amount && tx.amount > 0 ? tx.amount : 0, // Ensure amount is positive or zero
+        amount: tx.amount && tx.amount > 0 ? tx.amount : 0, 
       };
-    }).filter(tx => tx.amount > 0 && tx.description); // Further filter for transactions with valid amount and description
+    }).filter(tx => tx.amount > 0 && tx.description); 
 
     return {
         parsedTransactions: validatedTransactions,

@@ -4,7 +4,6 @@
  * @fileOverview AI flow for parsing receipt images into structured transaction data.
  *
  * - parseReceiptImage - A function that uses AI to extract transaction details from a receipt image.
- * - ParsedReceiptTransaction - The type for the structure of a single transaction parsed by AI. (Imported from lib/types)
  * - ParseReceiptImageOutput - The return type for the flow.
  */
 
@@ -20,7 +19,6 @@ const CategorySchemaForAIInternal = z.object({
   name: z.string(),
   type: z.enum(['income', 'expense']),
 });
-type CategoryForAIInternal = z.infer<typeof CategorySchemaForAIInternal>;
 
 // Internal schema for AI flow input, not exported
 const PaymentMethodSchemaForAIInternal = z.object({
@@ -33,7 +31,7 @@ const ParseReceiptImageInputSchemaInternal = z.object({
   receiptImageUri: z.string().describe(
     "A receipt image, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
   ),
-  categories: z.array(CategorySchemaForAIInternal).describe("A list of available expense categories (name, id, type) to help with mapping."),
+  categories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates if any are ambiguously parsed from the receipt."),
 });
@@ -41,23 +39,29 @@ const ParseReceiptImageInputSchemaInternal = z.object({
 export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchemaInternal>;
 
 
-// Internal schema for AI flow output, not exported. Relies on imported ParsedReceiptTransactionSchema
-const ParseReceiptImageOutputSchemaInternal = z.object({
-  parsedTransaction: ParsedReceiptTransactionSchema.nullable().describe("The structured transaction parsed from the receipt image, or null if completely unparseable."),
-});
-export type ParseReceiptImageOutput = z.infer<typeof ParseReceiptImageOutputSchemaInternal>;
+export type ParseReceiptImageOutput = {
+  parsedTransaction: ParsedReceiptTransaction | null;
+};
 
 
 export async function parseReceiptImage(
   input: {
     receiptImageUri: string;
-    categories: CategoryForAIInternal[];
-    paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
+    categories: {id: string; name: string; type: 'income' | 'expense'}[];
+    paymentMethods: {id: string; name: string;}[];
   }
 ): Promise<ParseReceiptImageOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
+  const expenseCategoriesForAI = input.categories
+    .filter(c => c.type === 'expense')
+    .map(({ type, ...rest }) => rest);
   try {
-    return await parseReceiptImageFlow({ ...input, currentDate });
+    return await parseReceiptImageFlow({ 
+        receiptImageUri: input.receiptImageUri,
+        categories: expenseCategoriesForAI, // Only pass expense categories
+        paymentMethods: input.paymentMethods,
+        currentDate 
+    });
   } catch (flowError: any) {
     console.error("Error executing parseReceiptImageFlow:", flowError);
     return {
@@ -71,10 +75,10 @@ export async function parseReceiptImage(
 const parseReceiptImagePrompt = ai.definePrompt({
   name: 'parseReceiptImagePrompt',
   input: { schema: ParseReceiptImageInputSchemaInternal },
-  output: { schema: ParseReceiptImageOutputSchemaInternal },
-  prompt: `You are an expert financial assistant specialized in parsing text from receipt images.
-Your task is to extract transaction details from the provided receipt image.
-The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative. Assume receipts are for expenses.
+  output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }) }, // Ensure output schema matches expected
+  prompt: `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
+Your task is to extract transaction details from the provided receipt image. Assume receipts are for expenses.
+The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative.
 
 Available Expense Categories:
 {{#each categories}}
@@ -82,15 +86,21 @@ Available Expense Categories:
 {{/each}}
 
 Available Payment Methods:
-{{#each paymentMethods}}- {{this.name}} (ID: {{this.id}}){{/each}}
+{{#each paymentMethods}}
+- {{this.name}} (ID: {{this.id}})
+{{/each}}
 
 From the receipt image, extract the following:
 - date: Transaction date in YYYY-MM-DD format. If multiple dates are present (e.g., order date, payment date), prefer the payment date. If no date is clear, use the {{currentDate}}.
 - description: Merchant name or a concise description of the purchase (e.g., "Big Bazaar Groceries", "Starbucks Coffee").
 - amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
-- paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash"), the best guess for a payment method name from the provided list.
-- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'. If unsure, default to 'need' or 'want' based on common sense for receipt items.
+- paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash", "PayTM UPI"), the best guess for a payment method name from the provided list. Look for card brand names, last 4 digits, or payment app names.
+- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'.
+    Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
+    Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions.
+    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
+    If unsure, default to 'need' or 'want' based on common sense for receipt items.
 - confidenceScore: Your confidence (0.0 to 1.0) that you parsed this receipt correctly.
 - error: (Optional) If the receipt is unreadable, blurry, or key information (like amount or merchant) is missing, note the error.
 
@@ -106,7 +116,7 @@ const parseReceiptImageFlow = ai.defineFlow(
   {
     name: 'parseReceiptImageFlow',
     inputSchema: ParseReceiptImageInputSchemaInternal,
-    outputSchema: ParseReceiptImageOutputSchemaInternal,
+    outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }),
   },
   async (input) => {
     if (!input.receiptImageUri) {
@@ -125,10 +135,16 @@ const parseReceiptImageFlow = ai.defineFlow(
       return { parsedTransaction: { error: `AI model failed to process the receipt: ${aiError.message || 'Unknown AI error'}` } };
     }
 
-    if (!outputFromAI || !outputFromAI.parsedTransaction) {
-      console.error("AI model returned no or invalid output structure for receipt parsing.");
+    if (!outputFromAI || outputFromAI.parsedTransaction === undefined) { // Check for undefined explicitly
+      console.error("AI model returned no or invalid output structure for receipt parsing. Output:", outputFromAI);
       return { parsedTransaction: { error: "AI model failed to return a valid output structure for receipt parsing." } };
     }
+    
+    // If parsedTransaction is null, it means AI decided it's unparseable, which is a valid output.
+    if (outputFromAI.parsedTransaction === null) {
+        return { parsedTransaction: null };
+    }
+
 
     let finalDate = outputFromAI.parsedTransaction.date;
     if (outputFromAI.parsedTransaction.date) {
@@ -155,3 +171,4 @@ const parseReceiptImageFlow = ai.defineFlow(
     };
   }
 );
+
