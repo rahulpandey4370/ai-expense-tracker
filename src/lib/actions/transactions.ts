@@ -15,24 +15,12 @@ const TRANSACTIONS_DIR = 'transactions/';
 async function ensureBlobStoreFile<T>(filePath: string, defaultData: T[]): Promise<T[]> {
   try {
     const blob = await head(filePath);
-    const response = await fetch(blob.url, { cache: 'no-store' }); // Added cache: 'no-store'
+    const response = await fetch(blob.url, { cache: 'no-store' });
     if (!response.ok) {
       console.error(`Failed to fetch content of existing blob ${filePath}: ${response.statusText} (Status: ${response.status})`);
-      // Fall through to creation logic if fetch fails for a reason other than pure non-existence (e.g. permissions changed)
-      // This might lead to overwriting if not careful, but for this app's data files, it's likely a "not found" equivalent.
-    } else {
-      return await response.json();
+      throw new BlobNotFoundError(); 
     }
-    // If response was not ok, it means the blob might exist but is not accessible, or some other error.
-    // The original catch block handles BlobNotFoundError specifically for creation.
-    // For robustness, we might consider if other non-ok statuses should also trigger creation,
-    // but typically `head` would fail with BlobNotFoundError if it's truly not there.
-    // If we reach here because response.ok was false, it's an edge case. The original catch will handle true "not found".
-    // To be safe, we'll assume if fetch wasn't ok after head was, something is wrong, try to create.
-    // This path is less likely; BlobNotFoundError in head is the primary "not found" path.
-    console.warn(`Blob ${filePath} metadata found, but content fetch failed. Will attempt to create/overwrite.`);
-    throw new BlobNotFoundError(); // Simulate not found to trigger creation logic
-
+    return await response.json();
   } catch (error: any) {
     let isNotFoundError = false;
     if (error instanceof BlobNotFoundError || (error && error.name === 'BlobNotFoundError')) {
@@ -71,8 +59,9 @@ async function ensureBlobStoreFile<T>(filePath: string, defaultData: T[]): Promi
       }
     }
     
+    // For other errors, re-throw
     console.error(`Error ensuring blob file ${filePath}:`, error);
-    throw new Error(`Blob storage error for ${filePath}: ${error.message}. Please check Vercel Blob store and logs.`);
+    throw new Error(`Blob storage error for ${filePath}: ${error.message || 'Unknown error ensuring blob file.'}. Check Vercel Blob store and logs.`);
   }
 }
 
@@ -85,9 +74,9 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
       return allCategories.filter(c => c.type === type);
     }
     return allCategories;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch categories:', error);
-    throw new Error('Database query failed: Could not fetch categories. Ensure Vercel Blob is set up and migrations (if applicable) ran. Check server logs for detailed Prisma errors.');
+    throw new Error(`Database query failed: Could not fetch categories. Ensure Vercel Blob is set up. Original error: ${error.message}`);
   }
 }
 
@@ -95,9 +84,9 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
 export async function getPaymentMethods(): Promise<PaymentMethod[]> {
    try {
     return await ensureBlobStoreFile<PaymentMethod>(PAYMENT_METHODS_BLOB_PATH, defaultPaymentMethods);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch payment methods:', error);
-    throw new Error('Database query failed: Could not fetch payment methods. Ensure Vercel Blob is set up and migrations (if applicable) ran. Check server logs for detailed Prisma errors.');
+    throw new Error(`Database query failed: Could not fetch payment methods. Ensure Vercel Blob is set up. Original error: ${error.message}`);
   }
 }
 
@@ -111,9 +100,9 @@ export async function getTransactions(): Promise<AppTransaction[]> {
       getCategories(),
       getPaymentMethods()
     ]);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to load categories/payment methods for getTransactions, cannot proceed:", error);
-    throw new Error("Essential data (categories/payment methods) could not be loaded for transactions. Check previous logs for Blob store errors.");
+    throw new Error(`Essential data (categories/payment methods) could not be loaded for transactions. Original error: ${error.message}`);
   }
 
   const categoryMap = new Map(allCategories.map(c => [c.id, c]));
@@ -128,8 +117,8 @@ export async function getTransactions(): Promise<AppTransaction[]> {
       const salaryCategory = allCategories.find(c => c.name === 'Salary');
       const groceriesCategory = allCategories.find(c => c.name === 'Groceries');
       const foodDiningCategory = allCategories.find(c => c.name === 'Food and Dining');
-      const upiPaymentMethod = allPaymentMethods.find(pm => pm.type === 'UPI'); // Assuming type 'UPI' for a generic UPI
-      const ccPaymentMethod = allPaymentMethods.find(pm => pm.name === 'CC HDFC 7950'); // Using a specific CC name
+      const upiPaymentMethod = allPaymentMethods.find(pm => pm.type === 'UPI'); 
+      const ccPaymentMethod = allPaymentMethods.find(pm => pm.name === 'CC HDFC 7950'); 
 
       const mockTxData: TransactionInput[] = [];
 
@@ -159,7 +148,7 @@ export async function getTransactions(): Promise<AppTransaction[]> {
           id: newId,
           ...validation.data,
           date: validation.data.date.toISOString(),
-          description: validation.data.description || '', // Ensure description is not undefined
+          description: validation.data.description || '', 
           createdAt: now,
           updatedAt: now,
         };
@@ -178,11 +167,12 @@ export async function getTransactions(): Promise<AppTransaction[]> {
        revalidatePath('/transactions');
        revalidatePath('/reports');
        revalidatePath('/yearly-overview');
+       revalidatePath('/ai-playground');
     } else {
         for (const blob of blobs) {
           if (!blob.pathname.endsWith('.json')) continue;
           try {
-            const response = await fetch(blob.url, { cache: 'no-store' }); // Added cache: 'no-store'
+            const response = await fetch(blob.url, { cache: 'no-store' }); 
             if (!response.ok) {
                 console.warn(`Failed to fetch transaction blob ${blob.pathname}: ${response.statusText}`);
                 continue;
@@ -226,7 +216,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     id,
     ...validation.data,
     date: validation.data.date.toISOString(),
-    description: validation.data.description || '', // Ensure description is not undefined
+    description: validation.data.description || '',
     createdAt: now,
     updatedAt: now,
   };
@@ -238,6 +228,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     revalidatePath('/transactions');
     revalidatePath('/reports');
     revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([
         getCategories(),
@@ -267,7 +258,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   try {
     const blobHead = await head(blobPath);
      if (!blobHead || !blobHead.url) throw new Error('Transaction blob metadata not found or URL missing for update.');
-    const response = await fetch(blobHead.url, { cache: 'no-store' }); // Added cache: 'no-store'
+    const response = await fetch(blobHead.url, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Failed to fetch existing transaction for update. Status: ${response.status}`);
     existingRawTx = await response.json();
   } catch (error: any) {
@@ -278,61 +269,84 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     throw new Error(`Could not retrieve transaction for update. Original error: ${error.message}`);
   }
 
-  // Create a new object for updatedFields based on `data`
-  const updatedFields: Partial<RawTransaction> = {};
-  if (data.type !== undefined) updatedFields.type = data.type;
-  if (data.date !== undefined) updatedFields.date = data.date.toISOString(); // data.date is a Date object
-  if (data.amount !== undefined) updatedFields.amount = data.amount;
+  // Create a new object for the updated transaction, starting with the existing data
+  const updatedRawTx: RawTransaction = { ...existingRawTx };
+
+  // Apply updates from `data`
+  if (data.type !== undefined) updatedRawTx.type = data.type;
+  if (data.date !== undefined) updatedRawTx.date = data.date.toISOString();
+  if (data.amount !== undefined) updatedRawTx.amount = data.amount;
+  // Ensure description is handled: if data.description is passed (even empty string), use it. Otherwise keep existing.
+  updatedRawTx.description = data.description !== undefined ? data.description : existingRawTx.description;
+
+
+  // Determine the final type to ensure correct fields are set/cleared
+  const finalType = data.type || existingRawTx.type;
+
+  if (finalType === 'expense') {
+    updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
+    updatedRawTx.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
+    updatedRawTx.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
+    updatedRawTx.source = undefined; // Expenses don't have a source
+  } else if (finalType === 'income') {
+    updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
+    updatedRawTx.source = data.source !== undefined ? data.source : existingRawTx.source;
+    updatedRawTx.paymentMethodId = undefined; // Income transactions don't have a payment method
+    updatedRawTx.expenseType = undefined; // Income transactions don't have an expense type
+  }
   
-  // Handle description carefully: if data.description is explicitly passed (even as empty string), use it. Otherwise, keep existing.
-  updatedFields.description = data.description !== undefined ? data.description : existingRawTx.description;
+  updatedRawTx.updatedAt = new Date().toISOString();
 
+  // Validate the fully constructed updatedRawTx against a schema that reflects RawTransaction structure
+  // This step is important if your RawTransaction type has more specific constraints not covered by TransactionInput
+  // For simplicity, we'll assume TransactionInput's structure is close enough for now,
+  // but in a real app, you might have a RawTransactionSchema.
+  // The main thing TransactionInputSchema validates is that required fields per type are there.
+  
+  // Create a temporary object for validation based on TransactionInput structure
+  const tempForValidation: TransactionInput = {
+    type: updatedRawTx.type,
+    date: new Date(updatedRawTx.date),
+    amount: updatedRawTx.amount,
+    description: updatedRawTx.description,
+    categoryId: updatedRawTx.categoryId,
+    paymentMethodId: updatedRawTx.paymentMethodId,
+    source: updatedRawTx.source,
+    expenseType: updatedRawTx.expenseType,
+  };
 
-  if (data.type === 'expense' || (data.type === undefined && existingRawTx.type === 'expense')) {
-    updatedFields.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
-    updatedFields.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
-    updatedFields.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    // Ensure source is cleared if it was an income before and now is an expense
-    if (data.type === 'expense') updatedFields.source = undefined;
-  } else if (data.type === 'income' || (data.type === undefined && existingRawTx.type === 'income')) {
-    updatedFields.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
-    updatedFields.source = data.source !== undefined ? data.source : existingRawTx.source;
-    // Ensure expense-specific fields are cleared if it was an expense before and now is an income
-    if (data.type === 'income') {
-      updatedFields.paymentMethodId = undefined;
-      updatedFields.expenseType = undefined;
-    }
+  const validation = TransactionInputSchema.safeParse(tempForValidation);
+   if (!validation.success) {
+    const errorMessages = validation.error.flatten().fieldErrors;
+    const readableErrors = Object.entries(errorMessages)
+      .map(([field, messages]) => `${field}: ${messages?.join(', ')}`)
+      .join('; ');
+    console.error('Update transaction validation error after merge:', readableErrors, updatedRawTx);
+    throw new Error(`Invalid transaction data after update: ${readableErrors || "Validation failed."}`);
   }
 
 
-  const rawTransactionUpdate: RawTransaction = {
-    ...existingRawTx,
-    ...updatedFields,
-    id: existingRawTx.id, // Ensure ID is not changed
-    createdAt: existingRawTx.createdAt, // Ensure createdAt is not changed
-    updatedAt: new Date().toISOString(),
-  };
-
   try {
-    await put(blobPath, JSON.stringify(rawTransactionUpdate, null, 2), { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json' });
+    await put(blobPath, JSON.stringify(updatedRawTx, null, 2), { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json' });
 
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
     revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([
         getCategories(),
         getPaymentMethods()
       ]);
-    const category = rawTransactionUpdate.categoryId ? allCategories.find(c => c.id === rawTransactionUpdate.categoryId) : undefined;
-    const paymentMethod = rawTransactionUpdate.paymentMethodId ? allPaymentMethods.find(pm => pm.id === rawTransactionUpdate.paymentMethodId) : undefined;
+    const category = updatedRawTx.categoryId ? allCategories.find(c => c.id === updatedRawTx.categoryId) : undefined;
+    const paymentMethod = updatedRawTx.paymentMethodId ? allPaymentMethods.find(pm => pm.id === updatedRawTx.paymentMethodId) : undefined;
 
     return {
-        ...rawTransactionUpdate,
-        date: new Date(rawTransactionUpdate.date),
-        createdAt: new Date(rawTransactionUpdate.createdAt),
-        updatedAt: new Date(rawTransactionUpdate.updatedAt),
+        ...updatedRawTx,
+        date: new Date(updatedRawTx.date),
+        createdAt: new Date(updatedRawTx.createdAt),
+        updatedAt: new Date(updatedRawTx.updatedAt),
         category,
         paymentMethod
     };
@@ -350,12 +364,12 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     revalidatePath('/transactions');
     revalidatePath('/reports');
     revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete transaction from blob:', error);
     if (error instanceof Error && (error.name === 'BlobNotFoundError' || (error as any).code === 'BLOB_NOT_FOUND') ) {
          console.warn(`Attempted to delete non-existent blob: ${TRANSACTIONS_DIR}${id}.json`);
-         // Considered success if blob already doesn't exist to avoid user-facing errors for this case
          return { success: true }; 
     }
     throw new Error(`Could not delete transaction from blob storage. Original error: ${error.message}`);
