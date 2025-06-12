@@ -30,8 +30,8 @@ async function getAzureContainerClient(): Promise<ContainerClient> {
   try {
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const client = blobServiceClient.getContainerClient(containerName);
-    // Check if container exists, and create if it doesn't (optional, depends on setup)
-    // For simplicity, we assume the container is pre-created or creation is handled elsewhere.
+    // Optional: Check if container exists, and create if it doesn't.
+    // For this app, we'll assume it's pre-created or creation is handled elsewhere to keep it simple.
     // await client.createIfNotExists(); 
     containerClient = client;
     return containerClient;
@@ -47,24 +47,21 @@ async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promi
   const blobClient = client.getBlobClient(filePath);
 
   try {
-    const downloadBlockBlobResponse = await blobClient.downloadToString();
-    return JSON.parse(downloadBlockBlobResponse);
-  } catch (error: any) {
-    if (error instanceof RestError && error.statusCode === 404) {
+    const fileExists = await blobClient.exists();
+    if (fileExists) {
+      const downloadBlockBlobResponse = await blobClient.downloadToString();
+      return JSON.parse(downloadBlockBlobResponse);
+    } else {
       // File not found, create it with default data
       console.log(`Azure Blob ${filePath} not found. Attempting to create with default data.`);
-      try {
-        const blockBlobClient = client.getBlockBlobClient(filePath);
-        await blockBlobClient.uploadString(JSON.stringify(defaultData, null, 2), {
-          blobHTTPHeaders: { blobContentType: 'application/json' }
-        });
-        console.log(`Successfully created Azure blob ${filePath} with default data.`);
-        return defaultData;
-      } catch (putError: any) {
-        console.error(`Failed to create Azure blob ${filePath} with default data:`, putError);
-        throw new Error(`Failed to initialize Azure blob ${filePath}: ${putError.message || 'Unknown error during Azure put operation'}`);
-      }
+      const blockBlobClient = client.getBlockBlobClient(filePath);
+      await blockBlobClient.uploadString(JSON.stringify(defaultData, null, 2), {
+        blobHTTPHeaders: { blobContentType: 'application/json' }
+      });
+      console.log(`Successfully created Azure blob ${filePath} with default data.`);
+      return defaultData;
     }
+  } catch (error: any) {
     // For other errors, re-throw
     console.error(`Error ensuring Azure blob file ${filePath}:`, error);
     throw new Error(`Azure Blob storage error for ${filePath}: ${error.message || 'Unknown error ensuring Azure blob file.'}. Check Azure Blob Storage and logs.`);
@@ -116,20 +113,19 @@ export async function getTransactions(): Promise<AppTransaction[]> {
   const paymentMethodMap = new Map(allPaymentMethods.map(pm => [pm.id, pm]));
 
   let transactions: AppTransaction[] = [];
-  let blobExists = false;
+  let hasAnyTransactionBlobs = false;
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: TRANSACTIONS_DIR });
     const listedBlobs = [];
     for await (const blob of blobsIterator) {
-        if (blob.name.endsWith('.json')) { // Ensure we only process JSON files
+        if (blob.name.endsWith('.json') && blob.name !== TRANSACTIONS_DIR) { // Ensure we only process JSON files and not the directory itself
             listedBlobs.push(blob);
-            blobExists = true;
+            hasAnyTransactionBlobs = true;
         }
     }
     
-    if (listedBlobs.length === 0 && allCategories.length > 0 && allPaymentMethods.length > 0) {
+    if (!hasAnyTransactionBlobs && allCategories.length > 0 && allPaymentMethods.length > 0) {
       console.log("No transactions found in Azure blob store, creating 3 mock transactions.");
-      // Mock data creation logic (same as before, but uses Azure upload)
       const salaryCategory = allCategories.find(c => c.name === 'Salary');
       const groceriesCategory = allCategories.find(c => c.name === 'Groceries');
       const foodDiningCategory = allCategories.find(c => c.name === 'Food and Dining');
@@ -177,12 +173,17 @@ export async function getTransactions(): Promise<AppTransaction[]> {
             console.error(`Error processing Azure transaction blob ${blob.name}:`, fetchError);
              if (fetchError instanceof RestError && fetchError.statusCode === 404) {
                 console.warn(`Azure blob ${blob.name} not found during processing, skipping.`);
-             } else { throw fetchError; }
+             } else { /* Potentially rethrow or handle other errors */ }
           }
         }
     }
   } catch (error: any) {
     console.error('Failed to list or process transactions from Azure blob:', error);
+    // Check if the error is because the container itself doesn't exist
+    if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
+        console.warn("Azure container for transactions not found. Returning empty array. The container might need to be created in Azure portal.");
+        return [];
+    }
     throw new Error(`Could not fetch transactions from Azure Blob store. Original error: ${error.message}`);
   }
 
@@ -235,35 +236,50 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     throw new Error(`Could not retrieve transaction for update from Azure. Original error: ${error.message}`);
   }
   
+  // Start with existing data
   const updatedRawTx: RawTransaction = { ...existingRawTx };
+
+  // Apply updates from `data`
   if (data.type !== undefined) updatedRawTx.type = data.type;
   if (data.date !== undefined) updatedRawTx.date = data.date.toISOString();
   if (data.amount !== undefined) updatedRawTx.amount = data.amount;
+  // Allow description to be explicitly set to an empty string or cleared
   updatedRawTx.description = data.description !== undefined ? data.description : existingRawTx.description;
 
-  const finalType = data.type || existingRawTx.type;
+
+  // Handle type-specific fields
+  const finalType = updatedRawTx.type; // Use the potentially updated type
+
   if (finalType === 'expense') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
     updatedRawTx.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    updatedRawTx.source = undefined;
+    updatedRawTx.source = undefined; // Clear source if it's an expense
   } else if (finalType === 'income') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.source = data.source !== undefined ? data.source : existingRawTx.source;
-    updatedRawTx.paymentMethodId = undefined;
-    updatedRawTx.expenseType = undefined;
+    updatedRawTx.paymentMethodId = undefined; // Clear payment method for income
+    updatedRawTx.expenseType = undefined;   // Clear expense type for income
   }
   updatedRawTx.updatedAt = new Date().toISOString();
 
+  // Create a temporary object that matches TransactionInput structure for validation
   const tempForValidation: TransactionInput = {
-    type: updatedRawTx.type, date: new Date(updatedRawTx.date), amount: updatedRawTx.amount, description: updatedRawTx.description,
-    categoryId: updatedRawTx.categoryId, paymentMethodId: updatedRawTx.paymentMethodId, source: updatedRawTx.source, expenseType: updatedRawTx.expenseType,
+    type: updatedRawTx.type,
+    date: new Date(updatedRawTx.date), // Convert ISO string back to Date for validation
+    amount: updatedRawTx.amount,
+    description: updatedRawTx.description,
+    categoryId: updatedRawTx.categoryId,
+    paymentMethodId: updatedRawTx.paymentMethodId,
+    source: updatedRawTx.source,
+    expenseType: updatedRawTx.expenseType,
   };
+
   const validation = TransactionInputSchema.safeParse(tempForValidation);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
     const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
-    console.error('Update transaction validation error after merge (Azure):', readableErrors, updatedRawTx);
+    console.error('Update transaction validation error after merge (Azure):', readableErrors, "Validated Data:", tempForValidation, "Final Raw to save:", updatedRawTx);
     throw new Error(`Invalid transaction data after update: ${readableErrors || "Validation failed."}`);
   }
 
@@ -293,7 +309,6 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete transaction from Azure blob:', error);
-    // deleteIfExists doesn't throw if blob not found, so specific 404 check might not be needed here unless delete() is used.
     throw new Error(`Could not delete transaction from Azure blob storage. Original error: ${error.message}`);
   }
 }

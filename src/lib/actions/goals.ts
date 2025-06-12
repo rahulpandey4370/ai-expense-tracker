@@ -72,7 +72,7 @@ export async function getGoals(): Promise<Goal[]> {
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
     for await (const blob of blobsIterator) {
-      if (!blob.name.endsWith('.json')) continue;
+      if (!blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue; // Skip if not JSON or is the directory itself
       try {
         const blobClient = client.getBlobClient(blob.name);
         const downloadBlockBlobResponse = await blobClient.downloadToString();
@@ -87,10 +87,9 @@ export async function getGoals(): Promise<Goal[]> {
     }
   } catch (error: any) {
     console.error('Failed to list goals from Azure blob:', error);
-    if (error instanceof RestError && error.statusCode === 404) {
-      // This typically means the prefix itself or container might not exist or is empty, which is not an error for getGoals.
-      console.warn("No goals found or prefix issue, returning empty array for Azure goals.");
-      return [];
+     if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
+        console.warn("Azure container for goals not found. Returning empty array. The container might need to be created in Azure portal.");
+        return [];
     }
     throw new Error(`Could not fetch goals from Azure Blob store. Original error: ${error.message}`);
   }
