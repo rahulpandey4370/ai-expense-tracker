@@ -14,6 +14,20 @@ const TRANSACTIONS_DIR = 'transactions/';
 
 let containerClientInstance: ContainerClient;
 
+// Helper function to convert a readable stream to a Buffer
+async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    readableStream.on('data', (data: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+    });
+    readableStream.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+    readableStream.on('error', reject);
+  });
+}
+
 async function getAzureContainerClient(): Promise<ContainerClient> {
   if (containerClientInstance) {
     return containerClientInstance;
@@ -46,8 +60,12 @@ async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promi
   try {
     const fileExists = await blobClient.exists();
     if (fileExists) {
-      const downloadBlockBlobResponse = await blobClient.downloadToString();
-      return JSON.parse(downloadBlockBlobResponse);
+      const downloadBlockBlobResponse = await blobClient.download(0); // 0 for full download
+      if (!downloadBlockBlobResponse.readableStreamBody) {
+        throw new Error(`Blob ${filePath} has no readable stream body.`);
+      }
+      const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+      return JSON.parse(buffer.toString());
     } else {
       console.log(`Azure Blob ${filePath} not found. Attempting to create with default data.`);
       const blockBlobClient = client.getBlockBlobClient(filePath);
@@ -156,8 +174,13 @@ export async function getTransactions(): Promise<AppTransaction[]> {
         for (const blob of listedBlobs) {
           try {
             const blobClient = client.getBlobClient(blob.name);
-            const downloadBlockBlobResponse = await blobClient.downloadToString();
-            const rawTx: RawTransaction = JSON.parse(downloadBlockBlobResponse);
+            const downloadBlockBlobResponse = await blobClient.download(0);
+            if (!downloadBlockBlobResponse.readableStreamBody) {
+              console.warn(`Blob ${blob.name} has no readable stream body, skipping.`);
+              continue;
+            }
+            const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+            const rawTx: RawTransaction = JSON.parse(buffer.toString());
             transactions.push({
               ...rawTx,
               date: new Date(rawTx.date),
@@ -225,8 +248,12 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   let existingRawTx: RawTransaction;
 
   try {
-    const downloadResponse = await blobClient.downloadToString();
-    existingRawTx = JSON.parse(downloadResponse);
+    const downloadResponse = await blobClient.download(0);
+    if (!downloadResponse.readableStreamBody) {
+      throw new Error(`Blob ${filePath} for update has no readable stream body.`);
+    }
+    const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
+    existingRawTx = JSON.parse(buffer.toString());
   } catch (error: any) {
     console.error(`Failed to fetch transaction ${id} from Azure for update:`, error);
     if (error instanceof RestError && error.statusCode === 404) { throw new Error(`Transaction with ID ${id} not found for update.`); }
@@ -235,36 +262,42 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   
   const updatedRawTx: RawTransaction = { ...existingRawTx };
 
+  // Apply updates from data
   if (data.type !== undefined) updatedRawTx.type = data.type;
   if (data.date !== undefined) updatedRawTx.date = data.date.toISOString();
   if (data.amount !== undefined) updatedRawTx.amount = data.amount;
-  updatedRawTx.description = data.description !== undefined ? data.description : existingRawTx.description;
+  if (data.description !== undefined) updatedRawTx.description = data.description;
 
-  const finalType = updatedRawTx.type; 
+
+  // Handle type-specific fields based on the FINAL type
+  const finalType = updatedRawTx.type;
 
   if (finalType === 'expense') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
     updatedRawTx.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    updatedRawTx.source = undefined; 
+    updatedRawTx.source = undefined; // Expenses don't have a source
   } else if (finalType === 'income') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.source = data.source !== undefined ? data.source : existingRawTx.source;
-    updatedRawTx.paymentMethodId = undefined; 
-    updatedRawTx.expenseType = undefined;   
+    updatedRawTx.paymentMethodId = undefined; // Income doesn't have payment method
+    updatedRawTx.expenseType = undefined;   // Income doesn't have expense type
   }
   updatedRawTx.updatedAt = new Date().toISOString();
+  
 
-  const tempForValidation: TransactionInput = {
+  // Create a temporary object for validation that matches TransactionInput structure
+   const tempForValidation: TransactionInput = {
     type: updatedRawTx.type,
-    date: new Date(updatedRawTx.date),
+    date: new Date(updatedRawTx.date), // Convert ISO string back to Date for validation
     amount: updatedRawTx.amount,
-    description: updatedRawTx.description,
+    description: updatedRawTx.description || '', // Ensure description is a string
     categoryId: updatedRawTx.categoryId,
     paymentMethodId: updatedRawTx.paymentMethodId,
     source: updatedRawTx.source,
     expenseType: updatedRawTx.expenseType,
   };
+
 
   const validation = TransactionInputSchema.safeParse(tempForValidation);
   if (!validation.success) {
@@ -304,3 +337,6 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     throw new Error(`Could not delete transaction from Azure blob storage. Original error: ${error.message}`);
   }
 }
+
+
+    

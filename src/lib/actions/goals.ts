@@ -10,9 +10,23 @@ import cuid from 'cuid';
 const GOALS_DIR = 'goals/';
 const AI_PLAYGROUND_PATH = '/ai-playground';
 
-let goalsContainerClientInstance: ContainerClient; // Renamed to avoid conflict
+let goalsContainerClientInstance: ContainerClient;
 
-async function getAzureGoalsContainerClient(): Promise<ContainerClient> { // Renamed function
+// Helper function to convert a readable stream to a Buffer
+async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    readableStream.on('data', (data: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+    });
+    readableStream.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+    readableStream.on('error', reject);
+  });
+}
+
+async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
   if (goalsContainerClientInstance) {
     return goalsContainerClientInstance;
   }
@@ -76,8 +90,13 @@ export async function getGoals(): Promise<Goal[]> {
       if (!blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue; 
       try {
         const blobClient = client.getBlobClient(blob.name);
-        const downloadBlockBlobResponse = await blobClient.downloadToString();
-        const goalData: Goal = JSON.parse(downloadBlockBlobResponse);
+        const downloadBlockBlobResponse = await blobClient.download(0);
+        if (!downloadBlockBlobResponse.readableStreamBody) {
+          console.warn(`Blob ${blob.name} for goal has no readable stream body, skipping.`);
+          continue;
+        }
+        const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+        const goalData: Goal = JSON.parse(buffer.toString());
         goals.push(goalData);
       } catch (fetchError: any) {
         console.error(`Error processing Azure goal blob ${blob.name}:`, fetchError);
@@ -108,8 +127,12 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
   }
 
   try {
-    const downloadResponse = await blobClient.downloadToString();
-    existingGoal = JSON.parse(downloadResponse);
+    const downloadResponse = await blobClient.download(0);
+    if (!downloadResponse.readableStreamBody) {
+      throw new Error(`Blob ${filePath} for goal update has no readable stream body.`);
+    }
+    const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
+    existingGoal = JSON.parse(buffer.toString());
   } catch (error: any) {
     console.error(`Failed to fetch goal ${goalId} from Azure for update:`, error);
     if (error instanceof RestError && error.statusCode === 404) {
@@ -153,3 +176,6 @@ export async function deleteGoal(id: string): Promise<{ success: boolean }> {
     throw new Error(`Could not delete goal from Azure blob storage. Original error: ${error.message}`);
   }
 }
+
+
+    
