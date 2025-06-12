@@ -316,9 +316,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
 
-      const validExpenseTypes = ['need', 'want', 'investment_expense'];
+      const validExpenseTypes = ['need', 'want', 'investment']; // Updated
       if (!expTypeStr || !validExpenseTypes.includes(expTypeStr)) {
-          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment_Expense'. Found: ${values[5]}`);
+          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment'. Found: ${values[5]}`); // Updated
       }
       if (!pmName) errors.push("Payment Method Name is missing.");
 
@@ -506,7 +506,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
             const pm = paymentMethods.find(p => p.name.toLowerCase() === parsedAITransactions[index]?.paymentMethodNameGuess?.toLowerCase()) || (paymentMethods.length > 0 ? paymentMethods[0] : undefined);
             currentItem.paymentMethodId = pm?.id;
-            currentItem.expenseType = parsedAITransactions[index]?.expenseTypeNameGuess || 'need';
+            currentItem.expenseType = (parsedAITransactions[index]?.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
         }
     } else if (field === 'date' && value instanceof Date) {
       currentItem.date = value;
@@ -544,7 +544,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           type: aiTx.type || 'expense',
           categoryId: catId, 
           paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, 
-          expenseType: aiTx.type === 'expense' ? (aiTx.expenseTypeNameGuess || 'need') : undefined,
+          expenseType: aiTx.type === 'expense' ? ((aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need') : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
       }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
@@ -691,7 +691,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               type: 'expense', 
               categoryId: catId,
               paymentMethodId: pmId,
-              expenseType: result.parsedTransaction.expenseTypeNameGuess || 'need',
+              expenseType: (result.parsedTransaction.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need',
             });
             toast({ title: "AI Receipt Scan Complete", description: "Review the extracted details below." });
           } else {
@@ -834,7 +834,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           <div>
             <Label className={labelClasses}>Expense Type</Label>
             <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseTypeEnum)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
-              {[{ value: 'need', label: 'Need' }, { value: 'want', label: 'Want' }, { value: 'investment_expense', label: 'Investment' }].map(et => (
+              {[{ value: 'need', label: 'Need' }, { value: 'want', label: 'Want' }, { value: 'investment', label: 'Investment' }].map(et => (
                 <div key={et.value} className="flex items-center space-x-2">
                   <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`} className={cn("border-primary text-primary focus:ring-primary", expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-primary-foreground" : "data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground")} disabled={isFetchingDropdowns} />
                   <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-foreground", expenseType === et.value && type === 'expense' ? "text-red-600 font-medium" : "text-foreground")}>{et.label}</Label>
@@ -1031,7 +1031,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <Select value={tx.expenseType} onValueChange={(val) => handleAIReviewChange(index, 'expenseType', val as AppExpenseTypeEnum)}>
                             <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Expense Type" /></SelectTrigger>
                             <SelectContent className={selectContentClasses}>
-                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment_expense">Investment</SelectItem>
+                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment">Investment</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -1167,7 +1167,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <Select value={aiReceiptReviewTransaction.expenseType} onValueChange={(val) => handleAIReceiptReviewChange('expenseType', val as AppExpenseTypeEnum)}>
                             <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Expense Type" /></SelectTrigger>
                             <SelectContent className={selectContentClasses}>
-                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment_expense">Investment</SelectItem>
+                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment">Investment</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
