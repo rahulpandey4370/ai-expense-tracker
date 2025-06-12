@@ -129,19 +129,20 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
 }
 
 export async function getTransactions(): Promise<AppTransaction[]> {
+  console.log("Azure Info (getTransactions): Starting to fetch all transactions.");
   let allCategories: Category[] = [];
   let allPaymentMethods: PaymentMethod[] = [];
   const client = await getAzureContainerClient();
 
   try {
-    console.log("Azure Info: Fetching categories and payment methods for getTransactions.");
+    console.log("Azure Info (getTransactions): Fetching categories and payment methods.");
     [allCategories, allPaymentMethods] = await Promise.all([
       getCategories(),
       getPaymentMethods()
     ]);
-    console.log(`Azure Info: Loaded ${allCategories.length} categories and ${allPaymentMethods.length} payment methods for getTransactions.`);
+    console.log(`Azure Info (getTransactions): Loaded ${allCategories.length} categories and ${allPaymentMethods.length} payment methods.`);
   } catch (error: any) {
-    console.error("Azure Error: Essential data (categories/payment methods) could not be loaded for transactions (Azure). Cannot proceed.", error.message, error.stack);
+    console.error("Azure Critical Error (getTransactions): Essential data (categories/payment methods) could not be loaded. Cannot proceed.", error.message, error.stack);
     throw new Error(`Essential data (categories/payment methods) could not be loaded for transactions (Azure). Original error: ${error.message}`);
   }
 
@@ -149,23 +150,30 @@ export async function getTransactions(): Promise<AppTransaction[]> {
   const paymentMethodMap = new Map(allPaymentMethods.map(pm => [pm.id, pm]));
 
   let transactions: AppTransaction[] = [];
+  let processedBlobCount = 0;
   try {
-    console.log(`Azure Info: Listing blobs in directory: ${TRANSACTIONS_DIR}`);
+    console.log(`Azure Info (getTransactions): Listing blobs in directory: ${TRANSACTIONS_DIR}`);
     const blobsIterator = client.listBlobsFlat({ prefix: TRANSACTIONS_DIR });
     for await (const blob of blobsIterator) {
+      processedBlobCount++;
+      console.log(`Azure Info (getTransactions): Processing blob #${processedBlobCount}: ${blob.name}`);
       if (!blob.name || !blob.name.endsWith('.json') || blob.name === TRANSACTIONS_DIR) {
-        console.log(`Azure Debug (getTransactions): Skipping non-JSON or directory blob (name: ${blob.name})`);
+        console.log(`Azure Debug (getTransactions): Skipping non-JSON or directory blob: ${blob.name}`);
         continue;
       }
       try {
-        console.log(`Azure Info: Processing transaction blob ${blob.name}`);
         const blobClient = client.getBlobClient(blob.name);
+        console.log(`Azure Info (getTransactions): Attempting to download blob: ${blob.name}`);
         const downloadBlockBlobResponse = await blobClient.download(0);
+        console.log(`Azure Info (getTransactions): Downloaded blob: ${blob.name}. Stream available: ${!!downloadBlockBlobResponse.readableStreamBody}`);
+        
         if (!downloadBlockBlobResponse.readableStreamBody) {
-          console.warn(`Azure Warning: Transaction blob ${blob.name} has no readable stream body, skipping.`);
+          console.warn(`Azure Warning (getTransactions): Blob ${blob.name} has no readable stream body, skipping.`);
           continue;
         }
+        console.log(`Azure Info (getTransactions): Converting stream to buffer for blob: ${blob.name}`);
         const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+        console.log(`Azure Info (getTransactions): Converted to buffer for blob: ${blob.name}, size: ${buffer.length}`);
         const rawTx: RawTransaction = JSON.parse(buffer.toString());
         transactions.push({
           ...rawTx,
@@ -176,33 +184,34 @@ export async function getTransactions(): Promise<AppTransaction[]> {
           paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
         });
       } catch (fetchError: any) {
-        console.error(`Azure Error: Error processing transaction blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
+        console.error(`Azure Error (getTransactions): Error processing individual transaction blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
         if (fetchError instanceof RestError && fetchError.statusCode === 404) {
-             console.warn(`Azure Warning: Transaction blob ${blob.name} not found during processing, skipping.`);
+             console.warn(`Azure Warning (getTransactions): Transaction blob ${blob.name} not found during processing, skipping.`);
         }
+        // Optionally, decide if one failed blob should stop the whole process or just be skipped
       }
     }
-    console.log(`Azure Info: Fetched ${transactions.length} transactions.`);
-  } catch (error: any) {
-    console.error('Azure Error: Failed to list or process transactions from Azure blob.', error.message, error.stack);
+    console.log(`Azure Info (getTransactions): Finished processing. Total blobs listed/attempted: ${processedBlobCount}. Transactions parsed: ${transactions.length}.`);
+  } catch (error: any)
+   {
+    console.error('Azure Error (getTransactions): Failed to list or process transactions from Azure blob.', error.message, error.stack);
     if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
-        console.warn("Azure Warning: Container for transactions not found. Returning empty array. The container might need to be created in Azure portal.");
+        console.warn("Azure Warning (getTransactions): Container for transactions not found. Returning empty array. The container might need to be created in Azure portal.");
         return [];
     }
     throw new Error(`Could not fetch transactions from Azure Blob store. Original error: ${error.message}`);
   }
   
-  // No mock transaction creation
   return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
-  console.log("Azure Info: Attempting to add transaction...");
+  console.log("Azure Info (addTransaction): Attempting to add transaction...");
   const validation = TransactionInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
     const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
-    console.error('Azure Error: Add transaction validation error:', readableErrors);
+    console.error('Azure Error (addTransaction): Validation error:', readableErrors);
     throw new Error(`Invalid transaction data: ${readableErrors || "Validation failed."}`);
   }
 
@@ -214,12 +223,12 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const blockBlobClient = client.getBlockBlobClient(filePath);
 
   try {
-    console.log(`Azure Info: Adding transaction ${id} to ${filePath}`);
+    console.log(`Azure Info (addTransaction): Adding transaction ${id} to ${filePath}`);
     const content = JSON.stringify(rawTransaction, null, 2);
     await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
-    console.log(`Azure Info: Successfully added transaction ${id}`);
+    console.log(`Azure Info (addTransaction): Successfully added transaction ${id}`);
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
@@ -228,30 +237,30 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
 
     return { ...rawTransaction, date: new Date(rawTransaction.date), createdAt: new Date(rawTransaction.createdAt), updatedAt: new Date(rawTransaction.updatedAt), category, paymentMethod };
   } catch (error: any) {
-    console.error(`Azure Error: Failed to add transaction ${id} to Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
+    console.error(`Azure Error (addTransaction): Failed to add transaction ${id} to Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not add transaction to Azure blob storage. Original error: ${error.message}`);
   }
 }
 
 export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
-  console.log(`Azure Info: Attempting to update transaction ${id}...`);
+  console.log(`Azure Info (updateTransaction): Attempting to update transaction ${id}...`);
   const client = await getAzureContainerClient();
   const filePath = `${TRANSACTIONS_DIR}${id}.json`;
   const blobClient = client.getBlobClient(filePath);
   let existingRawTx: RawTransaction;
 
   try {
-    console.log(`Azure Info: Fetching transaction ${id} for update from ${filePath}`);
+    console.log(`Azure Info (updateTransaction): Fetching transaction ${id} for update from ${filePath}`);
     const downloadResponse = await blobClient.download(0);
     if (!downloadResponse.readableStreamBody) {
-      console.error(`Azure Error: Blob ${filePath} for update has no readable stream body.`);
+      console.error(`Azure Error (updateTransaction): Blob ${filePath} for update has no readable stream body.`);
       throw new Error(`Blob ${filePath} for update has no readable stream body.`);
     }
     const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
     existingRawTx = JSON.parse(buffer.toString());
-    console.log(`Azure Info: Successfully fetched transaction ${id} for update.`);
+    console.log(`Azure Info (updateTransaction): Successfully fetched transaction ${id} for update.`);
   } catch (error: any) {
-    console.error(`Azure Error: Failed to fetch transaction ${id} from Azure for update. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
+    console.error(`Azure Error (updateTransaction): Failed to fetch transaction ${id} from Azure for update. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     if (error instanceof RestError && error.statusCode === 404) { throw new Error(`Transaction with ID ${id} not found for update.`); }
     throw new Error(`Could not retrieve transaction for update from Azure. Original error: ${error.message}`);
   }
@@ -293,18 +302,18 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
     const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
-    console.error('Azure Error: Update transaction validation error after merge:', readableErrors, "Validated Data:", tempForValidation, "Final Raw to save:", updatedRawTx);
+    console.error('Azure Error (updateTransaction): Validation error after merge:', readableErrors, "Validated Data:", tempForValidation, "Final Raw to save:", updatedRawTx);
     throw new Error(`Invalid transaction data after update: ${readableErrors || "Validation failed."}`);
   }
   
   try {
-    console.log(`Azure Info: Updating transaction ${id} in ${filePath}`);
+    console.log(`Azure Info (updateTransaction): Updating transaction ${id} in ${filePath}`);
     const blockBlobClient = client.getBlockBlobClient(filePath);
     const content = JSON.stringify(updatedRawTx, null, 2);
     await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
-    console.log(`Azure Info: Successfully updated transaction ${id}`);
+    console.log(`Azure Info (updateTransaction): Successfully updated transaction ${id}`);
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
@@ -313,26 +322,25 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
 
     return { ...updatedRawTx, date: new Date(updatedRawTx.date), createdAt: new Date(updatedRawTx.createdAt), updatedAt: new Date(updatedRawTx.updatedAt), category, paymentMethod };
   } catch (error: any) {
-    console.error(`Azure Error: Failed to update transaction ${id} in Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
+    console.error(`Azure Error (updateTransaction): Failed to update transaction ${id} in Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not update transaction in Azure blob storage. Original error: ${error.message}`);
   }
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {
-  console.log(`Azure Info: Attempting to delete transaction ${id}...`);
+  console.log(`Azure Info (deleteTransaction): Attempting to delete transaction ${id}...`);
   const client = await getAzureContainerClient();
   const filePath = `${TRANSACTIONS_DIR}${id}.json`;
   const blobClient = client.getBlobClient(filePath);
   try {
-    console.log(`Azure Info: Deleting transaction ${id} from ${filePath}`);
+    console.log(`Azure Info (deleteTransaction): Deleting transaction ${id} from ${filePath}`);
     await blobClient.deleteIfExists();
-    console.log(`Azure Info: Successfully deleted transaction ${id}`);
+    console.log(`Azure Info (deleteTransaction): Successfully deleted transaction ${id}`);
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
     return { success: true };
   } catch (error: any) {
-    console.error(`Azure Error: Failed to delete transaction ${id} from Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
+    console.error(`Azure Error (deleteTransaction): Failed to delete transaction ${id} from Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not delete transaction from Azure blob storage. Original error: ${error.message}`);
   }
 }
-
     
