@@ -10,11 +10,11 @@ import cuid from 'cuid';
 const GOALS_DIR = 'goals/';
 const AI_PLAYGROUND_PATH = '/ai-playground';
 
-let containerClient: ContainerClient;
+let goalsContainerClientInstance: ContainerClient; // Renamed to avoid conflict
 
-async function getAzureContainerClient(): Promise<ContainerClient> {
-  if (containerClient) {
-    return containerClient;
+async function getAzureGoalsContainerClient(): Promise<ContainerClient> { // Renamed function
+  if (goalsContainerClientInstance) {
+    return goalsContainerClientInstance;
   }
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -28,8 +28,8 @@ async function getAzureContainerClient(): Promise<ContainerClient> {
   try {
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const client = blobServiceClient.getContainerClient(containerName);
-    containerClient = client;
-    return containerClient;
+    goalsContainerClientInstance = client;
+    return goalsContainerClientInstance;
   } catch (error) {
     console.error("Failed to initialize Azure Blob Service Client or Container Client for goals:", error);
     throw new Error("Could not connect to Azure Blob Storage for goals. Check configuration and credentials.");
@@ -49,12 +49,13 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
   const now = new Date().toISOString();
   const newGoal: Goal = { id, ...validation.data, amountSavedSoFar: 0, createdAt: now, updatedAt: now, status: 'active' };
   
-  const client = await getAzureContainerClient();
+  const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${id}.json`;
   const blockBlobClient = client.getBlockBlobClient(filePath);
 
   try {
-    await blockBlobClient.uploadString(JSON.stringify(newGoal, null, 2), {
+    const content = JSON.stringify(newGoal, null, 2);
+    await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
     revalidatePath(AI_PLAYGROUND_PATH);
@@ -67,12 +68,12 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
 
 export async function getGoals(): Promise<Goal[]> {
   const goals: Goal[] = [];
-  const client = await getAzureContainerClient();
+  const client = await getAzureGoalsContainerClient();
   
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
     for await (const blob of blobsIterator) {
-      if (!blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue; // Skip if not JSON or is the directory itself
+      if (!blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue; 
       try {
         const blobClient = client.getBlobClient(blob.name);
         const downloadBlockBlobResponse = await blobClient.downloadToString();
@@ -97,7 +98,7 @@ export async function getGoals(): Promise<Goal[]> {
 }
 
 export async function updateGoalProgress(goalId: string, allocatedAmount: number): Promise<Goal> {
-  const client = await getAzureContainerClient();
+  const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${goalId}.json`;
   const blobClient = client.getBlobClient(filePath);
   let existingGoal: Goal;
@@ -127,7 +128,8 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
   
   const blockBlobClient = client.getBlockBlobClient(filePath);
   try {
-    await blockBlobClient.uploadString(JSON.stringify(updatedGoal, null, 2), {
+    const content = JSON.stringify(updatedGoal, null, 2);
+    await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
     revalidatePath(AI_PLAYGROUND_PATH);
@@ -139,7 +141,7 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
 }
 
 export async function deleteGoal(id: string): Promise<{ success: boolean }> {
-  const client = await getAzureContainerClient();
+  const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${id}.json`;
   const blobClient = client.getBlobClient(filePath);
   try {
