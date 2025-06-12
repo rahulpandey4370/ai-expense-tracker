@@ -284,24 +284,41 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
       // Expected: Description, Category Name, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method Name
       if (values.length < 7) {
-        errors.push("Expected 7 columns: Description, Category, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method.");
+        errors.push("Row has fewer than 7 columns. Expected: Description, Category, Amount, Ignored Total, Date (DD/MM/YYYY), Expense Type, Payment Method.");
+        // Return early with errors, subsequent parsing will likely fail or be incorrect
         return { originalRow: line, rowIndex: index, errors, type: 'expense' };
       }
 
       const desc = values[0]?.trim();
-      const catName = values[1]?.trim();
-      const amountStr = values[2]?.trim();
+      const catNameRaw = values[1];
+      const catName = catNameRaw ? catNameRaw.trim() : undefined;
+
+      const amountStrRaw = values[2];
+      const amountStr = amountStrRaw ? amountStrRaw.trim() : undefined;
+      
       // values[3] is ignored (Total Amount)
-      const dateStr = values[4]?.trim();
-      const expTypeStr = values[5]?.trim().toLowerCase();
-      const pmName = values[6]?.trim();
+
+      const dateStrRaw = values[4];
+      const dateStr = dateStrRaw ? dateStrRaw.trim() : undefined;
+
+      const expTypeRaw = values[5];
+      let expTypeStr: string | undefined = undefined;
+      if (expTypeRaw && typeof expTypeRaw === 'string') {
+        const trimmed = expTypeRaw.trim();
+        if (trimmed) {
+          expTypeStr = trimmed.toLowerCase();
+        }
+      }
+      
+      const pmNameRaw = values[6];
+      const pmName = pmNameRaw ? pmNameRaw.trim() : undefined;
 
       let parsedDate: Date | undefined;
       try {
         if (dateStr) {
             parsedDate = parseDateFns(dateStr, 'dd/MM/yyyy', new Date());
             if (isNaN(parsedDate.getTime())) throw new Error("Invalid date format. Use DD/MM/YYYY.");
-        } else { errors.push("Date is missing."); }
+        } else { errors.push("Date is missing or invalid."); }
       } catch (e: any) { errors.push(e.message); }
 
       let amt: number | undefined;
@@ -310,26 +327,29 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             const cleanedAmountStr = amountStr.replace(/[₹,]/g, '');
             amt = parseFloat(cleanedAmountStr);
             if (isNaN(amt) || amt <= 0) throw new Error("Amount must be a positive number.");
-          } else { errors.push("Amount is missing."); }
+          } else { errors.push("Amount is missing or invalid."); }
       } catch (e: any) { errors.push(e.message); }
 
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
-
-      const validExpenseTypes = ['need', 'want', 'investment']; // Updated
-      if (!expTypeStr || !validExpenseTypes.includes(expTypeStr)) {
-          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment'. Found: ${values[5]}`); // Updated
+      
+      const validExpenseTypes = ['need', 'want', 'investment'];
+      if (!expTypeStr) {
+          errors.push("Expense Type is required.");
+      } else if (!validExpenseTypes.includes(expTypeStr)) {
+          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment'. Found: '${values[5] || "empty"}'`);
       }
+      
       if (!pmName) errors.push("Payment Method Name is missing.");
 
       const result: BulkParsedTransaction = {
         date: parsedDate,
         description: desc,
         amount: amt,
-        type: 'expense', // All bulk transactions assumed to be expenses
+        type: 'expense', 
         categoryName: catName,
         paymentMethodName: pmName,
-        expenseType: expTypeStr as AppExpenseTypeEnum,
+        expenseType: expTypeStr as AppExpenseTypeEnum, // Cast, as validation handles incorrect values
         originalRow: line,
         rowIndex: index,
       };
