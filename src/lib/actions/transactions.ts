@@ -12,7 +12,7 @@ const CATEGORIES_BLOB_PATH = 'internal/data/categories.json';
 const PAYMENT_METHODS_BLOB_PATH = 'internal/data/payment-methods.json';
 const TRANSACTIONS_DIR = 'transactions/';
 
-let azureContainerClientInstance: ContainerClient;
+let containerClientInstance: ContainerClient;
 
 async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -28,8 +28,8 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Bu
 }
 
 async function getAzureContainerClient(): Promise<ContainerClient> {
-  if (azureContainerClientInstance) {
-    return azureContainerClientInstance;
+  if (containerClientInstance) {
+    return containerClientInstance;
   }
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -43,10 +43,8 @@ async function getAzureContainerClient(): Promise<ContainerClient> {
   try {
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const client = blobServiceClient.getContainerClient(containerName);
-    // Optionally, create container if it doesn't exist
-    // await client.createIfNotExists();
-    azureContainerClientInstance = client;
-    return azureContainerClientInstance;
+    containerClientInstance = client;
+    return containerClientInstance;
   } catch (error) {
     console.error("Failed to initialize Azure Blob Service Client or Container Client:", error);
     throw new Error("Could not connect to Azure Blob Storage. Check configuration and credentials.");
@@ -56,7 +54,6 @@ async function getAzureContainerClient(): Promise<ContainerClient> {
 async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promise<T[]> {
   const client = await getAzureContainerClient();
   const blobClient = client.getBlobClient(filePath);
-  const blockBlobClient = client.getBlockBlobClient(filePath);
 
   try {
     const fileExists = await blobClient.exists();
@@ -69,6 +66,7 @@ async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promi
       return JSON.parse(buffer.toString());
     } else {
       console.log(`Azure Blob ${filePath} not found. Attempting to create with default data.`);
+      const blockBlobClient = client.getBlockBlobClient(filePath);
       const content = JSON.stringify(defaultData, null, 2);
       await blockBlobClient.upload(content, Buffer.byteLength(content), {
         blobHTTPHeaders: { blobContentType: 'application/json' }
@@ -123,75 +121,33 @@ export async function getTransactions(): Promise<AppTransaction[]> {
   const paymentMethodMap = new Map(allPaymentMethods.map(pm => [pm.id, pm]));
 
   let transactions: AppTransaction[] = [];
-  let hasAnyTransactionBlobs = false;
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: TRANSACTIONS_DIR });
-    const listedBlobs = [];
     for await (const blob of blobsIterator) {
-        if (blob.name.endsWith('.json') && blob.name !== TRANSACTIONS_DIR) { 
-            listedBlobs.push(blob);
-            hasAnyTransactionBlobs = true;
+      if (!blob.name.endsWith('.json') || blob.name === TRANSACTIONS_DIR) continue; 
+      try {
+        const blobClient = client.getBlobClient(blob.name);
+        const downloadBlockBlobResponse = await blobClient.download(0);
+        if (!downloadBlockBlobResponse.readableStreamBody) {
+          console.warn(`Blob ${blob.name} has no readable stream body, skipping.`);
+          continue;
         }
-    }
-    
-    if (!hasAnyTransactionBlobs && allCategories.length > 0 && allPaymentMethods.length > 0) {
-      console.log("No transactions found in Azure blob store, creating 3 mock transactions.");
-      const salaryCategory = allCategories.find(c => c.name === 'Salary');
-      const groceriesCategory = allCategories.find(c => c.name === 'Groceries');
-      const foodDiningCategory = allCategories.find(c => c.name === 'Food and Dining');
-      const upiPaymentMethod = allPaymentMethods.find(pm => pm.type === 'UPI'); 
-      const ccPaymentMethod = allPaymentMethods.find(pm => pm.name === 'CC HDFC 7950'); 
-
-      const mockTxData: TransactionInput[] = [];
-      if (salaryCategory) mockTxData.push({ type: 'income', date: new Date(new Date().setDate(1)), amount: 75000, description: 'Monthly Salary', categoryId: salaryCategory.id, source: 'Company A' });
-      if (groceriesCategory && upiPaymentMethod) mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(5)), amount: 3500, description: 'Weekly Groceries', categoryId: groceriesCategory.id, paymentMethodId: upiPaymentMethod.id, expenseType: 'need' });
-      if (foodDiningCategory && ccPaymentMethod) mockTxData.push({ type: 'expense', date: new Date(new Date().setDate(10)), amount: 1200, description: 'Dinner with Friends', categoryId: foodDiningCategory.id, paymentMethodId: ccPaymentMethod.id, expenseType: 'want' });
-      
-      if (mockTxData.length === 0 && (salaryCategory || groceriesCategory || foodDiningCategory)) {
-         console.warn("Could not construct mock transactions due to missing specific default categories/payment methods for mocks.");
+        const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+        const rawTx: RawTransaction = JSON.parse(buffer.toString());
+        transactions.push({
+          ...rawTx,
+          date: new Date(rawTx.date),
+          createdAt: new Date(rawTx.createdAt),
+          updatedAt: new Date(rawTx.updatedAt),
+          category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
+          paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
+        });
+      } catch (fetchError: any) {
+        console.error(`Error processing Azure transaction blob ${blob.name}:`, fetchError);
+          if (fetchError instanceof RestError && fetchError.statusCode === 404) {
+            console.warn(`Azure blob ${blob.name} not found during processing, skipping.`);
+          } else { /* Potentially rethrow or handle other errors */ }
       }
-
-      for (const txInput of mockTxData) {
-        const validation = TransactionInputSchema.safeParse(txInput);
-        if (!validation.success) { console.warn("Mock transaction data invalid, skipping:", validation.error.flatten().fieldErrors); continue; }
-        const newId = cuid();
-        const now = new Date().toISOString();
-        const rawTx: RawTransaction = { id: newId, ...validation.data, date: validation.data.date.toISOString(), description: validation.data.description || '', createdAt: now, updatedAt: now };
-        
-        const blockBlobClient = client.getBlockBlobClient(`${TRANSACTIONS_DIR}${newId}.json`);
-        const content = JSON.stringify(rawTx, null, 2);
-        await blockBlobClient.upload(content, Buffer.byteLength(content), { blobHTTPHeaders: { blobContentType: 'application/json' }});
-        
-        const hydratedTx: AppTransaction = { ...rawTx, date: new Date(rawTx.date), createdAt: new Date(rawTx.createdAt), updatedAt: new Date(rawTx.updatedAt), category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined, paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined };
-        transactions.push(hydratedTx);
-      }
-      revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
-    } else {
-        for (const blob of listedBlobs) {
-          try {
-            const blobClient = client.getBlobClient(blob.name);
-            const downloadBlockBlobResponse = await blobClient.download(0);
-            if (!downloadBlockBlobResponse.readableStreamBody) {
-              console.warn(`Blob ${blob.name} has no readable stream body, skipping.`);
-              continue;
-            }
-            const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
-            const rawTx: RawTransaction = JSON.parse(buffer.toString());
-            transactions.push({
-              ...rawTx,
-              date: new Date(rawTx.date),
-              createdAt: new Date(rawTx.createdAt),
-              updatedAt: new Date(rawTx.updatedAt),
-              category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
-              paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
-            });
-          } catch (fetchError: any) {
-            console.error(`Error processing Azure transaction blob ${blob.name}:`, fetchError);
-             if (fetchError instanceof RestError && fetchError.statusCode === 404) {
-                console.warn(`Azure blob ${blob.name} not found during processing, skipping.`);
-             } else { /* Potentially rethrow or handle other errors */ }
-          }
-        }
     }
   } catch (error: any) {
     console.error('Failed to list or process transactions from Azure blob:', error);
@@ -223,7 +179,9 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
 
   try {
     const content = JSON.stringify(rawTransaction, null, 2);
-    await blockBlobClient.upload(content, Buffer.byteLength(content), { blobHTTPHeaders: { blobContentType: 'application/json' }});
+    await blockBlobClient.upload(content, Buffer.byteLength(content), { 
+      blobHTTPHeaders: { blobContentType: 'application/json' }
+    });
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
@@ -256,33 +214,28 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     throw new Error(`Could not retrieve transaction for update from Azure. Original error: ${error.message}`);
   }
   
-  // Start with the existing transaction and apply partial updates
   const updatedRawTx: RawTransaction = { ...existingRawTx };
 
   if (data.type !== undefined) updatedRawTx.type = data.type;
   if (data.date !== undefined) updatedRawTx.date = data.date.toISOString();
   if (data.amount !== undefined) updatedRawTx.amount = data.amount;
-  // Ensure description is not nulled out if not provided in partial update, unless explicitly set to empty string
   if (data.description !== undefined) updatedRawTx.description = data.description;
 
-
-  // Handle type-specific fields based on the FINAL type of the transaction
-  const finalType = updatedRawTx.type; 
+  const finalType = data.type || existingRawTx.type; 
 
   if (finalType === 'expense') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
     updatedRawTx.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    updatedRawTx.source = undefined; // Expenses don't have a source
+    updatedRawTx.source = undefined; 
   } else if (finalType === 'income') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.source = data.source !== undefined ? data.source : existingRawTx.source;
-    updatedRawTx.paymentMethodId = undefined; // Income doesn't have payment method
-    updatedRawTx.expenseType = undefined;   // Income doesn't have expense type
+    updatedRawTx.paymentMethodId = undefined; 
+    updatedRawTx.expenseType = undefined;   
   }
   updatedRawTx.updatedAt = new Date().toISOString();
   
-  // Create a temporary object for validation that matches TransactionInput structure from the final updatedRawTx
    const tempForValidation: TransactionInput = {
     type: updatedRawTx.type,
     date: new Date(updatedRawTx.date),
@@ -291,7 +244,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     categoryId: updatedRawTx.categoryId,
     paymentMethodId: updatedRawTx.paymentMethodId,
     source: updatedRawTx.source,
-    expenseType: updatedRawTx.expenseType,
+    expenseType: updatedRawTx.expenseType as 'need' | 'want' | 'investment' | undefined,
   };
 
   const validation = TransactionInputSchema.safeParse(tempForValidation);
@@ -304,8 +257,10 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
 
   try {
     const blockBlobClient = client.getBlockBlobClient(filePath);
-    const content = JSON.stringify(updatedRawTx, null, 2); // Save the merged and timestamped raw transaction
-    await blockBlobClient.upload(content, Buffer.byteLength(content), { blobHTTPHeaders: { blobContentType: 'application/json' }});
+    const content = JSON.stringify(updatedRawTx, null, 2); 
+    await blockBlobClient.upload(content, Buffer.byteLength(content), { 
+      blobHTTPHeaders: { blobContentType: 'application/json' }
+    });
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
 
     const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
