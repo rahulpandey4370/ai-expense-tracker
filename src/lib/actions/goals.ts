@@ -10,9 +10,8 @@ import cuid from 'cuid';
 const GOALS_DIR = 'goals/';
 const AI_PLAYGROUND_PATH = '/ai-playground';
 
-let goalsContainerClientInstance: ContainerClient;
+let azureGoalsContainerClientInstance: ContainerClient;
 
-// Helper function to convert a readable stream to a Buffer
 async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -27,8 +26,8 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Bu
 }
 
 async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
-  if (goalsContainerClientInstance) {
-    return goalsContainerClientInstance;
+  if (azureGoalsContainerClientInstance) {
+    return azureGoalsContainerClientInstance;
   }
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -42,8 +41,10 @@ async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
   try {
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const client = blobServiceClient.getContainerClient(containerName);
-    goalsContainerClientInstance = client;
-    return goalsContainerClientInstance;
+    // Optionally, create container if it doesn't exist
+    // await client.createIfNotExists();
+    azureGoalsContainerClientInstance = client;
+    return azureGoalsContainerClientInstance;
   } catch (error) {
     console.error("Failed to initialize Azure Blob Service Client or Container Client for goals:", error);
     throw new Error("Could not connect to Azure Blob Storage for goals. Check configuration and credentials.");
@@ -176,6 +177,3 @@ export async function deleteGoal(id: string): Promise<{ success: boolean }> {
     throw new Error(`Could not delete goal from Azure blob storage. Original error: ${error.message}`);
   }
 }
-
-
-    
