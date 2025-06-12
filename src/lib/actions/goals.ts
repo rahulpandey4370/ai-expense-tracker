@@ -33,11 +33,15 @@ async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
 
-  if (!connectionString || !containerName) {
-    console.error("Azure Storage environment variables (AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_CONTAINER_NAME) are not configured for goals.");
-    throw new Error("Azure Storage environment variables are not configured for goals.");
+  if (!connectionString) {
+    console.error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured for goals.");
+    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured for goals.");
   }
-  
+  if (!containerName || typeof containerName !== 'string' || containerName.trim() === '') {
+    console.error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals.");
+    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals. Please check Vercel environment variables.");
+  }
+
   try {
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const client = blobServiceClient.getContainerClient(containerName);
@@ -63,7 +67,7 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
   const id = cuid();
   const now = new Date().toISOString();
   const newGoal: Goal = { id, ...validation.data, amountSavedSoFar: 0, createdAt: now, updatedAt: now, status: 'active' };
-  
+
   const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${id}.json`;
   const blockBlobClient = client.getBlockBlobClient(filePath);
@@ -84,11 +88,11 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
 export async function getGoals(): Promise<Goal[]> {
   const goals: Goal[] = [];
   const client = await getAzureGoalsContainerClient();
-  
+
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
     for await (const blob of blobsIterator) {
-      if (!blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue; 
+      if (!blob.name || !blob.name.endsWith('.json') || blob.name === GOALS_DIR) continue;
       try {
         const blobClient = client.getBlobClient(blob.name);
         const downloadBlockBlobResponse = await blobClient.download(0);
@@ -149,7 +153,7 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
     status: updatedAmountSaved >= existingGoal.targetAmount ? 'completed' : existingGoal.status,
     updatedAt: new Date().toISOString(),
   };
-  
+
   const blockBlobClient = client.getBlockBlobClient(filePath);
   try {
     const content = JSON.stringify(updatedGoal, null, 2);

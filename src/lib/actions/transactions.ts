@@ -35,9 +35,13 @@ async function getAzureContainerClient(): Promise<ContainerClient> {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
 
-  if (!connectionString || !containerName) {
-    console.error("Azure Storage environment variables (AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_CONTAINER_NAME) are not configured.");
-    throw new Error("Azure Storage environment variables are not configured.");
+  if (!connectionString) {
+    console.error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured.");
+    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured.");
+  }
+  if (!containerName || typeof containerName !== 'string' || containerName.trim() === '') {
+    console.error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string.");
+    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string. Please check Vercel environment variables.");
   }
 
   try {
@@ -124,7 +128,7 @@ export async function getTransactions(): Promise<AppTransaction[]> {
   try {
     const blobsIterator = client.listBlobsFlat({ prefix: TRANSACTIONS_DIR });
     for await (const blob of blobsIterator) {
-      if (!blob.name.endsWith('.json') || blob.name === TRANSACTIONS_DIR) continue; 
+      if (!blob.name || !blob.name.endsWith('.json') || blob.name === TRANSACTIONS_DIR) continue;
       try {
         const blobClient = client.getBlobClient(blob.name);
         const downloadBlockBlobResponse = await blobClient.download(0);
@@ -179,7 +183,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
 
   try {
     const content = JSON.stringify(rawTransaction, null, 2);
-    await blockBlobClient.upload(content, Buffer.byteLength(content), { 
+    await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
@@ -213,7 +217,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     if (error instanceof RestError && error.statusCode === 404) { throw new Error(`Transaction with ID ${id} not found for update.`); }
     throw new Error(`Could not retrieve transaction for update from Azure. Original error: ${error.message}`);
   }
-  
+
   const updatedRawTx: RawTransaction = { ...existingRawTx };
 
   if (data.type !== undefined) updatedRawTx.type = data.type;
@@ -221,21 +225,21 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   if (data.amount !== undefined) updatedRawTx.amount = data.amount;
   if (data.description !== undefined) updatedRawTx.description = data.description;
 
-  const finalType = data.type || existingRawTx.type; 
+  const finalType = data.type || existingRawTx.type;
 
   if (finalType === 'expense') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.paymentMethodId = data.paymentMethodId !== undefined ? data.paymentMethodId : existingRawTx.paymentMethodId;
     updatedRawTx.expenseType = data.expenseType !== undefined ? data.expenseType : existingRawTx.expenseType;
-    updatedRawTx.source = undefined; 
+    updatedRawTx.source = undefined;
   } else if (finalType === 'income') {
     updatedRawTx.categoryId = data.categoryId !== undefined ? data.categoryId : existingRawTx.categoryId;
     updatedRawTx.source = data.source !== undefined ? data.source : existingRawTx.source;
-    updatedRawTx.paymentMethodId = undefined; 
-    updatedRawTx.expenseType = undefined;   
+    updatedRawTx.paymentMethodId = undefined;
+    updatedRawTx.expenseType = undefined;
   }
   updatedRawTx.updatedAt = new Date().toISOString();
-  
+
    const tempForValidation: TransactionInput = {
     type: updatedRawTx.type,
     date: new Date(updatedRawTx.date),
@@ -257,8 +261,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
 
   try {
     const blockBlobClient = client.getBlockBlobClient(filePath);
-    const content = JSON.stringify(updatedRawTx, null, 2); 
-    await blockBlobClient.upload(content, Buffer.byteLength(content), { 
+    const content = JSON.stringify(updatedRawTx, null, 2);
+    await blockBlobClient.upload(content, Buffer.byteLength(content), {
       blobHTTPHeaders: { blobContentType: 'application/json' }
     });
     revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
