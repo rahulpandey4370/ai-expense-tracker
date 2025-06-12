@@ -275,29 +275,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
 
-  const handleProcessBulk = () => {
+ const handleProcessBulk = () => {
     setIsProcessingBulk(true);
     const lines = bulkText.trim().split('\n');
     const parsed: BulkParsedTransaction[] = lines.map((line, index) => {
       const values = line.split('\t');
       const errors: string[] = [];
 
-      // Expected: Description, Category Name, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method Name
       if (values.length < 7) {
         errors.push("Row has fewer than 7 columns. Expected: Description, Category, Amount, Ignored Total, Date (DD/MM/YYYY), Expense Type, Payment Method.");
-        // Return early with errors, subsequent parsing will likely fail or be incorrect
         return { originalRow: line, rowIndex: index, errors, type: 'expense' };
       }
 
-      const desc = values[0]?.trim();
+      const desc = values[0] ? values[0].trim() : "";
       const catNameRaw = values[1];
       const catName = catNameRaw ? catNameRaw.trim() : undefined;
 
       const amountStrRaw = values[2];
       const amountStr = amountStrRaw ? amountStrRaw.trim() : undefined;
       
-      // values[3] is ignored (Total Amount)
-
       const dateStrRaw = values[4];
       const dateStr = dateStrRaw ? dateStrRaw.trim() : undefined;
 
@@ -317,18 +313,36 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       try {
         if (dateStr) {
             parsedDate = parseDateFns(dateStr, 'dd/MM/yyyy', new Date());
-            if (isNaN(parsedDate.getTime())) throw new Error("Invalid date format. Use DD/MM/YYYY.");
-        } else { errors.push("Date is missing or invalid."); }
-      } catch (e: any) { errors.push(e.message); }
+            if (isNaN(parsedDate.getTime())) {
+                parsedDate = undefined; // Ensure it's undefined if invalid
+                throw new Error("Invalid date format. Use DD/MM/YYYY.");
+            }
+        } else { 
+            errors.push("Date is missing or invalid."); 
+            parsedDate = undefined;
+        }
+      } catch (e: any) { 
+          errors.push(e.message); 
+          parsedDate = undefined;
+      }
 
       let amt: number | undefined;
       try {
           if (amountStr) {
             const cleanedAmountStr = amountStr.replace(/[₹,]/g, '');
             amt = parseFloat(cleanedAmountStr);
-            if (isNaN(amt) || amt <= 0) throw new Error("Amount must be a positive number.");
-          } else { errors.push("Amount is missing or invalid."); }
-      } catch (e: any) { errors.push(e.message); }
+            if (isNaN(amt) || amt <= 0) {
+                amt = undefined; // Ensure it's undefined if invalid
+                throw new Error("Amount must be a positive number.");
+            }
+          } else { 
+              errors.push("Amount is missing or invalid."); 
+              amt = undefined;
+          }
+      } catch (e: any) { 
+          errors.push(e.message); 
+          amt = undefined;
+      }
 
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
@@ -349,7 +363,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         type: 'expense', 
         categoryName: catName,
         paymentMethodName: pmName,
-        expenseType: expTypeStr as AppExpenseTypeEnum, // Cast, as validation handles incorrect values
+        expenseType: expTypeStr as AppExpenseTypeEnum,
         originalRow: line,
         rowIndex: index,
       };
@@ -366,16 +380,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
 
+
   const handleSubmitBulk = async () => {
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
-    const newParsedBulkTransactions = [...parsedBulkTransactions]; // Create a mutable copy
+    const newParsedBulkTransactions = [...parsedBulkTransactions]; 
 
     const transactionsToSubmit: TransactionInput[] = [];
     for (const pt of newParsedBulkTransactions) {
         if (pt.errors && pt.errors.length > 0) {
-            // errorCount++; // Already has errors, don't double count
             continue;
         }
         if (!pt.date || pt.amount === undefined || pt.type !== 'expense' || !pt.description || !pt.categoryName || !pt.paymentMethodName || !pt.expenseType) {
@@ -428,11 +442,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     const results = await Promise.allSettled(transactionsToSubmit.map(tx => addTransaction(tx)));
     results.forEach((result, idx) => {
-        // Find the original parsed transaction corresponding to this result
         const originalParsedTx = newParsedBulkTransactions.find(pt => 
-            !pt.errors && // Only consider initially valid ones
-            transactionsToSubmit[idx] && // Ensure there's a mapping
-            pt.description === transactionsToSubmit[idx].description && // Basic matching, can be improved
+            !pt.errors && 
+            transactionsToSubmit[idx] && 
+            pt.description === transactionsToSubmit[idx].description && 
             pt.amount === transactionsToSubmit[idx].amount
         );
 
@@ -445,12 +458,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             if (originalParsedTx) {
                 originalParsedTx.errors = [...(originalParsedTx.errors || []), `Save Error: ${errorMessage}`];
             } else {
-                // This case might occur if the matching logic fails or if transaction was already marked with error
                 toast({ title: "Save Error (Bulk)", description: `An item failed to save: ${errorMessage}`, variant: "destructive"});
             }
         }
     });
-     setParsedBulkTransactions(newParsedBulkTransactions); // Update UI with save errors
+     setParsedBulkTransactions(newParsedBulkTransactions); 
 
     toast({
       title: "Bulk Submission Complete",
@@ -459,9 +471,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     if (successCount > 0) {
       onTransactionAdded?.();
-      // Optionally clear only successfully submitted items or the whole form
-      // setBulkText('');
-      // setParsedBulkTransactions(newParsedBulkTransactions.filter(pt => pt.errors && pt.errors.length > 0)); // Keep failed items for review
     }
     setIsLoading(false);
   };
@@ -929,7 +938,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 {parsedBulkTransactions.map((pt, i) => (
                   <TableRow key={i} className={pt.errors && pt.errors.length > 0 ? "bg-destructive/10" : "hover:bg-accent/5"}>
                     <TableCell className="text-xs">{pt.rowIndex + 1}</TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{pt.date ? format(pt.date, 'dd/MM/yy') : 'N/A'}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">
+                      {pt.date && pt.date instanceof Date && !isNaN(pt.date.getTime()) ? format(pt.date, 'dd/MM/yy') : 'N/A'}
+                    </TableCell>
                     <TableCell className="text-xs max-w-[150px] sm:max-w-[200px] truncate" title={pt.description}>{pt.description || 'N/A'}</TableCell>
                     <TableCell className="text-xs whitespace-nowrap">₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
                     <TableCell className="text-xs max-w-[100px] truncate" title={pt.categoryName}>{pt.categoryName}</TableCell>
