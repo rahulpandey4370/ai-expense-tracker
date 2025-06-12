@@ -2,7 +2,7 @@
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
-import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
+import { CosmosClient, type Container as CosmosContainer, type ItemDefinition } from '@azure/cosmos';
 import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
@@ -11,8 +11,8 @@ import cuid from 'cuid';
 
 const CATEGORIES_BLOB_PATH = 'internal/data/categories.json';
 const PAYMENT_METHODS_BLOB_PATH = 'internal/data/payment-methods.json';
-// TRANSACTIONS_DIR is no longer the primary source for getTransactions but might be used for migration or backup.
-// const TRANSACTIONS_DIR = 'transactions/'; 
+// TRANSACTIONS_DIR is no longer the primary source for active transaction operations.
+// const TRANSACTIONS_DIR = 'transactions/';
 
 let blobContainerClientInstance: BlobContainerClient;
 let cosmosContainerInstance: CosmosContainer;
@@ -155,7 +155,7 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
   }
 }
 
-// --- Transaction Functions (Now using Cosmos DB for getTransactions) ---
+// --- Transaction Functions (Now using Cosmos DB) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
   console.log(`CosmosDB Info (getTransactions): Starting to fetch transactions. Options: ${JSON.stringify(options)}`);
   let allCategories: Category[] = [];
@@ -173,45 +173,46 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
 
   const categoryMap = new Map(allCategories.map(c => [c.id, c]));
   const paymentMethodMap = new Map(allPaymentMethods.map(pm => [pm.id, pm]));
-  
+
   const container = await getCosmosDBContainer();
   const querySpec = {
-    query: "SELECT * FROM c ORDER BY c.date DESC", // Basic query, fetches all and sorts by date
+    query: "SELECT * FROM c ORDER BY c.date DESC",
     parameters: [] as {name: string; value: any}[]
   };
 
-  // If a limit is provided, adjust the query. Cosmos DB uses TOP for limiting.
   if (options?.limit) {
     querySpec.query = `SELECT TOP @limit * FROM c ORDER BY c.date DESC`;
     querySpec.parameters.push({ name: "@limit", value: options.limit });
   }
-  
+
   console.log(`CosmosDB Info (getTransactions): Executing query: ${querySpec.query} with params: ${JSON.stringify(querySpec.parameters)}`);
+  let processedBlobCount = 0;
 
   try {
     const { resources: items } = await container.items.query(querySpec).fetchAll();
     console.log(`CosmosDB Info (getTransactions): Fetched ${items.length} raw items from Cosmos DB.`);
+    processedBlobCount = items.length;
 
-    const transactions: AppTransaction[] = items.map((rawTx: any) => { // Assuming items are RawTransaction-like
+    const transactions: AppTransaction[] = items.map((rawTx: any) => {
       return {
         ...rawTx,
-        date: new Date(rawTx.date), // Ensure date is a Date object
+        date: new Date(rawTx.date),
         createdAt: new Date(rawTx.createdAt),
         updatedAt: new Date(rawTx.updatedAt),
         category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
         paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
       };
     });
-    
-    // Sorting is handled by Cosmos DB query's ORDER BY.
-    // If further client-side sorting/filtering after limiting is needed, it would go here.
+
     console.log(`CosmosDB Info (getTransactions): Parsed ${transactions.length} transactions.`);
+    if (options?.limit && transactions.length >= options.limit) {
+      console.log(`CosmosDB Info (getTransactions): Reached processing limit of ${options.limit}. Processed ${transactions.length} transactions from ${processedBlobCount} fetched items.`);
+    }
     return transactions;
 
   } catch (error: any) {
     console.error('CosmosDB Error (getTransactions): Failed to query transactions.', error.message, error.stack);
-    // Check for common Cosmos DB errors (e.g., container not found, auth issues)
-    if (error.code === 404) {
+    if ((error as any).code === 404) { // More robust check for Cosmos DB specific error structure
         console.warn("CosmosDB Warning (getTransactions): Transactions container or database not found. Returning empty array.");
         return [];
     }
@@ -221,61 +222,190 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
 
 export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
   console.log("CosmosDB Info (addTransaction): Attempting to add transaction...");
-  // TODO: Rewrite for Cosmos DB
-  // This function needs to be rewritten to insert a document into Cosmos DB.
-  // 1. Validate input with TransactionInputSchema.
-  // 2. Create a new RawTransaction-like object (ensure date is ISO string).
-  // 3. Use `container.items.create(newItem)` to add to Cosmos DB.
-  // 4. Revalidate paths.
-  // 5. Return the AppTransaction (hydrated with category/paymentMethod objects).
-  console.error("CosmosDB Error: addTransaction function is not yet implemented for Cosmos DB.");
-  throw new Error("addTransaction function is not yet implemented for Cosmos DB.");
-
-  // Placeholder for original blob logic (commented out)
-  /*
   const validation = TransactionInputSchema.safeParse(data);
-  if (!validation.success) { ... }
+  if (!validation.success) {
+    const errorMessages = validation.error.flatten().fieldErrors;
+    const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
+    console.error('CosmosDB Error (addTransaction): Validation error:', readableErrors);
+    throw new Error(`Invalid transaction data: ${readableErrors || "Validation failed."}`);
+  }
+
   const id = cuid();
   const now = new Date().toISOString();
-  const rawTransaction: RawTransaction = { id, ...validation.data, date: validation.data.date.toISOString(), description: validation.data.description || '', createdAt: now, updatedAt: now };
-  const client = await getAzureBlobContainerClient(); // Needs to be specific for blob if kept for other things
-  const filePath = `${TRANSACTIONS_DIR}${id}.json`;
-  const blockBlobClient = client.getBlockBlobClient(filePath);
+
+  // Prepare the item for Cosmos DB. Ensure date is ISO string.
+  // Cosmos DB expects `id` to be a string.
+  const newItem: RawTransaction = {
+    id: id, // Cosmos DB uses 'id' as the item identifier by default
+    ...validation.data,
+    date: validation.data.date.toISOString(),
+    description: validation.data.description || '', // Ensure description is not undefined
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const container = await getCosmosDBContainer();
   try {
-    const content = JSON.stringify(rawTransaction, null, 2);
-    await blockBlobClient.upload(content, Buffer.byteLength(content), { blobHTTPHeaders: { blobContentType: 'application/json' } });
-    revalidatePath('/'); revalidatePath('/transactions'); revalidatePath('/reports'); revalidatePath('/yearly-overview'); revalidatePath('/ai-playground');
+    console.log(`CosmosDB Info (addTransaction): Creating item in Cosmos DB with id: ${id}`);
+    const { resource: createdItem } = await container.items.create(newItem);
+    if (!createdItem) {
+      console.error('CosmosDB Error (addTransaction): Item creation returned no resource.');
+      throw new Error('Failed to create transaction in Cosmos DB, no resource returned.');
+    }
+    console.log(`CosmosDB Info (addTransaction): Successfully created item ${createdItem.id}`);
+    revalidatePath('/');
+    revalidatePath('/transactions');
+    revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
+
+    // Hydrate for return
     const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
     const category = validation.data.categoryId ? allCategories.find(c => c.id === validation.data.categoryId) : undefined;
     const paymentMethod = validation.data.paymentMethodId ? allPaymentMethods.find(pm => pm.id === validation.data.paymentMethodId) : undefined;
-    return { ...rawTransaction, date: new Date(rawTransaction.date), createdAt: new Date(rawTransaction.createdAt), updatedAt: new Date(rawTransaction.updatedAt), category, paymentMethod };
-  } catch (error: any) { ... }
-  */
+
+    return {
+      ...createdItem, // createdItem is already like RawTransaction
+      date: new Date(createdItem.date),
+      createdAt: new Date(createdItem.createdAt),
+      updatedAt: new Date(createdItem.updatedAt),
+      category,
+      paymentMethod,
+    } as AppTransaction;
+
+  } catch (error: any) {
+    console.error(`CosmosDB Error (addTransaction): Failed to add transaction ${id} to Cosmos DB. Status: ${error.code}, Message: ${error.message}`, error.stack);
+    throw new Error(`Could not add transaction to Cosmos DB. Original error: ${error.message}`);
+  }
 }
 
 export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
   console.log(`CosmosDB Info (updateTransaction): Attempting to update transaction ${id}...`);
-  // TODO: Rewrite for Cosmos DB
-  // This function needs to be rewritten to update/replace a document in Cosmos DB.
-  // 1. Fetch the existing item by ID: `container.item(id, partitionKeyValue_if_any).read()`.
-  // 2. Merge changes.
-  // 3. Validate the merged data.
-  // 4. Use `container.item(id, partitionKeyValue_if_any).replace(updatedItem)`
-  // 5. Revalidate paths.
-  // 6. Return the updated AppTransaction.
-  console.error("CosmosDB Error: updateTransaction function is not yet implemented for Cosmos DB.");
-  throw new Error("updateTransaction function is not yet implemented for Cosmos DB.");
+  const container = await getCosmosDBContainer();
+
+  // Fetch the existing item
+  let existingItem: RawTransaction;
+  try {
+    // For containers partitioned by /id, the id itself is the partition key.
+    // If you used a different partition key, you'd need to provide it here.
+    const { resource } = await container.item(id, id).read<RawTransaction>();
+    if (!resource) {
+      throw new Error(`Transaction with ID ${id} not found for update.`);
+    }
+    existingItem = resource;
+    console.log(`CosmosDB Info (updateTransaction): Fetched existing item ${id} for update.`);
+  } catch (error: any) {
+    console.error(`CosmosDB Error (updateTransaction): Failed to fetch transaction ${id} for update. Status: ${error.code}, Message: ${error.message}`, error.stack);
+    if (error.code === 404) {
+      throw new Error(`Transaction with ID ${id} not found for update.`);
+    }
+    throw new Error(`Could not retrieve transaction for update. Original error: ${error.message}`);
+  }
+
+  // Merge changes and validate. Date needs special handling if it's being updated.
+  const updatedRawData = {
+    ...existingItem,
+    ...data,
+    date: data.date ? data.date.toISOString() : existingItem.date, // If new date, convert to ISO
+    description: data.description !== undefined ? data.description : existingItem.description,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  // Convert RawTransaction-like data to TransactionInput for validation
+  const transactionInputForValidation: TransactionInput = {
+    type: updatedRawData.type,
+    date: new Date(updatedRawData.date), // Convert string date back to Date for validation
+    amount: updatedRawData.amount,
+    description: updatedRawData.description,
+    categoryId: updatedRawData.categoryId,
+    paymentMethodId: updatedRawData.paymentMethodId,
+    source: updatedRawData.source,
+    expenseType: updatedRawData.expenseType,
+  };
+
+
+  const validation = TransactionInputSchema.safeParse(transactionInputForValidation);
+  if (!validation.success) {
+    const errorMessages = validation.error.flatten().fieldErrors;
+    const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
+    console.error('CosmosDB Error (updateTransaction): Validation error:', readableErrors);
+    throw new Error(`Invalid transaction data for update: ${readableErrors || "Validation failed."}`);
+  }
+  
+  // Use the validated data (where date is Date object) to form the final RawTransaction for Cosmos
+   const finalItemToUpdate: RawTransaction = {
+    ...existingItem, // spread existing to keep _rid, _self, _etag, _attachments, _ts
+    id: existingItem.id, // Ensure id is explicitly from existing
+    type: validation.data.type,
+    date: validation.data.date.toISOString(), // Convert validated Date back to ISO string
+    amount: validation.data.amount,
+    description: validation.data.description || '',
+    categoryId: validation.data.categoryId,
+    paymentMethodId: validation.data.paymentMethodId,
+    source: validation.data.source,
+    expenseType: validation.data.expenseType,
+    createdAt: existingItem.createdAt, // Keep original createdAt
+    updatedAt: new Date().toISOString(),
+  };
+
+
+  try {
+    console.log(`CosmosDB Info (updateTransaction): Replacing item ${id} in Cosmos DB.`);
+    const { resource: updatedItem } = await container.item(id, id).replace(finalItemToUpdate);
+     if (!updatedItem) {
+      console.error('CosmosDB Error (updateTransaction): Item replacement returned no resource.');
+      throw new Error('Failed to update transaction in Cosmos DB, no resource returned.');
+    }
+    console.log(`CosmosDB Info (updateTransaction): Successfully updated item ${updatedItem.id}`);
+    revalidatePath('/');
+    revalidatePath('/transactions');
+    revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
+
+    // Hydrate for return
+    const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
+    const category = updatedItem.categoryId ? allCategories.find(c => c.id === updatedItem.categoryId) : undefined;
+    const paymentMethod = updatedItem.paymentMethodId ? allPaymentMethods.find(pm => pm.id === updatedItem.paymentMethodId) : undefined;
+
+    return {
+      ...updatedItem,
+      date: new Date(updatedItem.date),
+      createdAt: new Date(updatedItem.createdAt),
+      updatedAt: new Date(updatedItem.updatedAt),
+      category,
+      paymentMethod,
+    } as AppTransaction;
+
+  } catch (error: any) {
+    console.error(`CosmosDB Error (updateTransaction): Failed to update transaction ${id} in Cosmos DB. Status: ${error.code}, Message: ${error.message}`, error.stack);
+    throw new Error(`Could not update transaction in Cosmos DB. Original error: ${error.message}`);
+  }
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {
   console.log(`CosmosDB Info (deleteTransaction): Attempting to delete transaction ${id}...`);
-  // TODO: Rewrite for Cosmos DB
-  // This function needs to be rewritten to delete a document from Cosmos DB.
-  // 1. Use `container.item(id, partitionKeyValue_if_any).delete()`.
-  //    Note: You'll need a partition key value if your container is partitioned and you're not using a cross-partition query to find the item first.
-  //    For simplicity, if you don't have many distinct values for partitioning (e.g. by year or type), you might choose a single partition key value for all transactions or not use one if data size is small.
-  //    If your transaction ID `id` is unique across the container, that's good.
-  // 2. Revalidate paths.
-  console.error("CosmosDB Error: deleteTransaction function is not yet implemented for Cosmos DB.");
-  throw new Error("deleteTransaction function is not yet implemented for Cosmos DB.");
+  const container = await getCosmosDBContainer();
+  try {
+    // For containers partitioned by /id, the id itself is the partition key value.
+    // If you used a different partition key, you would need to provide that value.
+    console.log(`CosmosDB Info (deleteTransaction): Deleting item ${id} from Cosmos DB.`);
+    await container.item(id, id).delete();
+    console.log(`CosmosDB Info (deleteTransaction): Successfully deleted item ${id}`);
+    revalidatePath('/');
+    revalidatePath('/transactions');
+    revalidatePath('/reports');
+    revalidatePath('/yearly-overview');
+    revalidatePath('/ai-playground');
+    return { success: true };
+  } catch (error: any) {
+    console.error(`CosmosDB Error (deleteTransaction): Failed to delete transaction ${id} from Cosmos DB. Status: ${error.code}, Message: ${error.message}`, error.stack);
+     if (error.code === 404) {
+      console.warn(`CosmosDB Warning (deleteTransaction): Transaction ${id} not found for deletion, considered success.`);
+      return { success: true }; // Item not found, so it's effectively deleted.
+    }
+    throw new Error(`Could not delete transaction from Cosmos DB. Original error: ${error.message}`);
+  }
 }
+
+    
