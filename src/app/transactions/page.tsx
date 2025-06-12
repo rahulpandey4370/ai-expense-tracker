@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
-import { getTransactions, deleteTransaction, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
+import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions } from '@/lib/actions/transactions';
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,10 +69,13 @@ export default function TransactionsPage() {
   const [filterPaymentMethodId, setFilterPaymentMethodId] = useState<string | 'all'>('all');
   const [filterExpenseType, setFilterExpenseType] = useState<string | 'all'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
+  
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // For single delete
 
   const { toast } = useToast();
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange, handleYearChange } = useDateSelection();
@@ -81,6 +85,7 @@ export default function TransactionsPage() {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    setSelectedTransactionIds(new Set()); // Reset selection on data refresh
     try {
       const [fetchedTransactions, fetchedCategories, fetchedPaymentMethods] = await Promise.all([
         getTransactions(),
@@ -112,33 +117,18 @@ export default function TransactionsPage() {
       const paramType = searchParams.get('type');
       const paramExpenseType = searchParams.get('expenseType');
 
-      let dateChangedByParams = false;
-
       if (paramMonth !== null && paramYear !== null) {
         const monthNum = parseInt(paramMonth, 10);
         const yearNum = parseInt(paramYear, 10);
         if (!isNaN(monthNum) && monthNum >= 0 && monthNum < 12 && !isNaN(yearNum)) {
-          if (selectedMonth !== monthNum) {
-            handleMonthChange(monthNum.toString());
-            dateChangedByParams = true;
-          }
-          if (selectedYear !== yearNum) {
-            handleYearChange(yearNum.toString());
-            dateChangedByParams = true;
-          }
-          setViewMode('selected_month'); // Ensure view mode matches linked KPI
+          if (selectedMonth !== monthNum) handleMonthChange(monthNum.toString());
+          if (selectedYear !== yearNum) handleYearChange(yearNum.toString());
+          setViewMode('selected_month');
         }
       }
+      if (paramType) setFilterType(paramType);
+      if (paramExpenseType) setFilterExpenseType(paramExpenseType);
       
-      if (paramType) {
-        setFilterType(paramType);
-      }
-      if (paramExpenseType) {
-        setFilterExpenseType(paramExpenseType);
-      }
-      
-      // Only mark as applied if we actually read some params, 
-      // or if no params were present on first load.
       if (paramMonth || paramYear || paramType || paramExpenseType || searchParams.toString() === '') {
          hasAppliedInitialParams.current = true;
       }
@@ -177,7 +167,6 @@ export default function TransactionsPage() {
       tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
     }
 
-
     if (filterCategoryId !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.category?.id === filterCategoryId);
     }
@@ -189,7 +178,6 @@ export default function TransactionsPage() {
     if (sortConfig.key) {
       tempTransactions.sort((a, b) => {
         let aValue, bValue;
-
         if (sortConfig.key === 'categoryName') {
           aValue = a.category?.name || '';
           bValue = b.category?.name || '';
@@ -200,9 +188,7 @@ export default function TransactionsPage() {
           aValue = a[sortConfig.key as keyof AppTransaction];
           bValue = b[sortConfig.key as keyof AppTransaction];
         }
-
         if (aValue === undefined || bValue === undefined || aValue === null || bValue === null) return 0;
-
         if (sortConfig.key === 'date' && aValue instanceof Date && bValue instanceof Date) {
            return sortConfig.direction === 'ascending' ? aValue.getTime() - bValue.getTime() : bValue.getTime() - aValue.getTime();
         }
@@ -215,7 +201,6 @@ export default function TransactionsPage() {
         return 0;
       });
     }
-
     setFilteredTransactions(tempTransactions);
   }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, sortConfig, selectedMonth, selectedYear, viewMode]);
 
@@ -227,13 +212,12 @@ export default function TransactionsPage() {
     return { count, netAmount };
   }, [filteredTransactions]);
 
-
   const handleTransactionUpdateOrAdd = () => {
     fetchData(); 
     setEditingTransaction(null);
   };
 
-  const handleDeleteTransaction = async (transactionId: string) => {
+  const handleDeleteSingleTransaction = async (transactionId: string) => {
     setIsDeleting(true);
     try {
       await deleteTransaction(transactionId);
@@ -244,6 +228,48 @@ export default function TransactionsPage() {
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    const idsToDelete = Array.from(selectedTransactionIds);
+    try {
+      const result = await deleteMultipleTransactions(idsToDelete);
+      toast({
+        title: "Bulk Deletion Complete",
+        description: `${result.successCount} transaction(s) deleted. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
+        variant: result.errorCount > 0 ? "destructive" : "default",
+      });
+      if (result.errors.length > 0) {
+        console.error("Bulk delete errors:", result.errors);
+      }
+      fetchData(); // Refreshes list and clears selection
+    } catch (error) {
+      console.error("Failed to bulk delete transactions:", error);
+      toast({ title: "Bulk Deletion Failed", description: "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+  
+  const toggleSelectTransaction = (id: string) => {
+    setSelectedTransactionIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTransactionIds.size === filteredTransactions.length && filteredTransactions.length > 0) {
+      setSelectedTransactionIds(new Set());
+    } else {
+      setSelectedTransactionIds(new Set(filteredTransactions.map(t => t.id)));
     }
   };
 
@@ -346,7 +372,7 @@ export default function TransactionsPage() {
                     <SelectItem value="all" className="text-xs md:text-sm">All Expense Types</SelectItem>
                     <SelectItem value="need" className="text-xs md:text-sm">Need</SelectItem>
                     <SelectItem value="want" className="text-xs md:text-sm">Want</SelectItem>
-                    <SelectItem value="investment_expense" className="text-xs md:text-sm">Investment</SelectItem>
+                    <SelectItem value="investment" className="text-xs md:text-sm">Investment</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
@@ -372,18 +398,41 @@ export default function TransactionsPage() {
               </div>
             </div>
 
-            <div className="my-4 p-3 md:p-4 border rounded-lg bg-background/50 border-primary/20">
-              <div className="flex flex-col sm:flex-row flex-wrap justify-between items-center gap-2 md:gap-4">
-                <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
-                  <List className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                  <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s) for <strong className="text-accent">{currentPeriodText}</strong></span>
-                </div>
-                <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
-                  <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                  <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
-                </div>
+            <div className="my-4 p-3 md:p-4 border rounded-lg bg-background/50 border-primary/20 flex flex-col sm:flex-row flex-wrap justify-between items-center gap-3 md:gap-4">
+              <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
+                <List className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                <span>Showing: <strong className="text-foreground">{filteredSummary.count}</strong> transaction(s) for <strong className="text-accent">{currentPeriodText}</strong></span>
               </div>
+              <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
+                <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
+              </div>
+              {selectedTransactionIds.size > 0 && (
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" disabled={isBulkDeleting} className="w-full sm:w-auto">
+                        {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Delete Selected ({selectedTransactionIds.size})
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive flex items-center gap-2"><ShieldAlert />Confirm Bulk Deletion</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted-foreground">
+                          Are you sure you want to permanently delete {selectedTransactionIds.size} selected transaction(s)? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete} disabled={isBulkDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
+                          {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Delete Selected"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+              )}
             </div>
+
 
             {isLoading ? (
               <div className="flex justify-center items-center h-[300px] sm:h-[400px]">
@@ -396,6 +445,14 @@ export default function TransactionsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-primary/10 border-b-primary/30">
+                      <TableHead className="w-12 px-2">
+                        <Checkbox
+                          checked={filteredTransactions.length > 0 && selectedTransactionIds.size === filteredTransactions.length}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Select all transactions"
+                          disabled={filteredTransactions.length === 0}
+                        />
+                      </TableHead>
                       <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Date{getSortIndicator('date')}</TableHead>
                       <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Description{getSortIndicator('description')}</TableHead>
                       <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Type{getSortIndicator('type')}</TableHead>
@@ -413,8 +470,15 @@ export default function TransactionsPage() {
                           key={transaction.id}
                           variants={tableRowVariants}
                           layout
-                          className="hover:bg-accent/10 border-b-primary/20 text-xs sm:text-sm"
+                          className={cn("hover:bg-accent/10 border-b-primary/20 text-xs sm:text-sm", selectedTransactionIds.has(transaction.id) && "bg-primary/10 dark:bg-primary/20")}
                         >
+                          <TableCell className="px-2">
+                            <Checkbox
+                              checked={selectedTransactionIds.has(transaction.id)}
+                              onCheckedChange={() => toggleSelectTransaction(transaction.id)}
+                              aria-label={`Select transaction ${transaction.description}`}
+                            />
+                          </TableCell>
                           <TableCell className="text-foreground/90 whitespace-nowrap">{format(new Date(transaction.date), "dd MMM, yy")}</TableCell>
                           <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
                           <TableCell>
@@ -442,7 +506,7 @@ export default function TransactionsPage() {
                                   `capitalize border-opacity-50 text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5`,
                                   transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
                                   transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
-                                  transaction.expenseType === 'investment_expense' ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40' :
+                                  transaction.expenseType === 'investment' ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40' :
                                   'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
                                 )}
                               >
@@ -474,7 +538,7 @@ export default function TransactionsPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
+                                  <AlertDialogAction onClick={() => handleDeleteSingleTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
                                     {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                     {isDeleting ? "Deleting..." : "Delete"}
                                   </AlertDialogAction>
@@ -487,7 +551,7 @@ export default function TransactionsPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                           No transactions found for {currentPeriodText}. Try adjusting your filters or adding a new transaction.
                         </TableCell>
                       </TableRow>
