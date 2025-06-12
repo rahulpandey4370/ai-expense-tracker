@@ -87,8 +87,8 @@ export default function AIPlaygroundPage() {
     setIsLoadingGoals(true);
     try {
       const [fetchedTransactions, fetchedGoals] = await Promise.all([
-        getTransactions(),
-        getGoals()
+        getTransactions({ limit: 500 }), // Limit transactions for AI playground averages
+        getGoals({ limit: 50 }) // Limit goals displayed initially
       ]);
       setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
       setSavedGoals(fetchedGoals.map(g => ({...g, createdAt: new Date(g.createdAt), updatedAt: new Date(g.updatedAt) })));
@@ -277,7 +277,7 @@ export default function AIPlaygroundPage() {
   const calculateBudgetingAssistantInputs = useCallback(() => {
     const today = new Date();
     let totalCoreExpensesLast3Months = 0;
-    const spendingByTypeLast3Months: Record<string, number> = { need: 0, want: 0, investment_expense: 0 };
+    const spendingByTypeLast3Months: Record<string, number> = { need: 0, want: 0, investment: 0 };
     const spendingByCategoryLast3Months: Record<string, number> = {};
     const monthSet = new Set<string>();
     const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
@@ -319,7 +319,7 @@ export default function AIPlaygroundPage() {
       .map(([name, total]) => `${name}: ₹${(total / numberOfMonthsWithData).toFixed(0)}`)
       .join(', ');
 
-    const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ₹${(spendingByTypeLast3Months.need / numberOfMonthsWithData).toFixed(0)}, Wants: ₹${(spendingByTypeLast3Months.want / numberOfMonthsWithData).toFixed(0)}, Investments (as expense): ₹${(spendingByTypeLast3Months.investment_expense / numberOfMonthsWithData).toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
+    const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ₹${(spendingByTypeLast3Months.need / numberOfMonthsWithData).toFixed(0)}, Wants: ₹${(spendingByTypeLast3Months.want / numberOfMonthsWithData).toFixed(0)}, Investments: ₹${(spendingByTypeLast3Months.investment / numberOfMonthsWithData).toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
 
     return { averagePastMonthlyExpenses: averagePastMonthlyCoreExpenses, pastSpendingBreakdown };
   }, [allTransactions]);
@@ -380,7 +380,7 @@ export default function AIPlaygroundPage() {
 
   const summarizeSpendingForAI = (transactions: AppTransaction[]): string => {
     if (transactions.length === 0) return "No spending in this period.";
-    const spendingByType: Record<string, number> = { need: 0, want: 0, investment_expense: 0 };
+    const spendingByType: Record<string, number> = { need: 0, want: 0, investment: 0 };
     const spendingByCategory: Record<string, number> = {};
 
     transactions.filter(t => t.type === 'expense').forEach(t => {
@@ -394,7 +394,7 @@ export default function AIPlaygroundPage() {
       .map(([name, total]) => `${name}: ₹${total.toFixed(0)}`)
       .join(', ');
 
-    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments_Expenses: ₹${spendingByType.investment_expense.toFixed(0)}. Top categories: ${topCategoriesString || 'N/A'}.`;
+    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments: ₹${spendingByType.investment.toFixed(0)}. Top categories: ${topCategoriesString || 'N/A'}.`;
   };
 
   const handleGetHealthCheck = async () => {
@@ -932,4 +932,5 @@ export default function AIPlaygroundPage() {
     </main>
   );
 }
+
 

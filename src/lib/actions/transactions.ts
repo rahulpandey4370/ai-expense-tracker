@@ -128,8 +128,8 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
   }
 }
 
-export async function getTransactions(): Promise<AppTransaction[]> {
-  console.log("Azure Info (getTransactions): Starting to fetch all transactions.");
+export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
+  console.log(`Azure Info (getTransactions): Starting to fetch transactions. Options: ${JSON.stringify(options)}`);
   let allCategories: Category[] = [];
   let allPaymentMethods: PaymentMethod[] = [];
   const client = await getAzureContainerClient();
@@ -151,29 +151,34 @@ export async function getTransactions(): Promise<AppTransaction[]> {
 
   let transactions: AppTransaction[] = [];
   let processedBlobCount = 0;
+  const limit = options?.limit;
+
   try {
     console.log(`Azure Info (getTransactions): Listing blobs in directory: ${TRANSACTIONS_DIR}`);
+    // Note: Azure Blob Storage lists blobs lexicographically. If IDs (like cuid) are time-ordered, this gives a rough chronological order.
+    // For true "most recent N", all blobs would need to be listed, metadata (if available) or content fetched for dates, then sorted.
+    // This implementation limits the *number of blobs processed* from the beginning of the list.
     const blobsIterator = client.listBlobsFlat({ prefix: TRANSACTIONS_DIR });
     for await (const blob of blobsIterator) {
       processedBlobCount++;
-      console.log(`Azure Info (getTransactions): Processing blob #${processedBlobCount}: ${blob.name}`);
+      // console.log(`Azure Info (getTransactions): Processing blob #${processedBlobCount}: ${blob.name}`);
       if (!blob.name || !blob.name.endsWith('.json') || blob.name === TRANSACTIONS_DIR) {
-        console.log(`Azure Debug (getTransactions): Skipping non-JSON or directory blob: ${blob.name}`);
+        // console.log(`Azure Debug (getTransactions): Skipping non-JSON or directory blob: ${blob.name}`);
         continue;
       }
       try {
         const blobClient = client.getBlobClient(blob.name);
-        console.log(`Azure Info (getTransactions): Attempting to download blob: ${blob.name}`);
+        // console.log(`Azure Info (getTransactions): Attempting to download blob: ${blob.name}`);
         const downloadBlockBlobResponse = await blobClient.download(0);
-        console.log(`Azure Info (getTransactions): Downloaded blob: ${blob.name}. Stream available: ${!!downloadBlockBlobResponse.readableStreamBody}`);
+        // console.log(`Azure Info (getTransactions): Downloaded blob: ${blob.name}. Stream available: ${!!downloadBlockBlobResponse.readableStreamBody}`);
         
         if (!downloadBlockBlobResponse.readableStreamBody) {
           console.warn(`Azure Warning (getTransactions): Blob ${blob.name} has no readable stream body, skipping.`);
           continue;
         }
-        console.log(`Azure Info (getTransactions): Converting stream to buffer for blob: ${blob.name}`);
+        // console.log(`Azure Info (getTransactions): Converting stream to buffer for blob: ${blob.name}`);
         const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
-        console.log(`Azure Info (getTransactions): Converted to buffer for blob: ${blob.name}, size: ${buffer.length}`);
+        // console.log(`Azure Info (getTransactions): Converted to buffer for blob: ${blob.name}, size: ${buffer.length}`);
         const rawTx: RawTransaction = JSON.parse(buffer.toString());
         transactions.push({
           ...rawTx,
@@ -183,12 +188,17 @@ export async function getTransactions(): Promise<AppTransaction[]> {
           category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
           paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
         });
+
+        if (limit && transactions.length >= limit) {
+          console.log(`Azure Info (getTransactions): Reached processing limit of ${limit}. Breaking loop after processing ${transactions.length} transactions from ${processedBlobCount} listed blobs.`);
+          break;
+        }
+
       } catch (fetchError: any) {
         console.error(`Azure Error (getTransactions): Error processing individual transaction blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
         if (fetchError instanceof RestError && fetchError.statusCode === 404) {
              console.warn(`Azure Warning (getTransactions): Transaction blob ${blob.name} not found during processing, skipping.`);
         }
-        // Optionally, decide if one failed blob should stop the whole process or just be skipped
       }
     }
     console.log(`Azure Info (getTransactions): Finished processing. Total blobs listed/attempted: ${processedBlobCount}. Transactions parsed: ${transactions.length}.`);
@@ -202,6 +212,7 @@ export async function getTransactions(): Promise<AppTransaction[]> {
     throw new Error(`Could not fetch transactions from Azure Blob store. Original error: ${error.message}`);
   }
   
+  // Sort by date descending after fetching and potentially limiting
   return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 

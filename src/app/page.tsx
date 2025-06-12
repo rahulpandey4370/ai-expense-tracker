@@ -64,7 +64,8 @@ export default function DashboardPage() {
   const fetchAndSetTransactions = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const fetchedTransactions = await getTransactions();
+      // Limit to fetching a reasonable number for dashboard performance
+      const fetchedTransactions = await getTransactions({ limit: 500 }); 
       setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
     } catch (error) {
       console.error("Failed to fetch transactions for dashboard:", error);
@@ -113,7 +114,7 @@ export default function DashboardPage() {
     
     const totalInvestments = currentMonthTransactions
       .filter(t => t.type === 'expense' && 
-                   (t.expenseType === 'investment_expense' || 
+                   (t.expenseType === 'investment' || 
                     (t.category && investmentCategoryNames.includes(t.category.name)))
       )
       .reduce((sum, t) => sum + t.amount, 0);
@@ -156,7 +157,7 @@ export default function DashboardPage() {
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
-    return transactions
+    return transactions // Uses the limited set of transactions fetched for the dashboard
       .filter(t => {
         const transactionDate = new Date(t.date);
         return t.type === 'expense' && 

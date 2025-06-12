@@ -95,21 +95,24 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
   }
 }
 
-export async function getGoals(): Promise<Goal[]> {
+export async function getGoals(options?: { limit?: number }): Promise<Goal[]> {
   const goals: Goal[] = [];
   const client = await getAzureGoalsContainerClient();
-  console.log("Azure Info: Attempting to get goals...");
+  console.log(`Azure Info: Attempting to get goals. Options: ${JSON.stringify(options)}`);
+  const limit = options?.limit;
+  let processedBlobCount = 0;
 
   try {
     console.log(`Azure Info: Listing blobs in directory: ${GOALS_DIR}`);
     const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
     for await (const blob of blobsIterator) {
+      processedBlobCount++;
       if (!blob.name || !blob.name.endsWith('.json') || blob.name === GOALS_DIR) {
-         console.log(`Azure Debug (getGoals): Skipping non-JSON or directory blob (name: ${blob.name})`);
+         // console.log(`Azure Debug (getGoals): Skipping non-JSON or directory blob (name: ${blob.name})`);
         continue;
       }
       try {
-        console.log(`Azure Info: Processing goal blob ${blob.name}`);
+        // console.log(`Azure Info: Processing goal blob ${blob.name}`);
         const blobClient = client.getBlobClient(blob.name);
         const downloadBlockBlobResponse = await blobClient.download(0);
         if (!downloadBlockBlobResponse.readableStreamBody) {
@@ -119,6 +122,11 @@ export async function getGoals(): Promise<Goal[]> {
         const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
         const goalData: Goal = JSON.parse(buffer.toString());
         goals.push(goalData);
+
+        if (limit && goals.length >= limit) {
+          console.log(`Azure Info (getGoals): Reached processing limit of ${limit}. Breaking loop after processing ${goals.length} goals from ${processedBlobCount} listed blobs.`);
+          break;
+        }
       } catch (fetchError: any) {
         console.error(`Azure Error: Error processing goal blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
         if (fetchError instanceof RestError && fetchError.statusCode === 404) {
@@ -126,7 +134,7 @@ export async function getGoals(): Promise<Goal[]> {
         }
       }
     }
-    console.log(`Azure Info: Fetched ${goals.length} goals.`);
+    console.log(`Azure Info: Fetched ${goals.length} goals. Total blobs listed/attempted: ${processedBlobCount}.`);
   } catch (error: any) {
     console.error('Azure Error: Failed to list goals from Azure blob.', error.message, error.stack);
      if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
