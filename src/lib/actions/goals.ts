@@ -10,7 +10,7 @@ import cuid from 'cuid';
 const GOALS_DIR = 'goals/';
 const AI_PLAYGROUND_PATH = '/ai-playground';
 
-let azureGoalsContainerClientInstance: ContainerClient;
+let goalsContainerClientInstance: ContainerClient; // Renamed for clarity
 
 async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -26,37 +26,44 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Bu
 }
 
 async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
-  if (azureGoalsContainerClientInstance) {
-    return azureGoalsContainerClientInstance;
+  console.log("Azure Info: Attempting to get Azure Container Client (goals)...");
+  if (goalsContainerClientInstance) {
+    console.log("Azure Info: Returning cached container client instance (goals).");
+    return goalsContainerClientInstance;
   }
+  console.log("Azure Info: No cached client instance, creating new one (goals).");
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
+
+  console.log(`Azure Info: Read AZURE_STORAGE_CONNECTION_STRING (goals). Is present: ${!!connectionString}, Length (if present): ${connectionString?.length}`);
+  console.log(`Azure Info: Read AZURE_STORAGE_CONTAINER_NAME (goals): '${containerName}'. Is present: ${!!containerName}, Type: ${typeof containerName}`);
 
   if (!connectionString) {
     console.error("Azure Critical Error: AZURE_STORAGE_CONNECTION_STRING is not configured for goals.");
     throw new Error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured for goals.");
   }
   if (!containerName || typeof containerName !== 'string' || containerName.trim() === '') {
-    console.error("Azure Critical Error: AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals.");
+    console.error(`Azure Critical Error: AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals. Value: '${containerName}'`);
     throw new Error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals. Please check Vercel environment variables.");
   }
 
   try {
-    console.log(`Azure Info: Attempting to create BlobServiceClient for goals. Connection string present: ${!!connectionString}`);
+    console.log(`Azure Info: Attempting to create BlobServiceClient from connection string (goals)... (First 30 chars of CS: ${connectionString.substring(0,30)}...)`);
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    console.log(`Azure Info: Attempting to get container client for goals. Container name: '${containerName}'`);
+    console.log(`Azure Info: BlobServiceClient created successfully (goals). Attempting to get container client for '${containerName}'...`);
     const client = blobServiceClient.getContainerClient(containerName);
-    console.log(`Azure Info: Successfully created container client for '${containerName}' (goals).`);
-    azureGoalsContainerClientInstance = client;
-    return azureGoalsContainerClientInstance;
+    console.log(`Azure Info: Container client for '${containerName}' (goals) obtained successfully.`);
+    goalsContainerClientInstance = client;
+    return goalsContainerClientInstance;
   } catch (error: any) {
-    console.error(`Azure Critical Error: Failed to initialize BlobServiceClient or ContainerClient for goals. CS present: ${!!connectionString}, CN: ${containerName}. Error: ${error.message}`, error);
+    console.error(`Azure CRITICAL Error: Failed to initialize BlobServiceClient or ContainerClient for goals. CS present: ${!!connectionString}, CN: ${containerName}. Error Type: ${error.name}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not connect to Azure Blob Storage for goals. Check configuration and credentials. Original error: ${error.message}`);
   }
 }
 
 export async function addGoal(data: GoalInput): Promise<Goal> {
+  console.log("Azure Info: Attempting to add goal...");
   const validation = GoalInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
@@ -83,7 +90,7 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
     revalidatePath(AI_PLAYGROUND_PATH);
     return newGoal;
   } catch (error: any) {
-    console.error(`Azure Error: Failed to add goal ${id} to Azure blob. Message: ${error.message}`, error);
+    console.error(`Azure Error: Failed to add goal ${id} to Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not add goal to Azure blob storage. Original error: ${error.message}`);
   }
 }
@@ -91,13 +98,14 @@ export async function addGoal(data: GoalInput): Promise<Goal> {
 export async function getGoals(): Promise<Goal[]> {
   const goals: Goal[] = [];
   const client = await getAzureGoalsContainerClient();
+  console.log("Azure Info: Attempting to get goals...");
 
   try {
     console.log(`Azure Info: Listing blobs in directory: ${GOALS_DIR}`);
     const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
     for await (const blob of blobsIterator) {
       if (!blob.name || !blob.name.endsWith('.json') || blob.name === GOALS_DIR) {
-        console.log(`Azure Debug: Skipping goal blob (name: ${blob.name}, endsWithJson: ${blob.name?.endsWith('.json')}, isDir: ${blob.name === GOALS_DIR})`);
+         console.log(`Azure Debug (getGoals): Skipping non-JSON or directory blob (name: ${blob.name})`);
         continue;
       }
       try {
@@ -112,7 +120,7 @@ export async function getGoals(): Promise<Goal[]> {
         const goalData: Goal = JSON.parse(buffer.toString());
         goals.push(goalData);
       } catch (fetchError: any) {
-        console.error(`Azure Error: Error processing goal blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError);
+        console.error(`Azure Error: Error processing goal blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
         if (fetchError instanceof RestError && fetchError.statusCode === 404) {
              console.warn(`Azure Warning: Goal blob ${blob.name} not found during processing, skipping.`);
         }
@@ -120,7 +128,7 @@ export async function getGoals(): Promise<Goal[]> {
     }
     console.log(`Azure Info: Fetched ${goals.length} goals.`);
   } catch (error: any) {
-    console.error('Azure Error: Failed to list goals from Azure blob.', error);
+    console.error('Azure Error: Failed to list goals from Azure blob.', error.message, error.stack);
      if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
         console.warn("Azure Warning: Container for goals not found. Returning empty array. The container might need to be created in Azure portal.");
         return [];
@@ -131,6 +139,7 @@ export async function getGoals(): Promise<Goal[]> {
 }
 
 export async function updateGoalProgress(goalId: string, allocatedAmount: number): Promise<Goal> {
+  console.log(`Azure Info: Attempting to update goal progress for ${goalId}...`);
   const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${goalId}.json`;
   const blobClient = client.getBlobClient(filePath);
@@ -151,7 +160,7 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
     existingGoal = JSON.parse(buffer.toString());
     console.log(`Azure Info: Successfully fetched goal ${goalId} for update.`);
   } catch (error: any) {
-    console.error(`Azure Error: Failed to fetch goal ${goalId} from Azure for update. Message: ${error.message}`, error);
+    console.error(`Azure Error: Failed to fetch goal ${goalId} from Azure for update. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     if (error instanceof RestError && error.statusCode === 404) {
       throw new Error(`Goal with ID ${goalId} not found for update in Azure.`);
     }
@@ -177,12 +186,13 @@ export async function updateGoalProgress(goalId: string, allocatedAmount: number
     revalidatePath(AI_PLAYGROUND_PATH);
     return updatedGoal;
   } catch (error: any) {
-    console.error(`Azure Error: Failed to update goal ${goalId} in Azure blob. Message: ${error.message}`, error);
+    console.error(`Azure Error: Failed to update goal ${goalId} in Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not update goal in Azure blob storage. Original error: ${error.message}`);
   }
 }
 
 export async function deleteGoal(id: string): Promise<{ success: boolean }> {
+  console.log(`Azure Info: Attempting to delete goal ${id}...`);
   const client = await getAzureGoalsContainerClient();
   const filePath = `${GOALS_DIR}${id}.json`;
   const blobClient = client.getBlobClient(filePath);
@@ -193,7 +203,9 @@ export async function deleteGoal(id: string): Promise<{ success: boolean }> {
     revalidatePath(AI_PLAYGROUND_PATH);
     return { success: true };
   } catch (error: any) {
-    console.error(`Azure Error: Failed to delete goal ${id} from Azure blob. Message: ${error.message}`, error);
+    console.error(`Azure Error: Failed to delete goal ${id} from Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
     throw new Error(`Could not delete goal from Azure blob storage. Original error: ${error.message}`);
   }
 }
+
+    
