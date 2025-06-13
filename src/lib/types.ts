@@ -25,7 +25,7 @@ export interface RawTransaction {
   categoryId?: string;
   paymentMethodId?: string;
   source?: string;
-  expenseType?: 'need' | 'want' | 'investment'; // <-- Changed here
+  expenseType?: 'need' | 'want' | 'investment';
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }
@@ -49,7 +49,7 @@ export const TransactionInputSchema = z.object({
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment']).optional(), // <-- Changed here
+  expenseType: z.enum(['need', 'want', 'investment']).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -72,7 +72,7 @@ export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
-export type ExpenseType = 'need' | 'want' | 'investment'; // <-- Changed here
+export type ExpenseType = 'need' | 'want' | 'investment';
 
 
 // Zod schema for a single transaction parsed by AI from text
@@ -83,7 +83,7 @@ export const ParsedAITransactionSchema = z.object({
   type: z.enum(['income', 'expense']).describe("The type of transaction."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."), // <-- Changed here
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
   sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
@@ -98,7 +98,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."), // <-- Changed here
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
 });
@@ -141,7 +141,7 @@ export const BudgetingAssistantOutputSchema = z.object({
   recommendedMonthlyBudget: z.object({
     needs: z.number().min(0).describe("Recommended monthly spending for 'Needs' in INR."),
     wants: z.number().min(0).describe("Recommended monthly spending for 'Wants' in INR."),
-    investmentsAsSpending: z.number().min(0).describe("Recommended monthly allocation for 'Investments' (treated as an expense category like SIPs, stock purchases) in INR. This is separate from pure 'Savings'."), // Label still uses investmentsAsSpending to match prompt, but value is now investment if parsed
+    investmentsAsSpending: z.number().min(0).describe("Recommended monthly allocation for 'Investments' (treated as an expense category like SIPs, stock purchases) in INR. This is separate from pure 'Savings'."),
     targetSavings: z.number().min(0).describe("The target amount to be saved each month based on the user's income and savings goal percentage, in INR. This is pure cash savings or unallocated investment funds."),
     discretionarySpendingOrExtraSavings: z.number().min(0).describe("Remaining amount after allocating to needs, wants, investments (as spending), and target savings. This can be used for flexible spending or additional savings/investments, in INR."),
   }).describe("The AI's recommended monthly budget breakdown in INR."),
@@ -177,7 +177,7 @@ export const FinancialHealthCheckInputSchema = z.object({
   periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
   currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
   currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
-  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."), // <-- Changed here for AI prompt context
+  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
 });
@@ -187,3 +187,77 @@ export const FinancialHealthCheckOutputSchema = z.object({
   healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (e.g., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
+
+
+// --- Split Expenses Feature Types ---
+
+export const SplitUserInputSchema = z.object({
+  name: z.string().min(1, "User name is required.").max(100, "Name too long"),
+});
+export type SplitUserInput = z.infer<typeof SplitUserInputSchema>;
+
+export interface SplitUser extends SplitUserInput {
+  id: string;
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+export interface SplitExpenseParticipant {
+  userId: string; // ID of the SplitUser
+  shareAmount: number; // Calculated or custom share for this expense
+  isSettled: boolean; // True if this participant's share is settled with the payer
+}
+
+export const SplitExpenseInputSchema = z.object({
+  title: z.string().min(1, "Title is required.").max(200, "Title too long"),
+  date: z.date({ description: "Date of the shared expense" }),
+  totalAmount: z.number().gt(0, "Total amount must be positive."),
+  paidById: z.string({ description: "ID of the SplitUser who paid the bill" }),
+  splitMethod: z.enum(['equally', 'custom'], { description: "How the bill was split" }),
+  participants: z.array(z.object({
+    userId: z.string(),
+    customShare: z.number().min(0).optional(), // Only for 'custom' split method
+  })).min(1, "At least one participant (other than payer) is required for a split, or 2 total including payer."),
+});
+export type SplitExpenseInput = z.infer<typeof SplitExpenseInputSchema>;
+
+
+// Raw SplitExpense for Cosmos DB storage
+export interface RawSplitExpense {
+  id: string;
+  title: string;
+  date: string; // ISO string
+  totalAmount: number;
+  paidById: string; // SplitUser ID
+  participants: {
+    userId: string; // SplitUser ID
+    shareAmount: number;
+    isSettled: boolean;
+  }[];
+  splitMethod: 'equally' | 'custom';
+  isFullySettled: boolean; // Derived: true if all participants are settled
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+// AppSplitExpense for frontend, with populated user objects
+export interface AppSplitExpense extends Omit<RawSplitExpense, 'date' | 'createdAt' | 'updatedAt' | 'paidById' | 'participants'> {
+  date: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  paidBy: SplitUser; // Populated SplitUser object
+  participants: {
+    user: SplitUser; // Populated SplitUser object
+    shareAmount: number;
+    isSettled: boolean;
+  }[];
+}
+
+// For calculating balances
+export interface UserBalance {
+  userId: string;
+  userName: string;
+  netAmount: number; // Positive if this user is owed, negative if this user owes overall
+  owes: { toUserId: string; toUserName: string; amount: number }[];
+  owedBy: { fromUserId: string; fromUserName: string; amount: number }[];
+}

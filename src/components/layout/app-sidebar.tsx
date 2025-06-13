@@ -17,7 +17,7 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties } from "lucide-react"; // Added FlaskConical
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users } from "lucide-react"; // Added Users icon
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +25,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/yearly-overview", label: "Yearly Overview", icon: TableProperties },
+  { href: "/split-expenses", label: "Split Expenses", icon: Users }, // New Item
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -90,6 +91,5 @@ export default function AppSidebar() {
         </Button>
       </SidebarFooter>
     </Sidebar>
-  );
-}
     
+
