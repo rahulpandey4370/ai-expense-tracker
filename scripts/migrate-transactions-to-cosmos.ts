@@ -8,6 +8,7 @@ import type { RawTransaction } from '@/lib/types'; // Assuming RawTransaction is
 config();
 
 const TRANSACTIONS_BLOB_DIR = 'transactions/';
+const DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE = "transactions_partition_main"; // Consistent with actions
 
 // --- Azure Blob Storage Helper ---
 async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -57,6 +58,7 @@ async function getCosmosDBContainer(): Promise<CosmosContainer> {
 
 async function migrateTransactions() {
   console.log("Starting transaction migration from Azure Blob Storage to Azure Cosmos DB...");
+  console.log(`Data migrated to Cosmos will include 'finwise: "${DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE}"' for partitioning.`);
 
   let blobContainerClient: BlobContainerClient;
   let cosmosContainer: CosmosContainer;
@@ -97,27 +99,21 @@ async function migrateTransactions() {
         }
 
         const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
-        const transactionData = JSON.parse(buffer.toString()) as RawTransaction;
+        const transactionDataFromBlob = JSON.parse(buffer.toString()) as RawTransaction;
 
-        // Ensure the transaction data has an 'id' field, as Cosmos DB uses it.
-        // The RawTransaction type should already include 'id' from cuid().
-        if (!transactionData.id) {
+        if (!transactionDataFromBlob.id) {
           console.warn(`Transaction data from ${blob.name} is missing an 'id'. Skipping.`);
           errorCount++;
           continue;
         }
         
-        // Ensure dates are ISO strings if they aren't already
-        // The RawTransaction should already store dates as ISO strings.
-        // If they were Date objects in blobs (unlikely if parsed from JSON), convert them:
-        // transactionData.date = new Date(transactionData.date).toISOString();
-        // transactionData.createdAt = new Date(transactionData.createdAt).toISOString();
-        // transactionData.updatedAt = new Date(transactionData.updatedAt).toISOString();
+        const transactionDataForCosmos = {
+            ...transactionDataFromBlob,
+            finwise: DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE // Add the partition key field
+        };
 
-
-        // Upsert item into Cosmos DB. This will create if not exists, or update if it does.
-        await cosmosContainer.items.upsert(transactionData);
-        console.log(`Successfully migrated transaction ${transactionData.id} from ${blob.name} to Cosmos DB.`);
+        await cosmosContainer.items.upsert(transactionDataForCosmos);
+        console.log(`Successfully migrated transaction ${transactionDataForCosmos.id} from ${blob.name} to Cosmos DB.`);
         migratedCount++;
       } catch (itemError: any) {
         console.error(`Error processing blob ${blob.name}: ${itemError.message}`, itemError.stack);
@@ -126,7 +122,7 @@ async function migrateTransactions() {
     }
   } catch (listError: any) {
     console.error(`Failed to list blobs from Azure Blob Storage: ${listError.message}`, listError.stack);
-    errorCount++; // Count this as an error too
+    errorCount++; 
   }
 
   console.log("\n--- Migration Summary ---");
@@ -142,3 +138,6 @@ async function migrateTransactions() {
 migrateTransactions().catch(err => {
   console.error("Unhandled error during migration script execution:", err.message, err.stack);
 });
+
+      
+    

@@ -11,6 +11,7 @@ import cuid from 'cuid';
 
 const CATEGORIES_BLOB_PATH = 'internal/data/categories.json';
 const PAYMENT_METHODS_BLOB_PATH = 'internal/data/payment-methods.json';
+const DEFAULT_FINWISE_PARTITION_VALUE = "transactions_partition_main";
 
 let blobContainerClientInstance: BlobContainerClient;
 let cosmosContainerInstance: CosmosContainer;
@@ -31,19 +32,12 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Bu
 
 // --- Azure Blob Storage Client (for Categories/PaymentMethods) ---
 async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
-  // console.log("Azure Blob Info: Attempting to get Azure Container Client (for categories/payment methods)...");
   if (blobContainerClientInstance) {
-    // console.log("Azure Blob Info: Returning cached blob container client instance.");
     return blobContainerClientInstance;
   }
-  // console.log("Azure Blob Info: No cached blob client instance, creating new one.");
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
-
-  // console.log(`Azure Blob Info: Read AZURE_STORAGE_CONNECTION_STRING. Is present: ${!!connectionString}, Length (if present): ${connectionString?.length}`);
-  // console.log(`Azure Blob Info: Read AZURE_STORAGE_CONTAINER_NAME: '${containerName}'. Is present: ${!!containerName}, Type: ${typeof containerName}`);
-
 
   if (!connectionString) {
     console.error("Azure Blob Critical Error: AZURE_STORAGE_CONNECTION_STRING is not configured.");
@@ -55,11 +49,8 @@ async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
   }
 
   try {
-    // console.log(`Azure Blob Info: Attempting to create BlobServiceClient from connection string... (First 30 chars of CS: ${connectionString.substring(0,30)}...)`);
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    // console.log(`Azure Blob Info: BlobServiceClient created successfully. Attempting to get container client for '${containerName}'...`);
     const client = blobServiceClient.getContainerClient(containerName);
-    // console.log(`Azure Blob Info: Container client for '${containerName}' obtained successfully.`);
     blobContainerClientInstance = client;
     return blobContainerClientInstance;
   } catch (error: any) {
@@ -71,25 +62,20 @@ async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
 async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promise<T[]> {
   const client = await getAzureBlobContainerClient();
   const blobClient = client.getBlobClient(filePath);
-  // console.log(`Azure Blob Info: Ensuring blob file: ${filePath}`);
   try {
     const fileExists = await blobClient.exists();
     if (fileExists) {
-      // console.log(`Azure Blob Info: File ${filePath} exists. Downloading...`);
       const downloadBlockBlobResponse = await blobClient.download(0);
       if (!downloadBlockBlobResponse.readableStreamBody) {
         console.error(`Azure Blob Error: Blob ${filePath} has no readable stream body.`);
         throw new Error(`Blob ${filePath} has no readable stream body.`);
       }
       const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
-      // console.log(`Azure Blob Info: Successfully downloaded and parsed ${filePath}.`);
       return JSON.parse(buffer.toString());
     } else {
-      // console.log(`Azure Blob Info: File ${filePath} does not exist. Creating with default data...`);
       const blockBlobClient = client.getBlockBlobClient(filePath);
       const content = JSON.stringify(defaultData, null, 2);
       await blockBlobClient.upload(content, Buffer.byteLength(content), { blobHTTPHeaders: { blobContentType: 'application/json' } });
-      // console.log(`Azure Blob Info: Created Azure blob ${filePath} with default data.`);
       return defaultData;
     }
   } catch (error: any) {
@@ -100,23 +86,14 @@ async function ensureAzureBlobFile<T>(filePath: string, defaultData: T[]): Promi
 
 // --- Azure Cosmos DB Client (for Transactions) ---
 async function getCosmosDBContainer(): Promise<CosmosContainer> {
-  // console.log("CosmosDB Info: Attempting to get Cosmos DB container client...");
   if (cosmosContainerInstance) {
-    // console.log("CosmosDB Info: Returning cached Cosmos DB container instance.");
     return cosmosContainerInstance;
   }
-  // console.log("CosmosDB Info: No cached Cosmos DB client instance, creating new one.");
 
   const endpoint = process.env.COSMOS_DB_ENDPOINT;
   const key = process.env.COSMOS_DB_KEY;
   const databaseId = process.env.COSMOS_DB_DATABASE_ID;
   const containerId = process.env.COSMOS_DB_TRANSACTIONS_CONTAINER_ID;
-
-  // console.log(`CosmosDB Info: Read COSMOS_DB_ENDPOINT. Is present: ${!!endpoint}`);
-  // console.log(`CosmosDB Info: Read COSMOS_DB_KEY. Is present: ${!!key}`);
-  // console.log(`CosmosDB Info: Read COSMOS_DB_DATABASE_ID: '${databaseId}'. Is present: ${!!databaseId}`);
-  // console.log(`CosmosDB Info: Read COSMOS_DB_TRANSACTIONS_CONTAINER_ID: '${containerId}'. Is present: ${!!containerId}`);
-
 
   if (!endpoint || !key || !databaseId || !containerId) {
     console.error("CosmosDB Critical Error: One or more Cosmos DB environment variables are not configured (COSMOS_DB_ENDPOINT, COSMOS_DB_KEY, COSMOS_DB_DATABASE_ID, COSMOS_DB_TRANSACTIONS_CONTAINER_ID).");
@@ -124,13 +101,9 @@ async function getCosmosDBContainer(): Promise<CosmosContainer> {
   }
 
   try {
-    // console.log("CosmosDB Info: Creating CosmosClient...");
     const cosmosClient = new CosmosClient({ endpoint, key });
-    // console.log("CosmosDB Info: CosmosClient created. Getting database...");
     const database = cosmosClient.database(databaseId);
-    // console.log(`CosmosDB Info: Database '${databaseId}' obtained. Getting container '${containerId}'...`);
     const container = database.container(containerId);
-    // console.log(`CosmosDB Info: Container '${containerId}' obtained.`);
     cosmosContainerInstance = container;
     return cosmosContainerInstance;
   } catch (error: any) {
@@ -163,7 +136,6 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
 
 // --- Transaction Functions (Now using Cosmos DB) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
-  // console.log(`CosmosDB Info (getTransactions): Starting to fetch transactions. Options: ${JSON.stringify(options)}`);
   let allCategories: Category[] = [];
   let allPaymentMethods: PaymentMethod[] = [];
 
@@ -190,13 +162,11 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
     querySpec.query = `SELECT TOP @limit * FROM c ORDER BY c.date DESC`;
     querySpec.parameters.push({ name: "@limit", value: options.limit });
   }
-
-  // console.log(`CosmosDB Info (getTransactions): Executing query: ${querySpec.query} with params: ${JSON.stringify(querySpec.parameters)}`);
+  
   let processedItemCount = 0;
 
   try {
     const { resources: items } = await container.items.query(querySpec).fetchAll();
-    // console.log(`CosmosDB Info (getTransactions): Fetched ${items.length} raw items from Cosmos DB.`);
     processedItemCount = items.length;
 
     const transactions: AppTransaction[] = items.map((rawTx: any) => {
@@ -210,7 +180,6 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
       };
     });
 
-    // console.log(`CosmosDB Info (getTransactions): Parsed ${transactions.length} transactions.`);
     if (options?.limit && transactions.length >= options.limit && transactions.length < processedItemCount) {
       console.log(`CosmosDB Info (getTransactions): Reached processing limit of ${options.limit}. Processed ${transactions.length} transactions from ${processedItemCount} listed blobs.`);
     }
@@ -227,7 +196,6 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
 }
 
 export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
-  // console.log("CosmosDB Info (addTransaction): Attempting to add transaction...");
   const validation = TransactionInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
@@ -239,24 +207,23 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const id = cuid();
   const now = new Date().toISOString();
 
-  const newItem: RawTransaction = {
+  const newItem: RawTransaction & { finwise: string } = {
     id: id,
     ...validation.data,
     date: validation.data.date.toISOString(),
     description: validation.data.description || '',
     createdAt: now,
     updatedAt: now,
+    finwise: DEFAULT_FINWISE_PARTITION_VALUE, // Add the partition key field
   };
 
   const container = await getCosmosDBContainer();
   try {
-    // console.log(`CosmosDB Info (addTransaction): Creating item in Cosmos DB with id: ${id}`);
     const { resource: createdItem } = await container.items.create(newItem);
     if (!createdItem) {
       console.error('CosmosDB Error (addTransaction): Item creation returned no resource.');
       throw new Error('Failed to create transaction in Cosmos DB, no resource returned.');
     }
-    // console.log(`CosmosDB Info (addTransaction): Successfully created item ${createdItem.id}`);
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
@@ -289,25 +256,28 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     throw new Error(`Invalid or missing transaction ID provided for update. ${idDetails}`);
   }
 
-  // console.log(`CosmosDB Info (updateTransaction): Attempting to update transaction with ID: ${id}...`);
   const container = await getCosmosDBContainer();
+  let existingItem: RawTransaction & { finwise?: string };
 
-  let existingItem: RawTransaction;
   try {
-    // console.log(`CosmosDB Info (updateTransaction): Fetching existing item ${id} for update.`);
-    // Assuming 'id' is the partition key or your container is configured for point reads with just id.
-    const { resource } = await container.item(id, id).read<RawTransaction>(); 
+    console.log(`CosmosDB Debug (updateTransaction): Attempting to read item. Item ID: '${id}', Assumed Partition Key Value: '${DEFAULT_FINWISE_PARTITION_VALUE}'`);
+    const { resource } = await container.item(id, DEFAULT_FINWISE_PARTITION_VALUE).read<RawTransaction & { finwise?: string }>();
     if (!resource) {
-      console.warn(`CosmosDB Warning (updateTransaction): Transaction with ID ${id} not found during read operation for update (resource was null/undefined).`);
+      console.warn(`CosmosDB Warning (updateTransaction): Transaction with ID ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) not found during read for update.`);
       throw new Error(`Transaction with ID ${id} not found for update.`);
     }
     existingItem = resource;
-    // console.log(`CosmosDB Info (updateTransaction): Successfully fetched existing item ${id} for update.`);
   } catch (error: any) {
-    console.error(`CosmosDB Error (updateTransaction): Failed to fetch transaction ${id} for update. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
-    const errorMessage = String(error.message || '').toLowerCase();
-    if (error.statusCode === 404 || errorMessage.includes("not found") || errorMessage.includes("notfound")) {
-      throw new Error(`Transaction with ID ${id} not found for update. (Details: SC=${error.statusCode}, Msg=${error.message})`);
+    const statusCodeFromSDK = error.statusCode;
+    const errorMessageFromSDK = String(error.message || '').toLowerCase();
+    console.error(`CosmosDB Debug (updateTransaction - CATCH BLOCK): Error object received during fetch for ID ${id}, Partition ${DEFAULT_FINWISE_PARTITION_VALUE}:`, error);
+    console.log(`CosmosDB Debug (updateTransaction - CATCH BLOCK): For ID ${id}, Partition ${DEFAULT_FINWISE_PARTITION_VALUE}: statusCodeFromSDK = ${statusCodeFromSDK}, errorMessageFromSDK = '${errorMessageFromSDK}'`);
+    const isNotFoundByStatus = statusCodeFromSDK === 404;
+    const isNotFoundByMessage = errorMessageFromSDK.includes("not found") || errorMessageFromSDK.includes("notfound");
+    console.log(`CosmosDB Debug (updateTransaction - CATCH BLOCK): For ID ${id}, Partition ${DEFAULT_FINWISE_PARTITION_VALUE}: isNotFoundByStatus = ${isNotFoundByStatus}, isNotFoundByMessage = ${isNotFoundByMessage}`);
+
+    if (isNotFoundByStatus || isNotFoundByMessage) {
+      throw new Error(`Transaction with ID ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) not found for update.`);
     }
     throw new Error(`Could not retrieve transaction for update. Original error: ${error.message}`);
   }
@@ -318,6 +288,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     date: data.date ? data.date.toISOString() : existingItem.date,
     description: data.description !== undefined ? data.description : existingItem.description,
     updatedAt: new Date().toISOString(),
+    finwise: DEFAULT_FINWISE_PARTITION_VALUE, // Ensure partition key is present
   };
 
   const transactionInputForValidation: TransactionInput = {
@@ -339,9 +310,9 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     throw new Error(`Invalid transaction data for update: ${readableErrors || "Validation failed."}`);
   }
 
-   const finalItemToUpdate: RawTransaction = {
-    ...existingItem, // Keep _rid, _self, _etag, _ts from existingItem
-    id: existingItem.id, // Ensure ID is not overwritten by partial data
+   const finalItemToUpdate: RawTransaction & { finwise: string } = {
+    ...existingItem,
+    id: existingItem.id,
     type: validation.data.type,
     date: validation.data.date.toISOString(),
     amount: validation.data.amount,
@@ -350,19 +321,18 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
-    createdAt: existingItem.createdAt, // Ensure createdAt is preserved
+    createdAt: existingItem.createdAt, 
     updatedAt: new Date().toISOString(),
+    finwise: DEFAULT_FINWISE_PARTITION_VALUE,
   };
 
   try {
-    // console.log(`CosmosDB Info (updateTransaction): Replacing item ${id} in Cosmos DB.`);
-    // Assuming 'id' is the partition key or your container is configured for point replaces with just id.
-    const { resource: updatedItem } = await container.item(id, id).replace(finalItemToUpdate); 
+    console.log(`CosmosDB Debug (updateTransaction): Attempting to replace item. Item ID: '${id}', Partition Key Value: '${DEFAULT_FINWISE_PARTITION_VALUE}'`);
+    const { resource: updatedItem } = await container.item(id, DEFAULT_FINWISE_PARTITION_VALUE).replace(finalItemToUpdate);
      if (!updatedItem) {
       console.error('CosmosDB Error (updateTransaction): Item replacement returned no resource.');
       throw new Error('Failed to update transaction in Cosmos DB, no resource returned.');
     }
-    // console.log(`CosmosDB Info (updateTransaction): Successfully updated item ${updatedItem.id}`);
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
@@ -383,22 +353,24 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     } as AppTransaction;
 
   } catch (error: any) {
-    console.error(`CosmosDB Error (updateTransaction): Failed to update transaction ${id} in Cosmos DB. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
+    console.error(`CosmosDB Error (updateTransaction): Failed to update transaction ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) in Cosmos DB. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
     if (error.statusCode === 404) {
-        throw new Error(`Transaction with ID ${id} not found during replace operation.`);
+        throw new Error(`Transaction with ID ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) not found during replace operation.`);
     }
     throw new Error(`Could not update transaction in Cosmos DB. Original error: ${error.message}`);
   }
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {
-  // console.log(`CosmosDB Info (deleteTransaction): Attempting to delete transaction ${id}...`);
+   if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
+    const idDetails = `Received ID: '${id}', Type: ${typeof id}`;
+    console.error(`CosmosDB Error (deleteTransaction): Invalid or missing transaction ID provided. ${idDetails}`);
+    throw new Error(`Invalid or missing transaction ID provided for delete. ${idDetails}`);
+  }
   const container = await getCosmosDBContainer();
   try {
-    // console.log(`CosmosDB Info (deleteTransaction): Deleting item ${id} from Cosmos DB.`);
-    // Assuming 'id' is the partition key or your container is configured for point deletes with just id.
-    await container.item(id, id).delete(); 
-    // console.log(`CosmosDB Info (deleteTransaction): Successfully deleted item ${id}`);
+    console.log(`CosmosDB Debug (deleteTransaction): Attempting to delete item. Item ID: '${id}', Partition Key Value: '${DEFAULT_FINWISE_PARTITION_VALUE}'`);
+    await container.item(id, DEFAULT_FINWISE_PARTITION_VALUE).delete();
     revalidatePath('/');
     revalidatePath('/transactions');
     revalidatePath('/reports');
@@ -406,10 +378,12 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     revalidatePath('/ai-playground');
     return { success: true };
   } catch (error: any) {
-    console.error(`CosmosDB Error (deleteTransaction): Failed to delete transaction ${id} from Cosmos DB. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
-     if (error.statusCode === 404) { // Check for 404 specifically
-      console.warn(`CosmosDB Warning (deleteTransaction): Transaction ${id} not found for deletion, considered success.`);
-      // Revalidate paths even if not found, as the state is effectively "deleted"
+    const statusCodeFromSDK = error.statusCode;
+    const errorMessageFromSDK = String(error.message || '').toLowerCase();
+    console.error(`CosmosDB Debug (deleteTransaction - CATCH BLOCK): Error object received during delete for ID ${id}, Partition ${DEFAULT_FINWISE_PARTITION_VALUE}:`, error);
+    
+    if (statusCodeFromSDK === 404 || errorMessageFromSDK.includes("not found") || errorMessageFromSDK.includes("notfound")) {
+      console.warn(`CosmosDB Warning (deleteTransaction): Transaction ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) not found for deletion, considered success.`);
       revalidatePath('/');
       revalidatePath('/transactions');
       revalidatePath('/reports');
@@ -422,7 +396,6 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
 }
 
 export async function deleteMultipleTransactions(ids: string[]): Promise<{ successCount: number, errorCount: number, errors: {id: string, error: string}[] }> {
-  // console.log(`CosmosDB Info (deleteMultipleTransactions): Attempting to delete ${ids.length} transactions...`);
   if (!ids || ids.length === 0) {
     return { successCount: 0, errorCount: 0, errors: [] };
   }
@@ -433,18 +406,20 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
 
   const deletePromises = ids.map(async (id) => {
     if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
-        console.warn(`CosmosDB Warning (deleteMultipleTransactions): Invalid ID '${id}' (type: ${typeof id}) found in bulk delete request. Skipping.`);
-        return { id, status: 'rejected' as const, reason: `Invalid ID: ${id}` };
+        const errMsg = `Invalid ID provided in bulk delete: '${id}' (type: ${typeof id})`;
+        console.warn(`CosmosDB Warning (deleteMultipleTransactions): ${errMsg}. Skipping.`);
+        return { id, status: 'rejected' as const, reason: errMsg };
     }
     try {
-      // Assuming 'id' is the partition key for point deletes.
-      await container.item(id, id).delete(); 
-      // console.log(`CosmosDB Info (deleteMultipleTransactions): Successfully deleted item ${id}`);
+      console.log(`CosmosDB Debug (deleteMultipleTransactions): Attempting to delete item. Item ID: '${id}', Partition Key Value: '${DEFAULT_FINWISE_PARTITION_VALUE}'`);
+      await container.item(id, DEFAULT_FINWISE_PARTITION_VALUE).delete();
       return { id, status: 'fulfilled' as const };
     } catch (error: any) {
-      console.error(`CosmosDB Error (deleteMultipleTransactions): Failed to delete transaction ${id}. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
-      if (error.statusCode === 404) { // Item already deleted or never existed
-        // console.warn(`CosmosDB Warning (deleteMultipleTransactions): Transaction ${id} not found during bulk delete, considering it successful.`);
+      const statusCodeFromSDK = error.statusCode;
+      const errorMessageFromSDK = String(error.message || '').toLowerCase();
+      console.error(`CosmosDB Error (deleteMultipleTransactions): Failed to delete transaction ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}). Status: ${statusCodeFromSDK}, Code: ${error.code}, Message: ${errorMessageFromSDK}`, error.stack);
+      if (statusCodeFromSDK === 404 || errorMessageFromSDK.includes("not found") || errorMessageFromSDK.includes("notfound")) {
+        console.warn(`CosmosDB Warning (deleteMultipleTransactions): Transaction ${id} (partition: ${DEFAULT_FINWISE_PARTITION_VALUE}) not found during bulk delete, considering it successful.`);
         return { id, status: 'fulfilled' as const, note: 'not_found' };
       }
       return { id, status: 'rejected' as const, reason: error.message || 'Unknown error' };
@@ -457,11 +432,11 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
     if (result.status === 'fulfilled') {
       if (result.value.status === 'fulfilled') {
         successCount++;
-      } else { // 'rejected' status from our inner promise logic (e.g., invalid ID)
+      } else { 
         errorCount++;
         localErrors.push({ id: result.value.id, error: result.value.reason });
       }
-    } else { // 'rejected' status from Promise.allSettled itself (unexpected error in the async map function)
+    } else { 
       errorCount++;
       const problemId = (result.reason as any)?.id || 'unknown_id_in_promise_all_settled_rejection';
       console.error("CosmosDB Error (deleteMultipleTransactions): A delete promise was unexpectedly rejected.", result.reason);
@@ -477,6 +452,9 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
     revalidatePath('/ai-playground');
   }
 
-  // console.log(`CosmosDB Info (deleteMultipleTransactions): Finished. Success: ${successCount}, Failed: ${errorCount}.`);
   return { successCount, errorCount, errors: localErrors };
 }
+
+    
+      
+    
