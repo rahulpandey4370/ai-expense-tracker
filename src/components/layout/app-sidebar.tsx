@@ -54,8 +54,8 @@ export default function AppSidebar() {
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Link 
-                      href={item.href} 
+                    <Link
+                      href={item.href}
                       onClick={handleLinkClick}
                       className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-md block"
                     >
@@ -91,5 +91,5 @@ export default function AppSidebar() {
         </Button>
       </SidebarFooter>
     </Sidebar>
-    
-
+  );
+}
