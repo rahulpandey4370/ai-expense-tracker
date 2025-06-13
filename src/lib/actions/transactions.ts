@@ -9,8 +9,6 @@ import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
 let cosmosTransactionsContainerInstance: CosmosContainer;
-let cosmosCategoriesContainerInstance: CosmosContainer;
-let cosmosPaymentMethodsContainerInstance: CosmosContainer;
 
 // --- Azure Cosmos DB Client Helpers ---
 async function getCosmosClientAndDb() {
@@ -41,108 +39,35 @@ async function getCosmosDBTransactionsContainer(): Promise<CosmosContainer> {
   return cosmosTransactionsContainerInstance;
 }
 
-async function getCosmosDBCategoriesContainer(): Promise<CosmosContainer> {
-  if (cosmosCategoriesContainerInstance) {
-    return cosmosCategoriesContainerInstance;
-  }
-  const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_CATEGORIES_CONTAINER_ID;
-  if (!containerId) {
-    console.error("CosmosDB Critical Error: COSMOS_DB_CATEGORIES_CONTAINER_ID is not configured.");
-    throw new Error("Cosmos DB Categories container ID is not configured.");
-  }
-  cosmosCategoriesContainerInstance = database.container(containerId);
-  return cosmosCategoriesContainerInstance;
-}
 
-async function getCosmosDBPaymentMethodsContainer(): Promise<CosmosContainer> {
-  if (cosmosPaymentMethodsContainerInstance) {
-    return cosmosPaymentMethodsContainerInstance;
-  }
-  const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_PAYMENT_METHODS_CONTAINER_ID;
-  if (!containerId) {
-    console.error("CosmosDB Critical Error: COSMOS_DB_PAYMENT_METHODS_CONTAINER_ID is not configured.");
-    throw new Error("Cosmos DB Payment Methods container ID is not configured.");
-  }
-  cosmosPaymentMethodsContainerInstance = database.container(containerId);
-  return cosmosPaymentMethodsContainerInstance;
-}
-
-
-// --- Category and Payment Method Functions (Now using Cosmos DB) ---
+// --- Category and Payment Method Functions (Now using static data) ---
 export async function getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
-  const container = await getCosmosDBCategoriesContainer();
-  const querySpec = { query: "SELECT * FROM c" };
-  
-  try {
-    const { resources: items } = await container.items.query(querySpec).fetchAll();
-    if (items.length === 0) {
-      console.log("CosmosDB Info (getCategories): Categories container is empty. Seeding default categories...");
-      const seededCategories: Category[] = [];
-      for (const defaultCat of defaultCategories) {
-        const newCat = { ...defaultCat, id: cuid() }; 
-        await container.items.create(newCat);
-        seededCategories.push(newCat);
-      }
-      console.log(`CosmosDB Info (getCategories): Seeded ${seededCategories.length} categories.`);
-      if (type) return seededCategories.filter(c => c.type === type);
-      return seededCategories;
-    }
-    const allCategories = items as Category[];
-    if (type) return allCategories.filter(c => c.type === type);
-    return allCategories;
-  } catch (error: any) {
-    console.error('CosmosDB Error (getCategories): Failed to fetch or seed categories.', error.code, error.message, error.stack);
-    if (error.code === 404 && error.message.includes("Resource Not Found") && error.message.includes("Container")) {
-       console.error(`CosmosDB Critical Error (getCategories): Container for categories not found. Please ensure a container with ID '${process.env.COSMOS_DB_CATEGORIES_CONTAINER_ID}' (partition key /id) exists in database '${process.env.COSMOS_DB_DATABASE_ID}'. Falling back to local defaults.`);
-       if (type) return defaultCategories.filter(c => c.type === type);
-       return defaultCategories; 
-    }
-    throw new Error(`Could not fetch categories from Cosmos DB. Original error: ${error.message}`);
+  console.log("Info (getCategories): Fetching categories from static data in src/lib/data.ts.");
+  if (type) {
+    return defaultCategories.filter(c => c.type === type);
   }
+  return defaultCategories;
 }
 
 export async function getPaymentMethods(): Promise<PaymentMethod[]> {
-  const container = await getCosmosDBPaymentMethodsContainer();
-  const querySpec = { query: "SELECT * FROM c" };
-  try {
-    const { resources: items } = await container.items.query(querySpec).fetchAll();
-    if (items.length === 0) {
-      console.log("CosmosDB Info (getPaymentMethods): Payment methods container is empty. Seeding default payment methods...");
-      const seededPaymentMethods: PaymentMethod[] = [];
-      for (const defaultPM of defaultPaymentMethods) {
-        const newPM = { ...defaultPM, id: cuid() }; 
-        await container.items.create(newPM);
-        seededPaymentMethods.push(newPM);
-      }
-      console.log(`CosmosDB Info (getPaymentMethods): Seeded ${seededPaymentMethods.length} payment methods.`);
-      return seededPaymentMethods;
-    }
-    return items as PaymentMethod[];
-  } catch (error: any) {
-    console.error('CosmosDB Error (getPaymentMethods): Failed to fetch or seed payment methods.', error.code, error.message, error.stack);
-     if (error.code === 404 && error.message.includes("Resource Not Found") && error.message.includes("Container")) {
-       console.error(`CosmosDB Critical Error (getPaymentMethods): Container for payment methods not found. Please ensure a container with ID '${process.env.COSMOS_DB_PAYMENT_METHODS_CONTAINER_ID}' (partition key /id) exists in database '${process.env.COSMOS_DB_DATABASE_ID}'. Falling back to local defaults.`);
-       return defaultPaymentMethods; 
-    }
-    throw new Error(`Could not fetch payment methods from Cosmos DB. Original error: ${error.message}`);
-  }
+  console.log("Info (getPaymentMethods): Fetching payment methods from static data in src/lib/data.ts.");
+  return defaultPaymentMethods;
 }
 
-// --- Transaction Functions (Using Cosmos DB) ---
+// --- Transaction Functions (Using Cosmos DB for transactions, static for lookups) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
   let allCategories: Category[] = [];
   let allPaymentMethods: PaymentMethod[] = [];
 
   try {
-    [allCategories, allPaymentMethods] = await Promise.all([
-      getCategories(),
-      getPaymentMethods()
-    ]);
+    // Fetch static data directly
+    allCategories = await getCategories();
+    allPaymentMethods = await getPaymentMethods();
   } catch (error: any) {
-    console.error("CosmosDB Critical Error (getTransactions): Essential lookup data (categories/payment methods from Cosmos DB) could not be loaded. This may impact transaction display.", error.message, error.stack);
-    throw new Error(`Essential lookup data (categories/payment methods from Cosmos DB) could not be loaded for transactions. Original error: ${error.message}`);
+    // This catch block is less likely to be hit now with static data,
+    // but kept for robustness in case `data.ts` had an issue (e.g., import error).
+    console.error("Critical Error (getTransactions): Essential lookup data (categories/payment methods from static files) could not be loaded. Cannot proceed.", error.message, error.stack);
+    throw new Error(`Essential lookup data (categories/payment methods from static files) could not be loaded for transactions. Original error: ${error.message}`);
   }
 
   const categoryMap = new Map(allCategories.map(c => [c.id, c]));
@@ -206,8 +131,8 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: validation.data.date.toISOString(), // Store date as ISO string
-    description: validation.data.description || '', // Ensure description is not undefined
+    date: validation.data.date.toISOString(), 
+    description: validation.data.description || '', 
     createdAt: now,
     updatedAt: now,
   };
@@ -225,13 +150,14 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     revalidatePath('/yearly-overview');
     revalidatePath('/ai-playground');
 
-    const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
+    const allCategories = await getCategories();
+    const allPaymentMethods = await getPaymentMethods();
     const category = validation.data.categoryId ? allCategories.find(c => c.id === validation.data.categoryId) : undefined;
     const paymentMethod = validation.data.paymentMethodId ? allPaymentMethods.find(pm => pm.id === validation.data.paymentMethodId) : undefined;
 
     return {
       ...createdItem,
-      date: new Date(createdItem.date), // Convert back to Date object for app use
+      date: new Date(createdItem.date), 
       createdAt: new Date(createdItem.createdAt),
       updatedAt: new Date(createdItem.updatedAt),
       category,
@@ -256,7 +182,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   let existingItem: RawTransaction;
 
   try {
-    console.log(`CosmosDB Debug (updateTransaction): Attempting to read item. Item ID: '${id}', Partition Key Value (should be same as ID): '${id}'`);
+    console.log(`CosmosDB Debug (updateTransaction): Attempting to read item. Item ID: '${id}', Assumed Partition Key Value (should be same as ID): '${id}'`);
     const { resource } = await container.item(id, id).read<RawTransaction>();
     if (!resource) {
       console.warn(`CosmosDB Warning (updateTransaction): Transaction with ID ${id} (partition: ${id}) not found during read for update.`);
@@ -283,14 +209,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? data.date.toISOString() : existingItem.date, // Store date as ISO string
+    date: data.date ? data.date.toISOString() : existingItem.date, 
     description: data.description !== undefined ? data.description : existingItem.description,
     updatedAt: new Date().toISOString(),
   };
 
   const transactionInputForValidation: TransactionInput = {
     type: updatedRawData.type,
-    date: new Date(updatedRawData.date), // Convert back to Date for validation
+    date: new Date(updatedRawData.date), 
     amount: updatedRawData.amount,
     description: updatedRawData.description,
     categoryId: updatedRawData.categoryId,
@@ -340,13 +266,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     revalidatePath('/yearly-overview');
     revalidatePath('/ai-playground');
 
-    const [allCategories, allPaymentMethods] = await Promise.all([ getCategories(), getPaymentMethods() ]);
+    const allCategories = await getCategories();
+    const allPaymentMethods = await getPaymentMethods();
     const category = updatedItem.categoryId ? allCategories.find(c => c.id === updatedItem.categoryId) : undefined;
     const paymentMethod = updatedItem.paymentMethodId ? allPaymentMethods.find(pm => pm.id === updatedItem.paymentMethodId) : undefined;
 
     return {
       ...updatedItem,
-      date: new Date(updatedItem.date), // Convert back to Date object for app use
+      date: new Date(updatedItem.date), 
       createdAt: new Date(updatedItem.createdAt),
       updatedAt: new Date(updatedItem. updatedAt),
       category,
@@ -468,24 +395,16 @@ export async function ensureCoreCosmosDBContainersExist() {
     try {
         const { database } = await getCosmosClientAndDb();
         const transactionsContainerId = process.env.COSMOS_DB_TRANSACTIONS_CONTAINER_ID;
-        const categoriesContainerId = process.env.COSMOS_DB_CATEGORIES_CONTAINER_ID;
-        const paymentMethodsContainerId = process.env.COSMOS_DB_PAYMENT_METHODS_CONTAINER_ID;
+        // Categories and Payment Methods containers are no longer managed here as they use static data.
 
-        if (!transactionsContainerId || !categoriesContainerId || !paymentMethodsContainerId) {
-            throw new Error("One or more core Cosmos DB container IDs (Transactions, Categories, PaymentMethods) are not defined in environment variables.");
+        if (!transactionsContainerId) {
+            throw new Error("Core Cosmos DB container ID for Transactions is not defined in environment variables.");
         }
 
         await database.containers.createIfNotExists({ id: transactionsContainerId, partitionKey: { paths: ["/id"] } });
         console.log(`CosmosDB Info: Container '${transactionsContainerId}' for transactions ensured.`);
         
-        await database.containers.createIfNotExists({ id: categoriesContainerId, partitionKey: { paths: ["/id"] } });
-        console.log(`CosmosDB Info: Container '${categoriesContainerId}' for categories ensured.`);
-
-        await database.containers.createIfNotExists({ id: paymentMethodsContainerId, partitionKey: { paths: ["/id"] } });
-        console.log(`CosmosDB Info: Container '${paymentMethodsContainerId}' for payment methods ensured.`);
-
-    } catch (error: any)
-     {
+    } catch (error: any) {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
