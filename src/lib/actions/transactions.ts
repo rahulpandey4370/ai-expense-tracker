@@ -1,65 +1,16 @@
 
 'use server';
 
-import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob'; // Keep for now if other parts might use it
-import { CosmosClient, type Container as CosmosContainer, type ItemDefinition } from '@azure/cosmos';
+import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
 import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
-// Constants for Blob Storage paths (will become obsolete for categories/pm if fully migrated)
-// const CATEGORIES_BLOB_PATH = 'internal/data/categories.json';
-// const PAYMENT_METHODS_BLOB_PATH = 'internal/data/payment-methods.json';
-
-let blobContainerClientInstance: BlobContainerClient; // May be removed if Blob is no longer used at all
 let cosmosTransactionsContainerInstance: CosmosContainer;
 let cosmosCategoriesContainerInstance: CosmosContainer;
 let cosmosPaymentMethodsContainerInstance: CosmosContainer;
-
-
-// --- Azure Blob Storage Helper (May become obsolete or move if Blob is fully phased out) ---
-async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    readableStream.on('data', (data: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
-    });
-    readableStream.on('end', () => {
-      resolve(Buffer.concat(chunks));
-    });
-    readableStream.on('error', reject);
-  });
-}
-
-// --- Azure Blob Storage Client (May become obsolete) ---
-async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
-  if (blobContainerClientInstance) {
-    return blobContainerClientInstance;
-  }
-  // ... (implementation remains, but its usage for categories/PMs will be removed)
-  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
-
-  if (!connectionString) {
-    console.error("Azure Blob Critical Error: AZURE_STORAGE_CONNECTION_STRING is not configured.");
-    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured.");
-  }
-  if (!containerName || typeof containerName !== 'string' || containerName.trim() === '') {
-    console.error(`Azure Blob Critical Error: AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string. Value: '${containerName}'`);
-    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string. Please check Vercel environment variables.");
-  }
-  try {
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    const client = blobServiceClient.getContainerClient(containerName);
-    blobContainerClientInstance = client;
-    return blobContainerClientInstance;
-  } catch (error: any) {
-    console.error(`Azure Blob CRITICAL Error: Failed to initialize BlobServiceClient or ContainerClient. CS present: ${!!connectionString}, CN: ${containerName}. Error Type: ${error.name}, Message: ${error.message}`, error.stack);
-    throw new Error(`Could not connect to Azure Blob Storage. Check configuration and credentials. Original error: ${error.message}`);
-  }
-}
 
 // --- Azure Cosmos DB Client Helpers ---
 async function getCosmosClientAndDb() {
@@ -127,11 +78,10 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
   try {
     const { resources: items } = await container.items.query(querySpec).fetchAll();
     if (items.length === 0) {
-      // Seed default categories if container is empty
       console.log("CosmosDB Info (getCategories): Categories container is empty. Seeding default categories...");
       const seededCategories: Category[] = [];
       for (const defaultCat of defaultCategories) {
-        const newCat = { ...defaultCat, id: cuid() }; // Ensure unique ID for Cosmos
+        const newCat = { ...defaultCat, id: cuid() }; 
         await container.items.create(newCat);
         seededCategories.push(newCat);
       }
@@ -147,7 +97,7 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
     if (error.code === 404 && error.message.includes("Resource Not Found") && error.message.includes("Container")) {
        console.error(`CosmosDB Critical Error (getCategories): Container for categories not found. Please ensure a container with ID '${process.env.COSMOS_DB_CATEGORIES_CONTAINER_ID}' (partition key /id) exists in database '${process.env.COSMOS_DB_DATABASE_ID}'. Falling back to local defaults.`);
        if (type) return defaultCategories.filter(c => c.type === type);
-       return defaultCategories; // Fallback to prevent app crash, but data won't be persisted.
+       return defaultCategories; 
     }
     throw new Error(`Could not fetch categories from Cosmos DB. Original error: ${error.message}`);
   }
@@ -159,11 +109,10 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
   try {
     const { resources: items } = await container.items.query(querySpec).fetchAll();
     if (items.length === 0) {
-      // Seed default payment methods if container is empty
       console.log("CosmosDB Info (getPaymentMethods): Payment methods container is empty. Seeding default payment methods...");
       const seededPaymentMethods: PaymentMethod[] = [];
       for (const defaultPM of defaultPaymentMethods) {
-        const newPM = { ...defaultPM, id: cuid() }; // Ensure unique ID for Cosmos
+        const newPM = { ...defaultPM, id: cuid() }; 
         await container.items.create(newPM);
         seededPaymentMethods.push(newPM);
       }
@@ -175,7 +124,7 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
     console.error('CosmosDB Error (getPaymentMethods): Failed to fetch or seed payment methods.', error.code, error.message, error.stack);
      if (error.code === 404 && error.message.includes("Resource Not Found") && error.message.includes("Container")) {
        console.error(`CosmosDB Critical Error (getPaymentMethods): Container for payment methods not found. Please ensure a container with ID '${process.env.COSMOS_DB_PAYMENT_METHODS_CONTAINER_ID}' (partition key /id) exists in database '${process.env.COSMOS_DB_DATABASE_ID}'. Falling back to local defaults.`);
-       return defaultPaymentMethods; // Fallback
+       return defaultPaymentMethods; 
     }
     throw new Error(`Could not fetch payment methods from Cosmos DB. Original error: ${error.message}`);
   }
@@ -187,16 +136,13 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
   let allPaymentMethods: PaymentMethod[] = [];
 
   try {
-    // These will now fetch from Cosmos DB
     [allCategories, allPaymentMethods] = await Promise.all([
       getCategories(),
       getPaymentMethods()
     ]);
   } catch (error: any) {
-    // Log the error but try to continue, or rethrow if critical
     console.error("CosmosDB Critical Error (getTransactions): Essential lookup data (categories/payment methods from Cosmos DB) could not be loaded. This may impact transaction display.", error.message, error.stack);
-    // Depending on strictness, you might throw here or attempt to proceed with empty/default lookups
-    // For now, let's proceed, and transactions might appear without full category/PM details if lookups failed.
+    throw new Error(`Essential lookup data (categories/payment methods from Cosmos DB) could not be loaded for transactions. Original error: ${error.message}`);
   }
 
   const categoryMap = new Map(allCategories.map(c => [c.id, c]));
@@ -260,8 +206,8 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: validation.data.date.toISOString(),
-    description: validation.data.description || '',
+    date: validation.data.date.toISOString(), // Store date as ISO string
+    description: validation.data.description || '', // Ensure description is not undefined
     createdAt: now,
     updatedAt: now,
   };
@@ -285,7 +231,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
 
     return {
       ...createdItem,
-      date: new Date(createdItem.date),
+      date: new Date(createdItem.date), // Convert back to Date object for app use
       createdAt: new Date(createdItem.createdAt),
       updatedAt: new Date(createdItem.updatedAt),
       category,
@@ -337,14 +283,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? data.date.toISOString() : existingItem.date,
+    date: data.date ? data.date.toISOString() : existingItem.date, // Store date as ISO string
     description: data.description !== undefined ? data.description : existingItem.description,
     updatedAt: new Date().toISOString(),
   };
 
   const transactionInputForValidation: TransactionInput = {
     type: updatedRawData.type,
-    date: new Date(updatedRawData.date),
+    date: new Date(updatedRawData.date), // Convert back to Date for validation
     amount: updatedRawData.amount,
     description: updatedRawData.description,
     categoryId: updatedRawData.categoryId,
@@ -373,7 +319,6 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     expenseType: validation.data.expenseType,
     createdAt: existingItem.createdAt, 
     updatedAt: new Date().toISOString(),
-    // Retain system properties for optimistic concurrency with etag
     _rid: existingItem._rid,
     _self: existingItem._self,
     _etag: existingItem._etag,
@@ -401,9 +346,9 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
 
     return {
       ...updatedItem,
-      date: new Date(updatedItem.date),
+      date: new Date(updatedItem.date), // Convert back to Date object for app use
       createdAt: new Date(updatedItem.createdAt),
-      updatedAt: new Date(updatedItem.updatedAt),
+      updatedAt: new Date(updatedItem. updatedAt),
       category,
       paymentMethod,
     } as AppTransaction;
@@ -413,7 +358,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     if (error.statusCode === 404 || String(error.message || '').toLowerCase().includes("not found")) {
         throw new Error(`Transaction with ID ${id} (partition: ${id}) not found during replace operation.`);
     }
-    if (error.statusCode === 412) { // Precondition Failed (etag mismatch)
+    if (error.statusCode === 412) { 
       console.error(`CosmosDB Error (updateTransaction): Etag mismatch for transaction ${id}. Data may have been modified by another process.`);
       throw new Error(`Failed to update transaction ${id} due to a data conflict (etag mismatch). Please refresh and try again.`);
     }
@@ -446,7 +391,7 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     
     if (statusCodeFromSDK === 404 || errorMessageFromSDK.includes("not found") || errorMessageFromSDK.includes("notfound")) {
       console.warn(`CosmosDB Warning (deleteTransaction): Transaction ${id} (partition: ${id}) not found for deletion, considered success.`);
-      revalidatePath('/'); // Still revalidate as the state should reflect it's gone
+      revalidatePath('/'); 
       revalidatePath('/transactions');
       revalidatePath('/reports');
       revalidatePath('/yearly-overview');
@@ -494,14 +439,13 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
 
   results.forEach(result => {
     if (result.status === 'fulfilled') {
-      // The value here is what our async function inside map returned
       if (result.value.status === 'fulfilled') {
         successCount++;
-      } else { // This means our async function returned { status: 'rejected', ... }
+      } else { 
         errorCount++;
         localErrors.push({ id: result.value.id, error: result.value.reason });
       }
-    } else { // This means the promise from map itself rejected (less likely here with individual try/catches)
+    } else { 
       errorCount++;
       const problemId = (result.reason as any)?.id || 'unknown_id_in_promise_all_settled_rejection';
       console.error("CosmosDB Error (deleteMultipleTransactions): A delete promise was unexpectedly rejected.", result.reason);
@@ -520,7 +464,6 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
   return { successCount, errorCount, errors: localErrors };
 }
 
-// Helper to ensure Cosmos DB containers exist. Call during app startup or before first use if necessary.
 export async function ensureCoreCosmosDBContainersExist() {
     try {
         const { database } = await getCosmosClientAndDb();
@@ -546,5 +489,3 @@ export async function ensureCoreCosmosDBContainersExist() {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
-// Example: Call this during app initialization if needed, e.g., in a global layout server component (though `use server` actions might not be the best place for a startup script like this)
-// ensureCoreCosmosDBContainersExist();
