@@ -8,7 +8,7 @@ import type { RawTransaction } from '@/lib/types'; // Assuming RawTransaction is
 config();
 
 const TRANSACTIONS_BLOB_DIR = 'transactions/';
-const DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE = "transactions_partition_main"; // Consistent with actions
+// No longer need DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE as partition key is /id
 
 // --- Azure Blob Storage Helper ---
 async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -58,7 +58,7 @@ async function getCosmosDBContainer(): Promise<CosmosContainer> {
 
 async function migrateTransactions() {
   console.log("Starting transaction migration from Azure Blob Storage to Azure Cosmos DB...");
-  console.log(`Data migrated to Cosmos will include 'finwise: "${DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE}"' for partitioning.`);
+  console.log("Data migrated to Cosmos will be partitioned by /id.");
 
   let blobContainerClient: BlobContainerClient;
   let cosmosContainer: CosmosContainer;
@@ -107,10 +107,9 @@ async function migrateTransactions() {
           continue;
         }
         
-        const transactionDataForCosmos = {
-            ...transactionDataFromBlob,
-            finwise: DEFAULT_FINWISE_PARTITION_VALUE_MIGRATE // Add the partition key field
-        };
+        // The transactionDataFromBlob already has an 'id' which will be used as the partition key.
+        // No need to add a 'finwise' field anymore.
+        const transactionDataForCosmos = { ...transactionDataFromBlob };
 
         await cosmosContainer.items.upsert(transactionDataForCosmos);
         console.log(`Successfully migrated transaction ${transactionDataForCosmos.id} from ${blob.name} to Cosmos DB.`);
@@ -138,6 +137,3 @@ async function migrateTransactions() {
 migrateTransactions().catch(err => {
   console.error("Unhandled error during migration script execution:", err.message, err.stack);
 });
-
-      
-    
