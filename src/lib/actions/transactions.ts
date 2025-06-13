@@ -283,7 +283,6 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
 }
 
 export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
-  // Enhanced ID check at the beginning
   if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
     const idDetails = `Received ID: '${id}', Type: ${typeof id}`;
     console.error(`CosmosDB Error (updateTransaction): Invalid or missing transaction ID provided. ${idDetails}`);
@@ -296,7 +295,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   let existingItem: RawTransaction;
   try {
     // console.log(`CosmosDB Info (updateTransaction): Fetching existing item ${id} for update.`);
-    const { resource } = await container.item(id, id).read<RawTransaction>();
+    // Assuming 'id' is the partition key or your container is configured for point reads with just id.
+    const { resource } = await container.item(id, id).read<RawTransaction>(); 
     if (!resource) {
       console.warn(`CosmosDB Warning (updateTransaction): Transaction with ID ${id} not found during read operation for update (resource was null/undefined).`);
       throw new Error(`Transaction with ID ${id} not found for update.`);
@@ -305,8 +305,9 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     // console.log(`CosmosDB Info (updateTransaction): Successfully fetched existing item ${id} for update.`);
   } catch (error: any) {
     console.error(`CosmosDB Error (updateTransaction): Failed to fetch transaction ${id} for update. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
-    if (error.statusCode === 404) {
-      throw new Error(`Transaction with ID ${id} not found for update.`);
+    const errorMessage = String(error.message || '').toLowerCase();
+    if (error.statusCode === 404 || errorMessage.includes("not found") || errorMessage.includes("notfound")) {
+      throw new Error(`Transaction with ID ${id} not found for update. (Details: SC=${error.statusCode}, Msg=${error.message})`);
     }
     throw new Error(`Could not retrieve transaction for update. Original error: ${error.message}`);
   }
@@ -339,8 +340,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   }
 
    const finalItemToUpdate: RawTransaction = {
-    ...existingItem,
-    id: existingItem.id,
+    ...existingItem, // Keep _rid, _self, _etag, _ts from existingItem
+    id: existingItem.id, // Ensure ID is not overwritten by partial data
     type: validation.data.type,
     date: validation.data.date.toISOString(),
     amount: validation.data.amount,
@@ -349,13 +350,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
-    createdAt: existingItem.createdAt,
+    createdAt: existingItem.createdAt, // Ensure createdAt is preserved
     updatedAt: new Date().toISOString(),
   };
 
   try {
     // console.log(`CosmosDB Info (updateTransaction): Replacing item ${id} in Cosmos DB.`);
-    const { resource: updatedItem } = await container.item(id, id).replace(finalItemToUpdate);
+    // Assuming 'id' is the partition key or your container is configured for point replaces with just id.
+    const { resource: updatedItem } = await container.item(id, id).replace(finalItemToUpdate); 
      if (!updatedItem) {
       console.error('CosmosDB Error (updateTransaction): Item replacement returned no resource.');
       throw new Error('Failed to update transaction in Cosmos DB, no resource returned.');
@@ -394,7 +396,8 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
   const container = await getCosmosDBContainer();
   try {
     // console.log(`CosmosDB Info (deleteTransaction): Deleting item ${id} from Cosmos DB.`);
-    await container.item(id, id).delete();
+    // Assuming 'id' is the partition key or your container is configured for point deletes with just id.
+    await container.item(id, id).delete(); 
     // console.log(`CosmosDB Info (deleteTransaction): Successfully deleted item ${id}`);
     revalidatePath('/');
     revalidatePath('/transactions');
@@ -404,8 +407,9 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean 
     return { success: true };
   } catch (error: any) {
     console.error(`CosmosDB Error (deleteTransaction): Failed to delete transaction ${id} from Cosmos DB. Status: ${error.statusCode}, Code: ${error.code}, Message: ${error.message}`, error.stack);
-     if (error.statusCode === 404) {
+     if (error.statusCode === 404) { // Check for 404 specifically
       console.warn(`CosmosDB Warning (deleteTransaction): Transaction ${id} not found for deletion, considered success.`);
+      // Revalidate paths even if not found, as the state is effectively "deleted"
       revalidatePath('/');
       revalidatePath('/transactions');
       revalidatePath('/reports');
@@ -425,15 +429,16 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
   const container = await getCosmosDBContainer();
   let successCount = 0;
   let errorCount = 0;
-  const errors: {id: string, error: string}[] = [];
+  const localErrors: {id: string, error: string}[] = [];
 
   const deletePromises = ids.map(async (id) => {
     if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
-        console.warn(`CosmosDB Warning (deleteMultipleTransactions): Invalid ID '${id}' found in bulk delete request. Skipping.`);
+        console.warn(`CosmosDB Warning (deleteMultipleTransactions): Invalid ID '${id}' (type: ${typeof id}) found in bulk delete request. Skipping.`);
         return { id, status: 'rejected' as const, reason: `Invalid ID: ${id}` };
     }
     try {
-      await container.item(id, id).delete();
+      // Assuming 'id' is the partition key for point deletes.
+      await container.item(id, id).delete(); 
       // console.log(`CosmosDB Info (deleteMultipleTransactions): Successfully deleted item ${id}`);
       return { id, status: 'fulfilled' as const };
     } catch (error: any) {
@@ -449,22 +454,18 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
   const results = await Promise.allSettled(deletePromises);
 
   results.forEach(result => {
-    // This condition handles both successfully deleted and "not found" (which we treat as success for deletion)
-    if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
-      successCount++;
-    } else if (result.status === 'fulfilled' && result.value.status === 'rejected') {
-      // This case is when our inner promise 'rejected' (e.g. invalid ID before trying Cosmos)
+    if (result.status === 'fulfilled') {
+      if (result.value.status === 'fulfilled') {
+        successCount++;
+      } else { // 'rejected' status from our inner promise logic (e.g., invalid ID)
+        errorCount++;
+        localErrors.push({ id: result.value.id, error: result.value.reason });
+      }
+    } else { // 'rejected' status from Promise.allSettled itself (unexpected error in the async map function)
       errorCount++;
-      errors.push({ id: result.value.id, error: result.value.reason });
-    } else if (result.status === 'rejected') {
-      // This case means Promise.allSettled caught a direct rejection from the async (id) => { ... } function
-      // which should be rare given the try/catch inside.
-      errorCount++;
-      // The 'id' might not be available if the mapped function itself threw an error before processing an ID.
-      // For robustness, we try to get it if available.
       const problemId = (result.reason as any)?.id || 'unknown_id_in_promise_all_settled_rejection';
       console.error("CosmosDB Error (deleteMultipleTransactions): A delete promise was unexpectedly rejected.", result.reason);
-      errors.push({ id: problemId, error: (result.reason as any)?.message || 'A delete operation failed unexpectedly.' });
+      localErrors.push({ id: problemId, error: (result.reason as any)?.message || 'A delete operation failed unexpectedly.' });
     }
   });
 
@@ -477,7 +478,5 @@ export async function deleteMultipleTransactions(ids: string[]): Promise<{ succe
   }
 
   // console.log(`CosmosDB Info (deleteMultipleTransactions): Finished. Success: ${successCount}, Failed: ${errorCount}.`);
-  return { successCount, errorCount, errors };
+  return { successCount, errorCount, errors: localErrors };
 }
-
-    
