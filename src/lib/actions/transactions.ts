@@ -2,6 +2,7 @@
 'use server';
 
 import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
+import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
 import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
@@ -9,8 +10,116 @@ import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
 let cosmosTransactionsContainerInstance: CosmosContainer;
+let blobContainerClientInstance: BlobContainerClient;
 
-// --- Azure Cosmos DB Client Helpers ---
+// --- Azure Blob Storage Constants and Helpers ---
+const INTERNAL_DATA_DIR = 'internal/data/';
+const CATEGORIES_BLOB_PATH = `${INTERNAL_DATA_DIR}categories.json`;
+const PAYMENT_METHODS_BLOB_PATH = `${INTERNAL_DATA_DIR}payment-methods.json`;
+
+async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    readableStream.on('data', (data: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+    });
+    readableStream.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+    readableStream.on('error', reject);
+  });
+}
+
+async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
+  if (blobContainerClientInstance) {
+    return blobContainerClientInstance;
+  }
+  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
+
+  if (!connectionString) {
+    console.error("Azure Critical Error (transactions.ts - Blob Client): AZURE_STORAGE_CONNECTION_STRING is not configured.");
+    throw new Error("Azure Storage Connection String for Blob is not configured.");
+  }
+  if (!containerName) {
+    console.error("Azure Critical Error (transactions.ts - Blob Client): AZURE_STORAGE_CONTAINER_NAME is not configured.");
+    throw new Error("Azure Storage Container Name for Blob is not configured.");
+  }
+
+  try {
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    blobContainerClientInstance = blobServiceClient.getContainerClient(containerName);
+    return blobContainerClientInstance;
+  } catch (error: any) {
+    console.error("Azure CRITICAL Error (transactions.ts - Blob Client): Failed to initialize BlobServiceClient or ContainerClient.", error.message, error.stack);
+    if (error.message && error.message.toLowerCase().includes("invalid url")) {
+        console.error("Azure CRITICAL Error (transactions.ts - Blob Client): The Azure Storage Connection String appears to be malformed.");
+    }
+    throw new Error(`Could not connect to Azure Blob Storage. Original error: ${error.message}`);
+  }
+}
+
+async function ensureAzureBlobFile<T>(filePath: string, defaultContent: T[]): Promise<T[]> {
+  const client = await getAzureBlobContainerClient();
+  const blobClient = client.getBlobClient(filePath);
+
+  try {
+    console.log(`Azure Info (ensureAzureBlobFile): Attempting to download blob: ${filePath}`);
+    const downloadBlockBlobResponse = await blobClient.download(0);
+    if (!downloadBlockBlobResponse.readableStreamBody) {
+      console.warn(`Azure Warning (ensureAzureBlobFile): Blob ${filePath} has no readable stream body. Attempting to create with default content.`);
+      throw new RestError("Blob has no readable stream body", undefined, 404); // Simulate 404 to trigger creation
+    }
+    const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+    console.log(`Azure Info (ensureAzureBlobFile): Successfully downloaded blob: ${filePath}`);
+    return JSON.parse(buffer.toString()) as T[];
+  } catch (error: any) {
+    if (error instanceof RestError && error.statusCode === 404) {
+      console.warn(`Azure Warning (ensureAzureBlobFile): Blob ${filePath} not found. Creating with default content.`);
+      const blockBlobClient = client.getBlockBlobClient(filePath);
+      const content = JSON.stringify(defaultContent, null, 2);
+      await blockBlobClient.upload(content, Buffer.byteLength(content), {
+        blobHTTPHeaders: { blobContentType: 'application/json' }
+      });
+      console.log(`Azure Info (ensureAzureBlobFile): Successfully created blob ${filePath} with default content.`);
+      return defaultContent;
+    }
+    console.error(`Azure Error (ensureAzureBlobFile): Failed to ensure/download blob ${filePath}. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
+    throw new Error(`Could not access or create blob file ${filePath}. Original error: ${error.message}`);
+  }
+}
+
+// --- Category and Payment Method Functions (Now using Azure Blob Storage) ---
+export async function getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
+  console.log("Azure Info (getCategories): Fetching categories from Azure Blob Storage.");
+  try {
+    const allCategories = await ensureAzureBlobFile<Category>(CATEGORIES_BLOB_PATH, defaultCategories);
+    if (type) {
+      return allCategories.filter(c => c.type === type);
+    }
+    return allCategories;
+  } catch (error: any) {
+    console.error("Azure Error (getCategories): Could not fetch categories from Blob. Falling back to static defaults. Error:", error.message);
+    const staticCategories = [...defaultCategories];
+    if (type) {
+      return staticCategories.filter(c => c.type === type);
+    }
+    return staticCategories;
+  }
+}
+
+export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+  console.log("Azure Info (getPaymentMethods): Fetching payment methods from Azure Blob Storage.");
+  try {
+    return await ensureAzureBlobFile<PaymentMethod>(PAYMENT_METHODS_BLOB_PATH, defaultPaymentMethods);
+  } catch (error: any) {
+    console.error("Azure Error (getPaymentMethods): Could not fetch payment methods from Blob. Falling back to static defaults. Error:", error.message);
+    return [...defaultPaymentMethods];
+  }
+}
+
+
+// --- Azure Cosmos DB Client Helpers for Transactions ---
 async function getCosmosClientAndDb() {
   const endpoint = process.env.COSMOS_DB_ENDPOINT;
   const key = process.env.COSMOS_DB_KEY;
@@ -40,34 +149,18 @@ async function getCosmosDBTransactionsContainer(): Promise<CosmosContainer> {
 }
 
 
-// --- Category and Payment Method Functions (Now using static data) ---
-export async function getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
-  console.log("Info (getCategories): Fetching categories from static data in src/lib/data.ts.");
-  if (type) {
-    return defaultCategories.filter(c => c.type === type);
-  }
-  return defaultCategories;
-}
-
-export async function getPaymentMethods(): Promise<PaymentMethod[]> {
-  console.log("Info (getPaymentMethods): Fetching payment methods from static data in src/lib/data.ts.");
-  return defaultPaymentMethods;
-}
-
-// --- Transaction Functions (Using Cosmos DB for transactions, static for lookups) ---
+// --- Transaction Functions (Using Cosmos DB for transactions, Blob for lookups) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
   let allCategories: Category[] = [];
   let allPaymentMethods: PaymentMethod[] = [];
 
   try {
-    // Fetch static data directly
+    // Fetch lookup data from Azure Blob Storage (with fallback to static)
     allCategories = await getCategories();
     allPaymentMethods = await getPaymentMethods();
   } catch (error: any) {
-    // This catch block is less likely to be hit now with static data,
-    // but kept for robustness in case `data.ts` had an issue (e.g., import error).
-    console.error("Critical Error (getTransactions): Essential lookup data (categories/payment methods from static files) could not be loaded. Cannot proceed.", error.message, error.stack);
-    throw new Error(`Essential lookup data (categories/payment methods from static files) could not be loaded for transactions. Original error: ${error.message}`);
+    console.error("Azure Critical Error (getTransactions): Essential lookup data (categories/payment methods from Azure Blob Storage) could not be loaded. Cannot proceed.", error.message, error.stack);
+    throw new Error(`Essential lookup data (categories/payment methods from Azure Blob Storage) could not be loaded for transactions. Original error: ${error.message}`);
   }
 
   const categoryMap = new Map(allCategories.map(c => [c.id, c]));
@@ -150,6 +243,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     revalidatePath('/yearly-overview');
     revalidatePath('/ai-playground');
 
+    // Use the getCategories and getPaymentMethods that now fetch from Blob (or static fallback)
     const allCategories = await getCategories();
     const allPaymentMethods = await getPaymentMethods();
     const category = validation.data.categoryId ? allCategories.find(c => c.id === validation.data.categoryId) : undefined;
@@ -182,7 +276,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   let existingItem: RawTransaction;
 
   try {
-    console.log(`CosmosDB Debug (updateTransaction): Attempting to read item. Item ID: '${id}', Assumed Partition Key Value (should be same as ID): '${id}'`);
+    console.log(`CosmosDB Debug (updateTransaction): Attempting to read item. Item ID: '${id}', Partition Key Value (should be same as ID): '${id}'`);
     const { resource } = await container.item(id, id).read<RawTransaction>();
     if (!resource) {
       console.warn(`CosmosDB Warning (updateTransaction): Transaction with ID ${id} (partition: ${id}) not found during read for update.`);
@@ -395,8 +489,7 @@ export async function ensureCoreCosmosDBContainersExist() {
     try {
         const { database } = await getCosmosClientAndDb();
         const transactionsContainerId = process.env.COSMOS_DB_TRANSACTIONS_CONTAINER_ID;
-        // Categories and Payment Methods containers are no longer managed here as they use static data.
-
+        
         if (!transactionsContainerId) {
             throw new Error("Core Cosmos DB container ID for Transactions is not defined in environment variables.");
         }
@@ -408,3 +501,4 @@ export async function ensureCoreCosmosDBContainersExist() {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
+
