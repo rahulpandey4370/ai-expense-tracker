@@ -10,6 +10,7 @@ import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spen
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
+import { ScrollArea } from './ui/scroll-area';
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
@@ -106,8 +107,8 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
           </CardTitle>
           <CardDescription>Insights for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
-          <div className="flex-grow overflow-auto pr-2">
+        <CardContent className="space-y-4 flex-1 flex flex-col justify-between overflow-hidden">
+          <ScrollArea className="flex-grow pr-4">
             {isLoading && (
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full" />
@@ -126,7 +127,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
             {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
               <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
             )}
-          </div>
+          </ScrollArea>
           <motion.div {...buttonHoverTap}>
             <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-4">
               <Zap className="mr-2 h-4 w-4" />

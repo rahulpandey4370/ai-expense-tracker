@@ -135,11 +135,12 @@ For each transaction identified, provide:
 - type: 'income' or 'expense'.
 - categoryNameGuess: (Optional) Map to a provided category name. If unsure, use "Others" or leave blank.
 - paymentMethodNameGuess: (Optional, for expenses) Map to a provided payment method name. If unsure, leave blank.
-- expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment_expense'.
+- expenseTypeNameGuess: (for expenses) Classify as 'need', 'want', or 'investment_expense'.
     Examples for 'need': Rent, essential Groceries, Medicines, commute to work, Loan Repayments, Utilities, Education fees.
     Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
     Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD).
-    If unsure or if it's an income transaction, leave blank.
+    YOU have to predict it to the best of your ability and provide an output dynamically.
+    If 100% unsure or if it's an income transaction, leave blank.
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.
 - splitDetails: (Optional) If splitting is mentioned, provide participant names and ratio.
 - confidenceScore: Your confidence (0.0-1.0) for this transaction. 1.0 means very confident.
