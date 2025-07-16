@@ -2,12 +2,14 @@
 'use server';
 
 import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
-import type { SplitUser, SplitUserInput, RawSplitExpense, SplitExpenseInput, AppSplitExpense, UserBalance } from '@/lib/types';
+import type { SplitUser, SplitUserInput, RawSplitExpense, SplitExpenseInput, AppSplitExpense, UserBalance, SplitMethod } from '@/lib/types';
 import { SplitUserInputSchema, SplitExpenseInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
+import { addTransaction } from './transactions';
 
 const SPLIT_EXPENSES_PAGE_PATH = '/split-expenses';
+const MAIN_USER_ID = "me"; 
 
 let splitUsersContainerInstance: CosmosContainer;
 let splitExpensesContainerInstance: CosmosContainer;
@@ -133,22 +135,32 @@ export async function addSplitExpense(data: SplitExpenseInput): Promise<RawSplit
     console.error('CosmosDB Error (addSplitExpense): Validation error:', readableErrors);
     throw new Error(`Invalid split expense data: ${readableErrors || "Validation failed."}`);
   }
-  const { totalAmount, participants, splitMethod } = validation.data;
+  const { totalAmount, participants, splitMethod, paidById } = validation.data;
   let calculatedParticipants: RawSplitExpense['participants'] = [];
+  let myShare = 0;
 
   if (splitMethod === 'equally') {
     const shareAmount = totalAmount / participants.length;
-    calculatedParticipants = participants.map(p => ({
-      userId: p.userId,
-      shareAmount: parseFloat(shareAmount.toFixed(2)),
-      isSettled: p.userId === validation.data.paidById, // Payer is settled by default
-    }));
-  } else { // 'custom' - assumes custom shares are validated to sum up correctly by Zod
-     calculatedParticipants = participants.map(p => ({
-        userId: p.userId,
-        shareAmount: p.customShare || 0,
-        isSettled: p.userId === validation.data.paidById,
-    }));
+    calculatedParticipants = participants.map(p => {
+        const isPayer = p.userId === paidById;
+        if (p.userId === MAIN_USER_ID) myShare = shareAmount;
+        return {
+            userId: p.userId,
+            shareAmount: parseFloat(shareAmount.toFixed(2)),
+            isSettled: isPayer,
+        };
+    });
+  } else { // 'custom'
+     calculatedParticipants = participants.map(p => {
+        const isPayer = p.userId === paidById;
+        const customShare = p.customShare || 0;
+        if (p.userId === MAIN_USER_ID) myShare = customShare;
+        return {
+            userId: p.userId,
+            shareAmount: customShare,
+            isSettled: isPayer,
+        };
+    });
   }
 
   const id = cuid();
@@ -160,7 +172,7 @@ export async function addSplitExpense(data: SplitExpenseInput): Promise<RawSplit
     title: validation.data.title,
     date: validation.data.date.toISOString(),
     totalAmount,
-    paidById: validation.data.paidById,
+    paidById,
     participants: calculatedParticipants,
     splitMethod,
     isFullySettled,
@@ -174,6 +186,20 @@ export async function addSplitExpense(data: SplitExpenseInput): Promise<RawSplit
     if (!createdItem) {
       throw new Error('Failed to create split expense, no resource returned.');
     }
+
+    // If "I" paid, add my share as a regular transaction
+    if (paidById === MAIN_USER_ID && myShare > 0 && validation.data.personalExpenseDetails) {
+        await addTransaction({
+            type: 'expense',
+            date: validation.data.date,
+            amount: myShare,
+            description: `My share of: ${validation.data.title}`,
+            categoryId: validation.data.personalExpenseDetails.categoryId,
+            paymentMethodId: validation.data.personalExpenseDetails.paymentMethodId,
+            expenseType: 'want', // Defaulting to want, could be a future enhancement
+        });
+    }
+
     revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
     return createdItem as RawSplitExpense;
   } catch (error: any) {
@@ -185,7 +211,9 @@ export async function addSplitExpense(data: SplitExpenseInput): Promise<RawSplit
 export async function getSplitExpenses(options?: { limit?: number }): Promise<AppSplitExpense[]> {
   const expensesContainer = await getSplitExpensesContainer();
   const users = await getSplitUsers();
-  const userMap = new Map(users.map(u => [u.id, u]));
+  // Add "Me" to the user map for populating participant details
+  const meUser: SplitUser = { id: MAIN_USER_ID, name: 'Me', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const userMap = new Map([...users, meUser].map(u => [u.id, u]));
 
   const querySpec = { query: "SELECT * FROM c ORDER BY c.date DESC" };
    if (options?.limit) {
@@ -265,87 +293,81 @@ export async function settleParticipantShare(expenseId: string, participantUserI
 export async function getSplitBalances(): Promise<UserBalance[]> {
     const expenses = await getSplitExpenses();
     const users = await getSplitUsers();
-    const userMap = new Map(users.map(u => [u.id, u.name]));
-    const balances: Record<string, number> = {};
-
-    users.forEach(u => balances[u.id] = 0);
-
-    expenses.forEach(expense => {
-        if (expense.isFullySettled) return;
-
-        expense.participants.forEach(p => {
-            if (!p.isSettled) {
-                // Payer is owed money
-                balances[expense.paidById] = (balances[expense.paidById] || 0) + p.shareAmount;
-                // Participant owes money
-                balances[p.user.id] = (balances[p.user.id] || 0) - p.shareAmount;
-            }
-        });
-    });
-
-    const owed: Record<string, { to: string, amount: number }[]> = {};
-    const owes: Record<string, { from: string, amount: number }[]> = {};
     
-    const userIds = Object.keys(balances);
+    const meUser: SplitUser = { id: MAIN_USER_ID, name: 'Me', createdAt: '', updatedAt: '' };
+    const allUsers = [meUser, ...users];
+    const userMap = new Map(allUsers.map(u => [u.id, u.name]));
+    
+    const balances: Record<string, number> = {};
+    allUsers.forEach(u => balances[u.id] = 0);
 
-    // This is a simplified settlement calculation. A real implementation might use a more complex algorithm
-    // (like a directed graph to minimize transactions), but this shows direct debts.
-    for(const expense of expenses) {
+    for (const expense of expenses) {
         if (expense.isFullySettled) continue;
-        const payerId = expense.paidById;
-        expense.participants.forEach(participant => {
-            if (!participant.isSettled) {
-                const debtorId = participant.user.id;
-                
-                // Debtor owes Payer
-                owes[debtorId] = [...(owes[debtorId] || []), { from: payerId, amount: participant.shareAmount }];
-                owed[payerId] = [...(owed[payerId] || []), { to: debtorId, amount: participant.shareAmount }];
+
+        for (const p of expense.participants) {
+            if (!p.isSettled) {
+                // Participant owes money to the payer
+                balances[p.user.id] = (balances[p.user.id] || 0) - p.shareAmount;
+                balances[expense.paidBy.id] = (balances[expense.paidBy.id] || 0) + p.shareAmount;
             }
-        });
+        }
     }
 
-    const finalBalances: UserBalance[] = userIds.map(userId => {
-      const netAmount = balances[userId] || 0;
-      const userOwes: UserBalance['owes'] = [];
-      const userOwedBy: UserBalance['owedBy'] = [];
-      const consolidatedOwes: Record<string, number> = {};
-      
-      if(owes[userId]) {
-        owes[userId].forEach(debt => {
-            consolidatedOwes[debt.from] = (consolidatedOwes[debt.from] || 0) + debt.amount;
-        });
-      }
+    const creditors: { id: string, amount: number }[] = [];
+    const debtors: { id: string, amount: number }[] = [];
 
-      Object.entries(consolidatedOwes).forEach(([payerId, amount]) => {
-          userOwes.push({ toUserId: payerId, toUserName: userMap.get(payerId) || 'Unknown', amount });
-          
-          const consolidatedOwedByPayer = (owed[payerId] || []).filter(credit => credit.to === userId);
-          const totalOwedByPayerToUser = consolidatedOwedByPayer.reduce((sum, credit) => sum + credit.amount, 0);
-
-          if (amount > totalOwedByPayerToUser) {
-              consolidatedOwes[payerId] = amount - totalOwedByPayerToUser;
-          } else {
-              delete consolidatedOwes[payerId];
-          }
-      });
-
-
-      return {
-          userId,
-          userName: userMap.get(userId) || 'Unknown User',
-          netAmount: parseFloat(netAmount.toFixed(2)),
-          owes: Object.entries(consolidatedOwes).map(([toUserId, amount]) => ({
-              toUserId,
-              toUserName: userMap.get(toUserId) || 'Unknown',
-              amount: parseFloat(amount.toFixed(2))
-          })).filter(d => d.amount > 0.01),
-          owedBy: [], // Simplified for now
-      };
+    Object.entries(balances).forEach(([userId, amount]) => {
+        if (amount > 0) {
+            creditors.push({ id: userId, amount });
+        } else if (amount < 0) {
+            debtors.push({ id: userId, amount: -amount });
+        }
     });
 
-    return finalBalances;
-}
+    const settlements: { from: string, to: string, amount: number }[] = [];
 
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+        const debtor = debtors[i];
+        const creditor = creditors[j];
+        const settlementAmount = Math.min(debtor.amount, creditor.amount);
+
+        if (settlementAmount > 0.01) {
+            settlements.push({ from: debtor.id, to: creditor.id, amount: settlementAmount });
+            debtor.amount -= settlementAmount;
+            creditor.amount -= settlementAmount;
+        }
+
+        if (debtor.amount < 0.01) i++;
+        if (creditor.amount < 0.01) j++;
+    }
+
+    const finalBalances: Record<string, UserBalance> = {};
+    allUsers.forEach(u => {
+        finalBalances[u.id] = {
+            userId: u.id,
+            userName: u.name,
+            netAmount: balances[u.id] || 0,
+            owes: [],
+            owedBy: []
+        };
+    });
+
+    settlements.forEach(s => {
+        finalBalances[s.from].owes.push({
+            toUserId: s.to,
+            toUserName: userMap.get(s.to) || 'Unknown',
+            amount: parseFloat(s.amount.toFixed(2))
+        });
+        finalBalances[s.to].owedBy.push({
+            fromUserId: s.from,
+            fromUserName: userMap.get(s.from) || 'Unknown',
+            amount: parseFloat(s.amount.toFixed(2))
+        });
+    });
+
+    return Object.values(finalBalances).sort((a,b) => a.userName.localeCompare(b.userName));
+}
 
 
 export async function deleteSplitExpense(id: string): Promise<{ success: boolean }> {

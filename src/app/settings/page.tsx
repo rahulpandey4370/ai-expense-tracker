@@ -38,7 +38,7 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 
 export default function SettingsPage() {
   const [userProfile, setUserProfile] = useState({
-    name: "FinWise User", // Changed from Rahul
+    name: "Me (FinWise User)", // Changed from Rahul
     email: "user@finwise.ai", // Changed from rahul@example.com
   });
   const [notifications, setNotifications] = useState({

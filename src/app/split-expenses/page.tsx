@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,9 +28,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { SplitUser, SplitUserInput, SplitExpenseInput, AppSplitExpense, UserBalance } from '@/lib/types';
+import type { SplitUser, SplitUserInput, SplitExpenseInput, AppSplitExpense, UserBalance, SplitMethod, Category, PaymentMethod } from '@/lib/types';
 import { addSplitUser, getSplitUsers, deleteSplitUser, addSplitExpense, getSplitExpenses, settleParticipantShare, getSplitBalances } from '@/lib/actions/split-expenses';
-import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon } from "lucide-react";
+import { getCategories, getPaymentMethods } from '@/lib/actions/transactions';
+import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon, AlertTriangle } from "lucide-react";
 import { format } from 'date-fns';
 
 const pageVariants = {
@@ -48,6 +50,8 @@ const itemVariants = {
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+const MAIN_USER_ID = "me";
+
 
 export default function SplitExpensesPage() {
   const { toast } = useToast();
@@ -59,25 +63,33 @@ export default function SplitExpensesPage() {
 
   const [splitExpenses, setSplitExpenses] = useState<AppSplitExpense[]>([]);
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
-  const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [isSettling, setIsSettling] = useState<{ expenseId: string, userId: string } | null>(null);
   const [balances, setBalances] = useState<UserBalance[]>([]);
   const [isLoadingBalances, setIsLoadingBalances] = useState(true);
+  
+  const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
 
 
   const fetchData = useCallback(async () => {
     setIsLoadingUsers(true);
     setIsLoadingExpenses(true);
     setIsLoadingBalances(true);
+    setIsLoadingDropdowns(true);
     try {
-      const [users, expenses, fetchedBalances] = await Promise.all([
+      const [users, expenses, fetchedBalances, fetchedCategories, fetchedPaymentMethods] = await Promise.all([
         getSplitUsers(),
         getSplitExpenses(),
         getSplitBalances(),
+        getCategories('expense'),
+        getPaymentMethods(),
       ]);
       setSplitUsers(users);
       setSplitExpenses(expenses);
       setBalances(fetchedBalances);
+      setExpenseCategories(fetchedCategories);
+      setPaymentMethods(fetchedPaymentMethods);
     } catch (error: any) {
       toast({ title: "Error Fetching Data", description: error.message || "Could not load split expense data.", variant: "destructive" });
       setSplitUsers([]);
@@ -87,6 +99,7 @@ export default function SplitExpensesPage() {
       setIsLoadingUsers(false);
       setIsLoadingExpenses(false);
       setIsLoadingBalances(false);
+      setIsLoadingDropdowns(false);
     }
   }, [toast]);
 
@@ -193,7 +206,15 @@ export default function SplitExpensesPage() {
             <motion.section variants={cardVariants}>
               <Card className={cn("shadow-lg border-primary/20 bg-card/95", glowClass)}>
                 <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><FilePlus className="text-primary/80"/>Add New Shared Expense</CardTitle></CardHeader>
-                <CardContent><AddSplitExpenseForm users={splitUsers} onExpenseAdded={fetchData} /></CardContent>
+                <CardContent>
+                  <AddSplitExpenseForm 
+                    users={splitUsers} 
+                    onExpenseAdded={fetchData} 
+                    categories={expenseCategories}
+                    paymentMethods={paymentMethods}
+                    isLoading={isLoadingDropdowns || isLoadingUsers}
+                  />
+                </CardContent>
               </Card>
             </motion.section>
             
@@ -212,7 +233,7 @@ export default function SplitExpensesPage() {
                                             <div>
                                                 <h4 className="font-semibold text-accent">{expense.title}</h4>
                                                 <p className="text-xs text-muted-foreground">{format(expense.date, 'dd MMM, yyyy')} • Total: ₹{expense.totalAmount.toLocaleString()}</p>
-                                                <p className="text-xs text-muted-foreground">Paid by: <strong>{expense.paidBy.name}</strong></p>
+                                                <p className="text-xs text-muted-foreground">Paid by: <strong>{expense.paidById === MAIN_USER_ID ? 'Me' : expense.paidBy?.name || 'Unknown'}</strong></p>
                                             </div>
                                             <Badge variant={expense.isFullySettled ? "default" : "secondary"} className={cn(expense.isFullySettled ? "bg-green-600/80" : "bg-orange-500/80", "text-white")}>{expense.isFullySettled ? "Settled" : "Unsettled"}</Badge>
                                         </div>
@@ -221,7 +242,7 @@ export default function SplitExpensesPage() {
                                                 <li key={p.user.id} className="flex justify-between items-center text-xs">
                                                     <div className="flex items-center gap-2">
                                                         {p.isSettled ? <CheckCircle className="h-4 w-4 text-green-500"/> : <CircleDot className="h-4 w-4 text-orange-500"/>}
-                                                        <span>{p.user.name} owes ₹{p.shareAmount.toLocaleString()}</span>
+                                                        <span>{p.user.id === MAIN_USER_ID ? 'You owe' : p.user.name + ' owes'} ₹{p.shareAmount.toLocaleString()}</span>
                                                     </div>
                                                     {!p.isSettled && (
                                                       <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleSettleShare(expense.id, p.user.id)} disabled={isSettling?.expenseId === expense.id && isSettling?.userId === p.user.id}>
@@ -246,16 +267,25 @@ export default function SplitExpensesPage() {
                 <Card className={cn("shadow-lg border-green-500/30 bg-green-500/5", glowClass)}>
                     <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-green-600 dark:text-green-400 flex items-center gap-2"><Scale className="text-green-500/80"/>Overall Balances</CardTitle></CardHeader>
                     <CardContent>
-                        {isLoadingBalances ? <p className="text-muted-foreground">Calculating balances...</p> : balances.filter(b => b.owes.length > 0).length === 0 ? <p className="text-muted-foreground">All balances are settled!</p> :
+                        {isLoadingBalances ? <p className="text-muted-foreground">Calculating balances...</p> : balances.filter(b => b.owes.length > 0 || b.owedBy.length > 0).length === 0 ? <p className="text-muted-foreground">All balances are settled!</p> :
                         <div className="space-y-3">
-                            {balances.map(balance => balance.owes.length > 0 && (
+                            {balances.map(balance => (balance.owes.length > 0 || balance.owedBy.length > 0) && (
                                 <div key={balance.userId} className="text-sm">
-                                    <strong className="text-red-500">{balance.userName}</strong> owes:
-                                    <ul className="list-disc list-inside pl-4 text-muted-foreground">
-                                        {balance.owes.map(debt => (
-                                            <li key={debt.toUserId}>₹{debt.amount.toLocaleString()} to <strong className="text-green-600">{debt.toUserName}</strong></li>
-                                        ))}
-                                    </ul>
+                                    <strong className="text-primary">{balance.userName === "Me" ? "Your Balances" : balance.userName}</strong>
+                                    {balance.owes.length > 0 && 
+                                        <ul className="list-disc list-inside pl-4 text-red-600 dark:text-red-400">
+                                            {balance.owes.map(debt => (
+                                                <li key={debt.toUserId}>Owes ₹{debt.amount.toLocaleString()} to <strong className="text-foreground">{debt.toUserName}</strong></li>
+                                            ))}
+                                        </ul>
+                                    }
+                                     {balance.owedBy.length > 0 && 
+                                        <ul className="list-disc list-inside pl-4 text-green-600 dark:text-green-400">
+                                            {balance.owedBy.map(credit => (
+                                                <li key={credit.fromUserId}>Is owed ₹{credit.amount.toLocaleString()} by <strong className="text-foreground">{credit.fromUserName}</strong></li>
+                                            ))}
+                                        </ul>
+                                    }
                                 </div>
                             ))}
                         </div>
@@ -271,45 +301,103 @@ export default function SplitExpensesPage() {
   );
 }
 
+interface AddSplitExpenseFormProps {
+  users: SplitUser[];
+  onExpenseAdded: () => void;
+  categories: Category[];
+  paymentMethods: PaymentMethod[];
+  isLoading: boolean;
+}
+
 // Sub-component for the Add Split Expense Form
-function AddSplitExpenseForm({ users, onExpenseAdded }: { users: SplitUser[], onExpenseAdded: () => void }) {
+function AddSplitExpenseForm({ users, onExpenseAdded, categories, paymentMethods, isLoading: isLoadingDropdowns }: AddSplitExpenseFormProps) {
     const { toast } = useToast();
     const [title, setTitle] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [date, setDate] = useState<Date | undefined>(new Date());
-    const [paidById, setPaidById] = useState<string | undefined>();
-    const [participantIds, setParticipantIds] = useState<Set<string>>(new Set());
+    const [paidById, setPaidById] = useState<string | undefined>(MAIN_USER_ID);
+    const [splitMethod, setSplitMethod] = useState<SplitMethod>('equally');
+    const [participants, setParticipants] = useState<Set<string>>(new Set([MAIN_USER_ID]));
+    const [customShares, setCustomShares] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     
+    const [categoryId, setCategoryId] = useState<string | undefined>();
+    const [paymentMethodId, setPaymentMethodId] = useState<string | undefined>();
+
+
+    useEffect(() => {
+        if (categories.length > 0 && !categoryId) {
+            setCategoryId(categories.find(c => c.name === 'Food and Dining')?.id || categories[0].id);
+        }
+        if (paymentMethods.length > 0 && !paymentMethodId) {
+            setPaymentMethodId(paymentMethods.find(p => p.type === 'UPI')?.id || paymentMethods[0].id);
+        }
+    }, [categories, paymentMethods, categoryId, paymentMethodId]);
+
+    const allPossiblePayers = [{ id: MAIN_USER_ID, name: 'Me (FinWise User)' }, ...users];
+
+    const toggleParticipant = (userId: string) => {
+        setParticipants(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(userId)) newSet.delete(userId);
+            else newSet.add(userId);
+            // If custom split, clear share for removed participant
+            if (splitMethod === 'custom' && !newSet.has(userId)) {
+                setCustomShares(currentShares => {
+                    const newShares = {...currentShares};
+                    delete newShares[userId];
+                    return newShares;
+                });
+            }
+            return newSet;
+        });
+    };
+    
+    const remainingAmount = useMemo(() => {
+        const total = parseFloat(totalAmount) || 0;
+        const currentCustomSum = Object.values(customShares).reduce((sum, share) => sum + (parseFloat(share) || 0), 0);
+        return total - currentCustomSum;
+    }, [totalAmount, customShares]);
+
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         
         const amountNum = parseFloat(totalAmount);
-        if (!title.trim() || isNaN(amountNum) || amountNum <= 0 || !date || !paidById || participantIds.size < 2) {
-            toast({ title: "Missing Information", description: "Please fill all fields. At least 2 participants are required.", variant: "destructive" });
+        if (!title.trim() || isNaN(amountNum) || amountNum <= 0 || !date || !paidById || participants.size < 1) {
+            toast({ title: "Missing Information", description: "Please fill all fields. At least one participant is required.", variant: "destructive" });
             return;
         }
 
+        if(paidById === MAIN_USER_ID && (!categoryId || !paymentMethodId)) {
+            toast({ title: "Missing Information", description: "When you pay, please select a category and payment method for your records.", variant: "destructive" });
+            return;
+        }
+
+        let participantData: { userId: string; customShare?: number }[] = [];
+        if (splitMethod === 'custom') {
+            if (Math.abs(remainingAmount) > 0.01) {
+                toast({ title: "Custom Split Mismatch", description: `The sum of custom shares must equal the total amount. Remaining: ₹${remainingAmount.toFixed(2)}`, variant: "destructive"});
+                return;
+            }
+            participantData = Array.from(participants).map(id => ({ userId: id, customShare: parseFloat(customShares[id] || '0') }));
+        } else {
+            participantData = Array.from(participants).map(id => ({ userId: id }));
+        }
+
         const expenseData: SplitExpenseInput = {
-            title,
-            totalAmount: amountNum,
-            date,
-            paidById,
-            splitMethod: 'equally', // For now, only equal split is implemented in this form
-            participants: Array.from(participantIds).map(id => ({ userId: id })),
+            title, totalAmount: amountNum, date, paidById, splitMethod,
+            participants: participantData,
+            personalExpenseDetails: paidById === MAIN_USER_ID ? { categoryId: categoryId!, paymentMethodId: paymentMethodId! } : undefined
         };
         
         setIsLoading(true);
         try {
             await addSplitExpense(expenseData);
             toast({ title: "Shared Expense Added!", description: `'${title}' has been recorded.` });
-            // Reset form
-            setTitle('');
-            setTotalAmount('');
-            setDate(new Date());
-            setPaidById(undefined);
-            setParticipantIds(new Set());
-            onExpenseAdded(); // Refresh data on parent page
+            setTitle(''); setTotalAmount(''); setDate(new Date()); setPaidById(MAIN_USER_ID); setSplitMethod('equally');
+            setParticipants(new Set([MAIN_USER_ID])); setCustomShares({}); setCategoryId(categories[0]?.id); setPaymentMethodId(paymentMethods[0]?.id);
+            onExpenseAdded();
         } catch (error: any) {
             toast({ title: "Error Adding Expense", description: error.message || "Could not add shared expense.", variant: "destructive" });
         } finally {
@@ -317,17 +405,11 @@ function AddSplitExpenseForm({ users, onExpenseAdded }: { users: SplitUser[], on
         }
     };
 
-    const toggleParticipant = (userId: string) => {
-        setParticipantIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(userId)) newSet.delete(userId);
-            else newSet.add(userId);
-            return newSet;
-        });
-    };
-
-    if (users.length === 0) {
-        return <p className="text-muted-foreground text-center italic">Please add at least one user to start adding shared expenses.</p>
+    if (isLoadingDropdowns) {
+        return <p className="text-muted-foreground text-center italic">Loading options...</p>
+    }
+     if (users.length === 0 && allPossiblePayers.length <= 1) {
+        return <p className="text-muted-foreground text-center italic">Please add at least one other user to start adding shared expenses.</p>
     }
 
     return (
@@ -340,36 +422,75 @@ function AddSplitExpenseForm({ users, onExpenseAdded }: { users: SplitUser[], on
                 <div>
                     <Label htmlFor="date">Date</Label>
                     <Popover>
-                        <PopoverTrigger asChild>
-                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal mt-1", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{date ? format(date, "PPP") : <span>Pick a date</span>}</Button>
-                        </PopoverTrigger>
+                        <PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal mt-1", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{date ? format(date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger>
                         <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
                     </Popover>
                 </div>
                 <div>
                     <Label htmlFor="paidById">Paid By</Label>
-                    <Select value={paidById} onValueChange={setPaidById}>
-                        <SelectTrigger id="paidById" className="mt-1"><SelectValue placeholder="Select who paid" /></SelectTrigger>
-                        <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+                    <Select value={paidById} onValueChange={setPaidById}><SelectTrigger id="paidById" className="mt-1"><SelectValue placeholder="Select who paid" /></SelectTrigger>
+                        <SelectContent>{allPossiblePayers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
             </div>
+
+            {paidById === MAIN_USER_ID && (
+                 <Card className="bg-primary/5 border-primary/20 p-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <Label>Expense Category <span className="text-xs text-muted-foreground">(for your records)</span></Label>
+                            <Select value={categoryId} onValueChange={setCategoryId}><SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
+                                <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Payment Method <span className="text-xs text-muted-foreground">(for your records)</span></Label>
+                             <Select value={paymentMethodId} onValueChange={setPaymentMethodId}><SelectTrigger className="mt-1"><SelectValue placeholder="Select payment method" /></SelectTrigger>
+                                <SelectContent>{paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
             <div>
-                <Label>Participants (Split Equally)</Label>
+                 <Label>Participants</Label>
                 <ScrollArea className="h-[120px] w-full rounded-md border p-2 mt-1 space-y-2">
-                    {users.map(user => (
+                    {allPossiblePayers.map(user => (
                         <div key={user.id} className="flex items-center space-x-2">
-                            <Checkbox id={`participant-${user.id}`} checked={participantIds.has(user.id)} onCheckedChange={() => toggleParticipant(user.id)}/>
+                            <Checkbox id={`participant-${user.id}`} checked={participants.has(user.id)} onCheckedChange={() => toggleParticipant(user.id)}/>
                             <label htmlFor={`participant-${user.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{user.name}</label>
                         </div>
                     ))}
                 </ScrollArea>
             </div>
+             <div>
+                <Label>Split Method</Label>
+                <RadioGroup value={splitMethod} onValueChange={(val) => setSplitMethod(val as SplitMethod)} className="flex space-x-4 mt-1">
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="equally" id="equally" /><Label htmlFor="equally">Equally</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="custom" id="custom" /><Label htmlFor="custom">Custom</Label></div>
+                </RadioGroup>
+            </div>
+            {splitMethod === 'custom' && (
+                <Card className="p-3 bg-accent/5 border-accent/20">
+                    <CardHeader className="p-0 pb-2"><CardTitle className="text-md text-accent">Custom Split</CardTitle><CardDescription className="text-xs">Enter each person's share. Must sum to total.</CardDescription></CardHeader>
+                    <CardContent className="p-0 space-y-2">
+                        {Array.from(participants).map(userId => {
+                            const user = allPossiblePayers.find(p => p.id === userId);
+                            return (
+                                <div key={userId} className="flex items-center gap-2">
+                                    <Label className="w-1/3 truncate" title={user?.name}>{user?.name}</Label>
+                                    <Input type="number" placeholder="0.00" value={customShares[userId] || ''} onChange={(e) => setCustomShares({...customShares, [userId]: e.target.value})} className="h-8 text-sm" />
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                    <CardContent className="p-0 pt-2 text-sm font-medium"><p className={cn(Math.abs(remainingAmount) > 0.01 ? 'text-red-500' : 'text-green-500')}>Remaining: ₹{remainingAmount.toFixed(2)}</p></CardContent>
+                </Card>
+            )}
             <Button type="submit" disabled={isLoading} className="w-full bg-primary text-primary-foreground" withMotion>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FilePlus className="mr-2 h-4 w-4"/>} Add Shared Expense
             </Button>
         </form>
     );
 }
-
-    

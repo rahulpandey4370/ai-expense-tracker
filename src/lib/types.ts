@@ -25,9 +25,15 @@ export interface RawTransaction {
   categoryId?: string;
   paymentMethodId?: string;
   source?: string;
-  expenseType?: 'need' | 'want' | 'investment';
+  expenseType?: 'need' | 'want' | 'investment_expense';
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  // For cosmos DB
+  _rid?: string;
+  _self?: string;
+  _etag?: string;
+  _attachments?: string;
+  _ts?: number;
 }
 
 // This is the "hydrated" transaction type used by the frontend,
@@ -194,6 +200,7 @@ export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutp
 
 
 // --- Split Expenses Feature Types ---
+export type SplitMethod = 'equally' | 'custom';
 
 export const SplitUserInputSchema = z.object({
   name: z.string().min(1, "User name is required.").max(100, "Name too long"),
@@ -206,15 +213,8 @@ export interface SplitUser extends SplitUserInput {
   updatedAt: string; // ISO string
 }
 
-export interface SplitExpenseParticipant {
-  userId: string; // ID of the SplitUser
-  shareAmount: number; // Calculated or custom share for this expense
-  isSettled: boolean; // True if this participant's share is settled with the payer
-}
-
 export const SplitExpenseParticipantInputSchema = z.object({
     userId: z.string(),
-    // customShare is not used for 'equally', but the schema needs to know about it for validation
     customShare: z.number().min(0).optional(),
 });
 export type SplitExpenseParticipantInput = z.infer<typeof SplitExpenseParticipantInputSchema>;
@@ -225,12 +225,14 @@ export const SplitExpenseInputSchema = z.object({
   totalAmount: z.number().gt(0, "Total amount must be positive."),
   paidById: z.string({ description: "ID of the SplitUser who paid the bill" }),
   splitMethod: z.enum(['equally', 'custom'], { description: "How the bill was split" }),
-  participants: z.array(SplitExpenseParticipantInputSchema).min(2, "At least two participants (including the payer) are required for a split."),
+  participants: z.array(SplitExpenseParticipantInputSchema).min(1, "At least one participant is required for a split."),
+  personalExpenseDetails: z.object({
+      categoryId: z.string(),
+      paymentMethodId: z.string(),
+  }).optional(),
 }).refine(data => {
-    // If split method is custom, ensure the sum of custom shares equals the total amount
     if (data.splitMethod === 'custom') {
         const totalCustomShares = data.participants.reduce((sum, p) => sum + (p.customShare || 0), 0);
-        // Use a small epsilon for float comparison
         return Math.abs(totalCustomShares - data.totalAmount) < 0.01;
     }
     return true;
@@ -247,13 +249,13 @@ export interface RawSplitExpense {
   title: string;
   date: string; // ISO string
   totalAmount: number;
-  paidById: string; // SplitUser ID
+  paidById: string; // SplitUser ID (or "me")
   participants: {
-    userId: string; // SplitUser ID
+    userId: string; // SplitUser ID (or "me")
     shareAmount: number;
     isSettled: boolean;
   }[];
-  splitMethod: 'equally' | 'custom';
+  splitMethod: SplitMethod;
   isFullySettled: boolean; // Derived: true if all participants are settled
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
