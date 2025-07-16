@@ -109,6 +109,10 @@ Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yester
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
 
+**Split Expense Detection:** If the user mentions splitting a bill (e.g., "split with Rahul", "50-50 between me and Priya"), populate the 'splitDetails' object.
+- 'participants': List all participant names, standardizing "I" or "me" to "me".
+- 'splitRatio': Note the ratio if given (e.g., "equally", "50-50").
+
 Available Expense Categories:
 {{#each expenseCategories}}
 - {{this.name}} (ID: {{this.id}})
@@ -127,16 +131,17 @@ Available Payment Methods (for expenses):
 For each transaction identified, provide:
 - date: Transaction date (YYYY-MM-DD).
 - description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.").
-- amount: Positive numeric amount (e.g., 50.75). Interpret ₹, INR, Rs. correctly.
+- amount: Positive numeric amount (e.g., 50.75). Interpret ₹, INR, Rs. correctly. This should be the FULL amount of the bill, even if it was split.
 - type: 'income' or 'expense'.
 - categoryNameGuess: (Optional) Map to a provided category name. If unsure, use "Others" or leave blank.
 - paymentMethodNameGuess: (Optional, for expenses) Map to a provided payment method name. If unsure, leave blank.
 - expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment_expense'.
-    Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
-    Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions (Netflix, Spotify if not considered essential).
-    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
-    If unsure or if it's an income transaction, leave blank or default to 'need' if it seems essential.
+    Examples for 'need': Rent, essential Groceries, Medicines, commute to work, Loan Repayments, Utilities, Education fees.
+    Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
+    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD).
+    If unsure or if it's an income transaction, leave blank.
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.
+- splitDetails: (Optional) If splitting is mentioned, provide participant names and ratio.
 - confidenceScore: Your confidence (0.0-1.0) for this transaction. 1.0 means very confident.
 - error: (Optional, concise) If a part is unparseable/missing info, note the error briefly.
 
@@ -210,4 +215,3 @@ const parseTransactionsFlow = ai.defineFlow(
     };
   }
 );
-

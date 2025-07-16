@@ -9,12 +9,12 @@ export interface Category {
 }
 
 export interface PaymentMethod {
-  id: string;
+  id:string;
   name: string;
   type: string; // e.g., 'Credit Card', 'UPI', 'Cash'
 }
 
-// This is the raw transaction structure as it might be stored in a blob
+// This is the raw transaction structure as it might be stored
 // It uses IDs for category and paymentMethod
 export interface RawTransaction {
   id: string;
@@ -49,7 +49,7 @@ export const TransactionInputSchema = z.object({
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment']).optional(),
+  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -72,7 +72,7 @@ export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
-export type ExpenseType = 'need' | 'want' | 'investment';
+export type ExpenseType = 'need' | 'want' | 'investment_expense';
 
 
 // Zod schema for a single transaction parsed by AI from text
@@ -83,10 +83,14 @@ export const ParsedAITransactionSchema = z.object({
   type: z.enum(['income', 'expense']).describe("The type of transaction."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
   sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
+  splitDetails: z.object({
+      participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
+      splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
+  }).optional().describe("If the text mentions splitting the bill, populate this object."),
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
@@ -98,7 +102,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
 });
@@ -208,16 +212,31 @@ export interface SplitExpenseParticipant {
   isSettled: boolean; // True if this participant's share is settled with the payer
 }
 
+export const SplitExpenseParticipantInputSchema = z.object({
+    userId: z.string(),
+    // customShare is not used for 'equally', but the schema needs to know about it for validation
+    customShare: z.number().min(0).optional(),
+});
+export type SplitExpenseParticipantInput = z.infer<typeof SplitExpenseParticipantInputSchema>;
+
 export const SplitExpenseInputSchema = z.object({
   title: z.string().min(1, "Title is required.").max(200, "Title too long"),
   date: z.date({ description: "Date of the shared expense" }),
   totalAmount: z.number().gt(0, "Total amount must be positive."),
   paidById: z.string({ description: "ID of the SplitUser who paid the bill" }),
   splitMethod: z.enum(['equally', 'custom'], { description: "How the bill was split" }),
-  participants: z.array(z.object({
-    userId: z.string(),
-    customShare: z.number().min(0).optional(), // Only for 'custom' split method
-  })).min(1, "At least one participant (other than payer) is required for a split, or 2 total including payer."),
+  participants: z.array(SplitExpenseParticipantInputSchema).min(2, "At least two participants (including the payer) are required for a split."),
+}).refine(data => {
+    // If split method is custom, ensure the sum of custom shares equals the total amount
+    if (data.splitMethod === 'custom') {
+        const totalCustomShares = data.participants.reduce((sum, p) => sum + (p.customShare || 0), 0);
+        // Use a small epsilon for float comparison
+        return Math.abs(totalCustomShares - data.totalAmount) < 0.01;
+    }
+    return true;
+}, {
+    message: "The sum of custom shares must equal the total amount.",
+    path: ['participants'],
 });
 export type SplitExpenseInput = z.infer<typeof SplitExpenseInputSchema>;
 
