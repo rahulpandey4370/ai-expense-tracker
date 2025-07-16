@@ -15,13 +15,18 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
   const pathname = usePathname();
   const router = useRouter();
 
+  const isDemoRoute = pathname.startsWith('/demo');
+
   useEffect(() => {
+    // If it's a demo route, we don't check for auth
+    if (isDemoRoute) return;
+
     if (!isLoadingAuth && !isAuthenticated && pathname !== '/login') {
       router.push('/login');
     }
-  }, [isAuthenticated, isLoadingAuth, pathname, router]);
+  }, [isAuthenticated, isLoadingAuth, pathname, router, isDemoRoute]);
 
-  if (isLoadingAuth) {
+  if (isLoadingAuth && !isDemoRoute) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-primary">
         <Loader2 className="h-12 w-12 animate-spin mr-3" />
@@ -30,10 +35,21 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
     );
   }
 
+  // If it's a demo route, render the main app layout without checking auth
+  if (isDemoRoute) {
+    return (
+      <SidebarProvider defaultOpen>
+        <AppSidebar isDemoMode={true} />
+        <SidebarInset>
+          <AppHeader />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
   if (!isAuthenticated && pathname !== '/login') {
-    // This case should ideally be caught by the useEffect redirect,
-    // but it's a fallback or for initial server render if needed.
-    return null; // Or a specific "redirecting..." message if preferred
+    return null; // Or a specific "redirecting..." message
   }
 
   if (pathname === '/login') {

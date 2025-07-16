@@ -17,7 +17,7 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users } from "lucide-react"; // Added Users icon
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home } from "lucide-react"; // Added Home
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,11 +25,15 @@ const navItems = [
   { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/yearly-overview", label: "Yearly Overview", icon: TableProperties },
-  { href: "/split-expenses", label: "Split Expenses", icon: Users }, // New Item
+  { href: "/split-expenses", label: "Split Expenses", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export default function AppSidebar() {
+interface AppSidebarProps {
+  isDemoMode?: boolean;
+}
+
+export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, state: sidebarState, setOpenMobile } = useSidebar();
 
@@ -39,17 +43,21 @@ export default function AppSidebar() {
     }
   };
 
+  const currentNavItems = isDemoMode 
+    ? [{ href: "/demo", label: "Demo Dashboard", icon: LayoutDashboard }, { href: "/", label: "Back to Main App", icon: Home }]
+    : navItems;
+
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Link href="/" aria-label="FinWise AI Home" onClick={handleLinkClick}>
+        <Link href={isDemoMode ? "/demo" : "/"} aria-label="FinWise AI Home" onClick={handleLinkClick}>
           <AppLogo appName="FinWise AI" />
         </Link>
       </SidebarHeader>
       <Separator className="mb-2" />
       <SidebarContent>
         <SidebarMenu className="px-2">
-          {navItems.map((item) => (
+          {currentNavItems.map((item) => (
             <SidebarMenuItem key={item.label}>
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
@@ -79,17 +87,21 @@ export default function AppSidebar() {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <Separator className="mt-auto mb-2"/>
-      <SidebarFooter className="p-4">
-        <Button variant="outline" className="w-full group-data-[collapsible=icon]:hidden">
-          <HelpCircle className="mr-2 h-4 w-4" />
-          Help & Feedback
-        </Button>
-         <Button variant="ghost" size="icon" className="hidden group-data-[collapsible=icon]:flex mx-auto">
-          <HelpCircle className="h-5 w-5" />
-           <span className="sr-only">Help & Feedback</span>
-        </Button>
-      </SidebarFooter>
+      {!isDemoMode && (
+        <>
+          <Separator className="mt-auto mb-2"/>
+          <SidebarFooter className="p-4">
+            <Button variant="outline" className="w-full group-data-[collapsible=icon]:hidden">
+              <HelpCircle className="mr-2 h-4 w-4" />
+              Help & Feedback
+            </Button>
+            <Button variant="ghost" size="icon" className="hidden group-data-[collapsible=icon]:flex mx-auto">
+              <HelpCircle className="h-5 w-5" />
+              <span className="sr-only">Help & Feedback</span>
+            </Button>
+          </SidebarFooter>
+        </>
+      )}
     </Sidebar>
   );
 }

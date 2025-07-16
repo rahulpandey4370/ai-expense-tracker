@@ -8,6 +8,7 @@ import { useDateSelection } from "@/contexts/DateSelectionContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { CalendarDays } from "lucide-react";
+import { usePathname } from 'next/navigation'; // Import usePathname
 
 export default function AppHeader() {
   const { 
@@ -20,13 +21,14 @@ export default function AppHeader() {
     handleSetToCurrentMonth 
   } = useDateSelection();
 
+  const pathname = usePathname();
+  const isDemoRoute = pathname.startsWith('/demo');
+
   return (
     <header className="sticky top-0 z-10 flex h-auto min-h-16 flex-wrap items-center justify-between gap-y-2 gap-x-4 border-b bg-background/80 backdrop-blur-sm px-4 py-2 md:px-6">
       <div className="flex items-center gap-2">
-        {/* SidebarTrigger is now always visible */}
         <SidebarTrigger />
         <div className="hidden md:block">
-          {/* Placeholder for breadcrumbs or title */}
         </div>
       </div>
       
@@ -62,7 +64,7 @@ export default function AppHeader() {
           </Button>
         </div>
         <ThemeToggle />
-        <UserNav />
+        {!isDemoRoute && <UserNav />}
       </div>
     </header>
   );
