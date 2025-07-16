@@ -2,7 +2,7 @@
 'use server';
 
 import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
-import type { SplitUser, SplitUserInput, RawSplitExpense, SplitExpenseInput, AppSplitExpense } from '@/lib/types';
+import type { SplitUser, SplitUserInput, RawSplitExpense, SplitExpenseInput, AppSplitExpense, UserBalance } from '@/lib/types';
 import { SplitUserInputSchema, SplitExpenseInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
@@ -94,25 +94,22 @@ export async function getSplitUsers(): Promise<SplitUser[]> {
     console.error('CosmosDB Error (getSplitUsers): Failed to query users.', error.code, error.message, error.stack);
     if (error.code === 404 || error.statusCode === 404) {
       console.warn("CosmosDB Warning (getSplitUsers): Split Users container not found. Returning empty array.");
-      return []; // Or attempt to create container if that's desired on first load
+      return [];
     }
     throw new Error(`Could not fetch split users from Cosmos DB. Original error: ${error.message}`);
   }
 }
 
 export async function deleteSplitUser(id: string): Promise<{ success: boolean }> {
-  if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
+    if (!id || typeof id !== 'string' || id.trim() === '' || id === 'undefined' || id === 'null') {
     const idDetails = `Received ID: '${id}', Type: ${typeof id}`;
     console.error(`CosmosDB Error (deleteSplitUser): Invalid ID. ${idDetails}`);
     throw new Error(`Invalid split user ID provided for delete. ${idDetails}`);
   }
-  // TODO: Before deleting a user, check if they are part of any UNSETTLED split expenses.
-  // If so, prevent deletion or handle appropriately (e.g., mark user as "Archived" instead of hard delete).
-  // For now, proceeding with hard delete for simplicity of this stage.
-
+  
   const container = await getSplitUsersContainer();
   try {
-    await container.item(id, id).delete(); // Assumes partition key is /id
+    await container.item(id, id).delete(); 
     revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
     return { success: true };
   } catch (error: any) {
@@ -126,78 +123,243 @@ export async function deleteSplitUser(id: string): Promise<{ success: boolean }>
 }
 
 
-// --- Split Expense Functions (Skeletons for now) ---
+// --- Split Expense Functions ---
 
 export async function addSplitExpense(data: SplitExpenseInput): Promise<RawSplitExpense> {
-  // TODO: Implement validation and logic
-  // 1. Validate with SplitExpenseInputSchema
-  // 2. Calculate shareAmount for each participant based on splitMethod
-  // 3. Create RawSplitExpense object with cuid, timestamps, isFullySettled = false
-  // 4. Save to splitExpensesContainer
-  // 5. Revalidate path
-  console.log("addSplitExpense called with data:", data);
-  throw new Error("addSplitExpense not yet implemented");
+  const validation = SplitExpenseInputSchema.safeParse(data);
+  if (!validation.success) {
+    const errorMessages = validation.error.flatten().fieldErrors;
+    const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
+    console.error('CosmosDB Error (addSplitExpense): Validation error:', readableErrors);
+    throw new Error(`Invalid split expense data: ${readableErrors || "Validation failed."}`);
+  }
+  const { totalAmount, participants, splitMethod } = validation.data;
+  let calculatedParticipants: RawSplitExpense['participants'] = [];
+
+  if (splitMethod === 'equally') {
+    const shareAmount = totalAmount / participants.length;
+    calculatedParticipants = participants.map(p => ({
+      userId: p.userId,
+      shareAmount: parseFloat(shareAmount.toFixed(2)),
+      isSettled: p.userId === validation.data.paidById, // Payer is settled by default
+    }));
+  } else { // 'custom' - assumes custom shares are validated to sum up correctly by Zod
+     calculatedParticipants = participants.map(p => ({
+        userId: p.userId,
+        shareAmount: p.customShare || 0,
+        isSettled: p.userId === validation.data.paidById,
+    }));
+  }
+
+  const id = cuid();
+  const now = new Date().toISOString();
+  const isFullySettled = calculatedParticipants.every(p => p.isSettled);
+
+  const newSplitExpense: RawSplitExpense = {
+    id,
+    title: validation.data.title,
+    date: validation.data.date.toISOString(),
+    totalAmount,
+    paidById: validation.data.paidById,
+    participants: calculatedParticipants,
+    splitMethod,
+    isFullySettled,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const container = await getSplitExpensesContainer();
+  try {
+    const { resource: createdItem } = await container.items.create(newSplitExpense);
+    if (!createdItem) {
+      throw new Error('Failed to create split expense, no resource returned.');
+    }
+    revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
+    return createdItem as RawSplitExpense;
+  } catch (error: any) {
+    console.error(`CosmosDB Error (addSplitExpense): Failed. Status: ${error.code}, Msg: ${error.message}`, error.stack);
+    throw new Error(`Could not add split expense. Original error: ${error.message}`);
+  }
 }
 
 export async function getSplitExpenses(options?: { limit?: number }): Promise<AppSplitExpense[]> {
-  // TODO: Implement logic
-  // 1. Fetch RawSplitExpenses from Cosmos
-  // 2. Fetch all SplitUsers (or pass them in if performance is an issue)
-  // 3. Map RawSplitExpenses to AppSplitExpenses, populating 'paidBy' and 'participants.user'
-  // 4. Sort by date descending
-  console.log("getSplitExpenses called with options:", options);
-  return []; // Placeholder
+  const expensesContainer = await getSplitExpensesContainer();
+  const users = await getSplitUsers();
+  const userMap = new Map(users.map(u => [u.id, u]));
+
+  const querySpec = { query: "SELECT * FROM c ORDER BY c.date DESC" };
+   if (options?.limit) {
+    querySpec.query = `SELECT TOP ${options.limit} * FROM c ORDER BY c.date DESC`;
+  }
+
+  try {
+    const { resources: items } = await expensesContainer.items.query(querySpec).fetchAll();
+    
+    const appExpenses: AppSplitExpense[] = items.map((raw: RawSplitExpense) => {
+      const paidBy = userMap.get(raw.paidById);
+      if (!paidBy) return null; // Skip if payer not found
+
+      const populatedParticipants = raw.participants.map(p => {
+        const user = userMap.get(p.userId);
+        return user ? { user, shareAmount: p.shareAmount, isSettled: p.isSettled } : null;
+      }).filter(Boolean) as AppSplitExpense['participants'];
+      
+      if (populatedParticipants.length !== raw.participants.length) return null; // Skip if a participant not found
+
+      return {
+        ...raw,
+        date: new Date(raw.date),
+        createdAt: new Date(raw.createdAt),
+        updatedAt: new Date(raw.updatedAt),
+        paidBy,
+        participants: populatedParticipants,
+      };
+    }).filter(Boolean) as AppSplitExpense[];
+    
+    return appExpenses;
+  } catch (error: any) {
+    console.error('CosmosDB Error (getSplitExpenses):', error.message, error.stack);
+     if (error.code === 404 || error.statusCode === 404) {
+      console.warn("CosmosDB Warning (getSplitExpenses): Container not found.");
+      return [];
+    }
+    throw new Error(`Could not fetch split expenses. Original error: ${error.message}`);
+  }
 }
 
 export async function settleParticipantShare(expenseId: string, participantUserId: string): Promise<RawSplitExpense> {
-  // TODO: Implement logic
-  // 1. Fetch RawSplitExpense by expenseId
-  // 2. Find participant by participantUserId
-  // 3. Set participant.isSettled = true
-  // 4. Check if all participants are settled; if so, set expense.isFullySettled = true
-  // 5. Update RawSplitExpense in Cosmos
-  // 6. Revalidate path
-  console.log("settleParticipantShare called with:", expenseId, participantUserId);
-  throw new Error("settleParticipantShare not yet implemented");
+  const container = await getSplitExpensesContainer();
+  const { resource: expense } = await container.item(expenseId, expenseId).read<RawSplitExpense>();
+
+  if (!expense) {
+    throw new Error(`Split expense with ID ${expenseId} not found.`);
+  }
+
+  let participantUpdated = false;
+  const updatedParticipants = expense.participants.map(p => {
+    if (p.userId === participantUserId) {
+      participantUpdated = true;
+      return { ...p, isSettled: true };
+    }
+    return p;
+  });
+
+  if (!participantUpdated) {
+    throw new Error(`Participant with ID ${participantUserId} not found in this expense.`);
+  }
+
+  const isFullySettled = updatedParticipants.every(p => p.isSettled);
+
+  const updatedExpense: RawSplitExpense = {
+    ...expense,
+    participants: updatedParticipants,
+    isFullySettled,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const { resource: replacedItem } = await container.item(expenseId, expenseId).replace(updatedExpense);
+  revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
+  return replacedItem as RawSplitExpense;
 }
 
-export async function updateSplitExpense(id: string, data: Partial<SplitExpenseInput>): Promise<RawSplitExpense> {
-  // TODO: Implement logic for editing basic details (title, date, totalAmount if unsettled, paidBy if unsettled)
-  // Recalculate shares if totalAmount or participants change
-  console.log("updateSplitExpense called with:", id, data);
-  throw new Error("updateSplitExpense not yet implemented");
+export async function getSplitBalances(): Promise<UserBalance[]> {
+    const expenses = await getSplitExpenses();
+    const users = await getSplitUsers();
+    const userMap = new Map(users.map(u => [u.id, u.name]));
+    const balances: Record<string, number> = {};
+
+    users.forEach(u => balances[u.id] = 0);
+
+    expenses.forEach(expense => {
+        if (expense.isFullySettled) return;
+
+        expense.participants.forEach(p => {
+            if (!p.isSettled) {
+                // Payer is owed money
+                balances[expense.paidById] = (balances[expense.paidById] || 0) + p.shareAmount;
+                // Participant owes money
+                balances[p.user.id] = (balances[p.user.id] || 0) - p.shareAmount;
+            }
+        });
+    });
+
+    const owed: Record<string, { to: string, amount: number }[]> = {};
+    const owes: Record<string, { from: string, amount: number }[]> = {};
+    
+    const userIds = Object.keys(balances);
+
+    // This is a simplified settlement calculation. A real implementation might use a more complex algorithm
+    // (like a directed graph to minimize transactions), but this shows direct debts.
+    for(const expense of expenses) {
+        if (expense.isFullySettled) continue;
+        const payerId = expense.paidById;
+        expense.participants.forEach(participant => {
+            if (!participant.isSettled) {
+                const debtorId = participant.user.id;
+                
+                // Debtor owes Payer
+                owes[debtorId] = [...(owes[debtorId] || []), { from: payerId, amount: participant.shareAmount }];
+                owed[payerId] = [...(owed[payerId] || []), { to: debtorId, amount: participant.shareAmount }];
+            }
+        });
+    }
+
+    const finalBalances: UserBalance[] = userIds.map(userId => {
+      const netAmount = balances[userId] || 0;
+      const userOwes: UserBalance['owes'] = [];
+      const userOwedBy: UserBalance['owedBy'] = [];
+      const consolidatedOwes: Record<string, number> = {};
+      
+      if(owes[userId]) {
+        owes[userId].forEach(debt => {
+            consolidatedOwes[debt.from] = (consolidatedOwes[debt.from] || 0) + debt.amount;
+        });
+      }
+
+      Object.entries(consolidatedOwes).forEach(([payerId, amount]) => {
+          userOwes.push({ toUserId: payerId, toUserName: userMap.get(payerId) || 'Unknown', amount });
+          
+          const consolidatedOwedByPayer = (owed[payerId] || []).filter(credit => credit.to === userId);
+          const totalOwedByPayerToUser = consolidatedOwedByPayer.reduce((sum, credit) => sum + credit.amount, 0);
+
+          if (amount > totalOwedByPayerToUser) {
+              consolidatedOwes[payerId] = amount - totalOwedByPayerToUser;
+          } else {
+              delete consolidatedOwes[payerId];
+          }
+      });
+
+
+      return {
+          userId,
+          userName: userMap.get(userId) || 'Unknown User',
+          netAmount: parseFloat(netAmount.toFixed(2)),
+          owes: Object.entries(consolidatedOwes).map(([toUserId, amount]) => ({
+              toUserId,
+              toUserName: userMap.get(toUserId) || 'Unknown',
+              amount: parseFloat(amount.toFixed(2))
+          })).filter(d => d.amount > 0.01),
+          owedBy: [], // Simplified for now
+      };
+    });
+
+    return finalBalances;
 }
+
+
 
 export async function deleteSplitExpense(id: string): Promise<{ success: boolean }> {
-  // TODO: Implement logic
-  // Delete from splitExpensesContainer
-  // Revalidate path
-  console.log("deleteSplitExpense called with id:", id);
-  throw new Error("deleteSplitExpense not yet implemented");
-}
-
-// Helper function to ensure containers exist (call during app startup or before first use if necessary)
-export async function ensureSplitExpenseContainersExist() {
-    try {
-        const { database } = await getCosmosClientAndDb();
-        const usersContainerId = process.env.COSMOS_DB_SPLIT_USERS_CONTAINER_ID;
-        const expensesContainerId = process.env.COSMOS_DB_SPLIT_EXPENSES_CONTAINER_ID;
-
-        if (!usersContainerId || !expensesContainerId) {
-            throw new Error("Split expense container IDs are not defined in environment variables.");
-        }
-
-        await database.containers.createIfNotExists({ id: usersContainerId, partitionKey: { paths: ["/id"] } });
-        console.log(`CosmosDB Info: Container '${usersContainerId}' ensured.`);
-        
-        await database.containers.createIfNotExists({ id: expensesContainerId, partitionKey: { paths: ["/id"] } });
-        console.log(`CosmosDB Info: Container '${expensesContainerId}' ensured.`);
-
-    } catch (error: any) {
-        console.error("CosmosDB Error: Failed to ensure split expense containers exist.", error.message, error.stack);
-        // Depending on the error, you might want to throw it or handle it gracefully
-        // For now, logging the error. The app might fail later if containers are crucial and don't exist.
+  const container = await getSplitExpensesContainer();
+  try {
+    await container.item(id, id).delete();
+    revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
+    return { success: true };
+  } catch (error: any) {
+     if (error.code === 404 || error.statusCode === 404) {
+      console.warn(`CosmosDB Warning (deleteSplitExpense): Expense ${id} not found, considered deleted.`);
+      return { success: true };
     }
+    console.error(`CosmosDB Error (deleteSplitExpense): Failed to delete expense ${id}.`, error.message, error.stack);
+    throw new Error(`Could not delete split expense. Original error: ${error.message}`);
+  }
 }
-// Call this, for example, in a global layout or a dedicated initialization step if needed.
-// ensureSplitExpenseContainersExist(); // Or call it on demand.
