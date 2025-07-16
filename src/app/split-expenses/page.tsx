@@ -31,8 +31,10 @@ import { cn } from "@/lib/utils";
 import type { SplitUser, SplitUserInput, SplitExpenseInput, AppSplitExpense, UserBalance, SplitMethod, Category, PaymentMethod } from '@/lib/types';
 import { addSplitUser, getSplitUsers, deleteSplitUser, addSplitExpense, getSplitExpenses, settleParticipantShare, getSplitBalances } from '@/lib/actions/split-expenses';
 import { getCategories, getPaymentMethods } from '@/lib/actions/transactions';
-import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon, AlertTriangle } from "lucide-react";
+import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon, AlertTriangle, ChevronsUpDown, Check } from "lucide-react";
 import { format } from 'date-fns';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -323,6 +325,7 @@ function AddSplitExpenseForm({ users, onExpenseAdded, categories, paymentMethods
     
     const [categoryId, setCategoryId] = useState<string | undefined>();
     const [paymentMethodId, setPaymentMethodId] = useState<string | undefined>();
+    const [isParticipantPopoverOpen, setIsParticipantPopoverOpen] = useState(false);
 
 
     useEffect(() => {
@@ -455,14 +458,55 @@ function AddSplitExpenseForm({ users, onExpenseAdded, categories, paymentMethods
 
             <div>
                  <Label>Participants</Label>
-                <ScrollArea className="h-[120px] w-full rounded-md border p-2 mt-1 space-y-2">
-                    {allPossiblePayers.map(user => (
-                        <div key={user.id} className="flex items-center space-x-2">
-                            <Checkbox id={`participant-${user.id}`} checked={participants.has(user.id)} onCheckedChange={() => toggleParticipant(user.id)}/>
-                            <label htmlFor={`participant-${user.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{user.name}</label>
-                        </div>
-                    ))}
-                </ScrollArea>
+                 <Popover open={isParticipantPopoverOpen} onOpenChange={setIsParticipantPopoverOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={isParticipantPopoverOpen}
+                            className="w-full justify-between mt-1 h-auto min-h-10"
+                        >
+                            <div className="flex flex-wrap gap-1">
+                                {participants.size > 0 ? (
+                                    Array.from(participants).map(userId => {
+                                        const user = allPossiblePayers.find(p => p.id === userId);
+                                        return <Badge key={userId} variant="secondary">{user?.name}</Badge>;
+                                    })
+                                ) : (
+                                    <span className="text-muted-foreground">Select participants...</span>
+                                )}
+                            </div>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                            <CommandInput placeholder="Search users..." />
+                            <CommandEmpty>No user found.</CommandEmpty>
+                            <CommandList>
+                                <CommandGroup>
+                                    {allPossiblePayers.map((user) => (
+                                        <CommandItem
+                                            key={user.id}
+                                            value={user.name}
+                                            onSelect={() => {
+                                                toggleParticipant(user.id);
+                                            }}
+                                        >
+                                            <Check
+                                                className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    participants.has(user.id) ? "opacity-100" : "opacity-0"
+                                                )}
+                                            />
+                                            {user.name}
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
             </div>
              <div>
                 <Label>Split Method</Label>
@@ -494,3 +538,4 @@ function AddSplitExpenseForm({ users, onExpenseAdded, categories, paymentMethods
         </form>
     );
 }
+
