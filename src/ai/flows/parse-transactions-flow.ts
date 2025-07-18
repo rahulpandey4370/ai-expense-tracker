@@ -138,7 +138,7 @@ For each transaction identified, provide:
 - expenseTypeNameGuess: (for expenses) Classify as 'need', 'want', or 'investment_expense'.
     Examples for 'need': Rent, essential Groceries, Medicines, commute to work, Loan Repayments, Utilities, Education fees.
     Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
-    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD).
+    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD). Use this for any transaction involving words like 'invested', 'bought stocks', 'SIP', etc.
     YOU have to predict it to the best of your ability and provide an output dynamically.
     If 100% unsure or if it's an income transaction, leave blank.
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.

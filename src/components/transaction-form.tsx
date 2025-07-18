@@ -149,7 +149,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setSelectedPaymentMethodId(initialTransactionData.paymentMethod?.id || undefined);
         setExpenseType(initialTransactionData.expenseType as AppExpenseTypeEnum || 'need');
         setSource(undefined);
-      } else {
+      } else { // income
         setSelectedCategoryId(initialTransactionData.category?.id || undefined);
         setSource(initialTransactionData.source || '');
         setSelectedPaymentMethodId(undefined);
@@ -347,7 +347,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (!desc) errors.push("Description is missing.");
       if (!catName) errors.push("Category Name is missing.");
       
-      const validExpenseTypes = ['need', 'want', 'investment'];
+      const validExpenseTypes = ['need', 'want', 'investment_expense'];
       if (!expTypeStr) {
           errors.push("Expense Type is required.");
       } else if (!validExpenseTypes.includes(expTypeStr)) {
@@ -863,7 +863,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           <div>
             <Label className={labelClasses}>Expense Type</Label>
             <RadioGroup value={expenseType} onValueChange={(value) => setExpenseType(value as AppExpenseTypeEnum)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
-              {[{ value: 'need', label: 'Need' }, { value: 'want', label: 'Want' }, { value: 'investment', label: 'Investment' }].map(et => (
+              {[{ value: 'need', label: 'Need' }, { value: 'want', label: 'Want' }, { value: 'investment_expense', label: 'Investment' }].map(et => (
                 <div key={et.value} className="flex items-center space-x-2">
                   <RadioGroupItem value={et.value} id={`${et.value}-${formId || 'new'}`} className={cn("border-primary text-primary focus:ring-primary", expenseType === et.value && type === 'expense' ? "data-[state=checked]:border-red-600 data-[state=checked]:bg-red-500 data-[state=checked]:text-primary-foreground" : "data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground")} disabled={isFetchingDropdowns} />
                   <Label htmlFor={`${et.value}-${formId || 'new'}`} className={cn("text-foreground", expenseType === et.value && type === 'expense' ? "text-red-600 font-medium" : "text-foreground")}>{et.label}</Label>
@@ -1062,7 +1062,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <Select value={tx.expenseType} onValueChange={(val) => handleAIReviewChange(index, 'expenseType', val as AppExpenseTypeEnum)}>
                             <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Expense Type" /></SelectTrigger>
                             <SelectContent className={selectContentClasses}>
-                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment">Investment</SelectItem>
+                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment_expense">Investment</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -1198,7 +1198,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <Select value={aiReceiptReviewTransaction.expenseType} onValueChange={(val) => handleAIReceiptReviewChange('expenseType', val as AppExpenseTypeEnum)}>
                             <SelectTrigger className={cn(selectTriggerClasses, "text-xs h-8 mt-0.5")}><SelectValue placeholder="Expense Type" /></SelectTrigger>
                             <SelectContent className={selectContentClasses}>
-                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment">Investment</SelectItem>
+                                <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment_expense">Investment</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
