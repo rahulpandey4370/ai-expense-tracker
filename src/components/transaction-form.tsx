@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, type FormEvent, useEffect, useCallback } from 'react';
@@ -565,6 +566,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         } else { 
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
+        
+        let finalExpenseType = (aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
+        if (aiTx.expenseTypeNameGuess === 'investment') { // Handle legacy 'investment' value from AI
+          finalExpenseType = 'investment_expense';
+        }
 
         return {
           date: transactionDate, 
@@ -573,7 +579,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           type: aiTx.type || 'expense',
           categoryId: catId, 
           paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, 
-          expenseType: aiTx.type === 'expense' ? ((aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need') : undefined,
+          expenseType: aiTx.type === 'expense' ? finalExpenseType : undefined,
           source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
         };
       }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
@@ -1258,4 +1264,5 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
+
 
