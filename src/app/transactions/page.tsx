@@ -163,7 +163,7 @@ export default function TransactionsPage() {
       tempTransactions = tempTransactions.filter(t => t.type === filterType);
     }
     
-    if (filterType === 'expense' && filterExpenseType !== 'all') {
+    if (filterExpenseType !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
     }
 
@@ -366,7 +366,7 @@ export default function TransactionsPage() {
                     <SelectItem value="expense" className="text-xs md:text-sm">Expense</SelectItem>
                   </SelectContent>
                 </Select>
-                 <Select value={filterExpenseType} onValueChange={setFilterExpenseType} disabled={filterType !== 'expense'}>
+                 <Select value={filterExpenseType} onValueChange={setFilterExpenseType} disabled={filterType === 'income'}>
                   <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Filter by Expense Type" /></SelectTrigger>
                   <SelectContent className="bg-card border-primary/60 text-foreground">
                     <SelectItem value="all" className="text-xs md:text-sm">All Expense Types</SelectItem>
