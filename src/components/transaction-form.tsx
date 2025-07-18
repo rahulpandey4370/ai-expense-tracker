@@ -567,11 +567,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
         }
         
-        let finalExpenseType = (aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
-        if (aiTx.expenseTypeNameGuess === 'investment') { // Handle legacy 'investment' value from AI
-          finalExpenseType = 'investment_expense';
-        }
-
+        const finalExpenseType = (aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
+        
         return {
           date: transactionDate, 
           description: aiTx.description || "AI Parsed Transaction",
@@ -1264,5 +1261,3 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     </FormWrapperComponent>
   );
 }
-
-
