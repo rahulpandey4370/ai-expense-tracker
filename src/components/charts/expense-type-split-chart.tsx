@@ -40,7 +40,11 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
   const expenseData = transactions
     .filter(t => t.type === 'expense')
     .reduce((acc, curr) => {
-      const expenseType = curr.expenseType || 'other';
+      let expenseType = curr.expenseType || 'other';
+      // Normalize 'investment' to 'investment_expense'
+      if (expenseType === 'investment') {
+          expenseType = 'investment_expense';
+      }
       acc[expenseType] = (acc[expenseType] || 0) + curr.amount;
       return acc;
     }, {} as Record<string, number>);
