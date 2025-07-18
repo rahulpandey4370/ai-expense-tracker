@@ -30,7 +30,7 @@ interface ExpenseTypeSplitChartProps {
 const CHART_COLORS_EXPENSE_TYPE = {
   need: "hsl(var(--chart-3))", 
   want: "hsl(var(--chart-4))", 
-  investment_expense: "hsl(var(--chart-2))", 
+  investment: "hsl(var(--chart-2))", 
   other: "hsl(var(--muted))", 
 };
 
@@ -41,9 +41,9 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
     .filter(t => t.type === 'expense')
     .reduce((acc, curr) => {
       let expenseType = curr.expenseType || 'other';
-      // Normalize 'investment' to 'investment_expense'
-      if (expenseType === 'investment') {
-          expenseType = 'investment_expense';
+      // Normalize 'investment_expense' to 'investment' for charting
+      if (expenseType === 'investment_expense') {
+          expenseType = 'investment';
       }
       acc[expenseType] = (acc[expenseType] || 0) + curr.amount;
       return acc;
@@ -54,7 +54,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
   const chartData = Object.entries(expenseData)
     .map(([name, value]) => {
       const percentage = totalExpenses > 0 ? (value / totalExpenses) * 100 : 0;
-      const displayName = name === 'investment_expense' ? 'Investment' : name.charAt(0).toUpperCase() + name.slice(1);
+      const displayName = name.charAt(0).toUpperCase() + name.slice(1);
       return {
         name: displayName,
         value,

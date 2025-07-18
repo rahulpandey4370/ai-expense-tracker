@@ -96,10 +96,10 @@ From the receipt image, extract the following:
 - amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
 - paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash", "PayTM UPI"), the best guess for a payment method name from the provided list. Look for card brand names, last 4 digits, or payment app names.
-- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'.
+- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment'.
     Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
     Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions.
-    Examples for 'investment_expense': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
+    Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
     If unsure, default to 'need' or 'want' based on common sense for receipt items.
 - confidenceScore: Your confidence (0.0 to 1.0) that you parsed this receipt correctly.
 - error: (Optional) If the receipt is unreadable, blurry, or key information (like amount or merchant) is missing, note the error.
@@ -171,4 +171,3 @@ const parseReceiptImageFlow = ai.defineFlow(
     };
   }
 );
-

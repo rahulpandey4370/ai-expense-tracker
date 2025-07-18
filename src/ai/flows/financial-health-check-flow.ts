@@ -18,7 +18,7 @@ const FinancialHealthCheckInputSchemaInternal = z.object({
   periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
   currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
   currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
-  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments_Expenses: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
+  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
 });
@@ -97,4 +97,3 @@ const financialHealthCheckFlow = ai.defineFlow(
     return result.output!;
   }
 );
-

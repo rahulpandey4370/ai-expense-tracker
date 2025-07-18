@@ -25,7 +25,7 @@ export interface RawTransaction {
   categoryId?: string;
   paymentMethodId?: string;
   source?: string;
-  expenseType?: 'need' | 'want' | 'investment_expense';
+  expenseType?: 'need' | 'want' | 'investment';
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // For cosmos DB
@@ -55,7 +55,7 @@ export const TransactionInputSchema = z.object({
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment_expense']).optional(),
+  expenseType: z.enum(['need', 'want', 'investment']).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -78,7 +78,7 @@ export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
-export type ExpenseType = 'need' | 'want' | 'investment_expense';
+export type ExpenseType = 'need' | 'want' | 'investment';
 
 
 // Zod schema for a single transaction parsed by AI from text
@@ -89,7 +89,7 @@ export const ParsedAITransactionSchema = z.object({
   type: z.enum(['income', 'expense']).describe("The type of transaction."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment_expense'. If not clearly identifiable or income, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
   sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
@@ -108,7 +108,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', or 'investment_expense'. If not clearly identifiable, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
 });
@@ -143,7 +143,7 @@ export const BudgetingAssistantInputSchema = z.object({
   statedMonthlyIncome: z.number().min(0).describe("User's stated monthly income in INR. Can be 0 if not provided recently."),
   statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
   averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
-  pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments_Expenses: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
+  pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
 });
 export type BudgetingAssistantInput = z.infer<typeof BudgetingAssistantInputSchema>;
 
