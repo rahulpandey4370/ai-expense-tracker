@@ -163,7 +163,7 @@ export default function TransactionsPage() {
       tempTransactions = tempTransactions.filter(t => t.type === filterType);
     }
     
-    if (filterExpenseType !== 'all' && filterType === 'expense') {
+    if (filterType === 'expense' && filterExpenseType !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
     }
 
