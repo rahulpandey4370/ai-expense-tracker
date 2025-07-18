@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, type FormEvent, useEffect, useCallback } from 'react';
+import { useState, type FormEvent, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -352,7 +352,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       if (!expTypeStr) {
           errors.push("Expense Type is required.");
       } else if (!validExpenseTypes.includes(expTypeStr)) {
-          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment'. Found: '${values[5] || "empty"}'`);
+          errors.push(`Invalid Expense Type. Use 'Need', 'Want', or 'Investment_Expense'. Found: '${values[5] || "empty"}'`);
       }
       
       if (!pmName) errors.push("Payment Method Name is missing.");
@@ -521,7 +521,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     if (!updated[index]) updated[index] = {} as TransactionInput; 
     
     const currentItem = { ...updated[index] };
-
+  
     if (field === 'type') {
         currentItem.type = value as AppTransactionTypeEnum;
         if (value === 'income') {
@@ -533,7 +533,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             currentItem.source = undefined;
             const expenseCat = expenseCategories.find(c => c.name.toLowerCase() === parsedAITransactions[index]?.categoryNameGuess?.toLowerCase()) || (expenseCategories.length > 0 ? expenseCategories[0] : undefined);
             currentItem.categoryId = expenseCat?.id;
-
+  
+            // Add fallback for payment method
             const pm = paymentMethods.find(p => p.name.toLowerCase() === parsedAITransactions[index]?.paymentMethodNameGuess?.toLowerCase()) || (paymentMethods.length > 0 ? paymentMethods[0] : undefined);
             currentItem.paymentMethodId = pm?.id;
             currentItem.expenseType = (parsedAITransactions[index]?.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
@@ -558,13 +559,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 if(!isNaN(parsed.getTime())) transactionDate = parsed;
             }
         } catch (e) { console.warn("AI returned invalid date string:", aiTx.date); }
-
-
+  
         if (aiTx.type === 'expense') {
+          // Find category with fallback
           catId = expenseCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
+          if (!catId && expenseCategories.length > 0) {
+            catId = expenseCategories[0].id; // Fallback to first category
+          }
+          
+          // Find payment method with fallback
           pmId = paymentMethods.find(p => p.name.toLowerCase() === aiTx.paymentMethodNameGuess?.toLowerCase())?.id;
+          if (!pmId && paymentMethods.length > 0) {
+            pmId = paymentMethods[0].id; // Fallback to first payment method
+          }
         } else { 
+          // Find income category with fallback
           catId = incomeCategories.find(c => c.name.toLowerCase() === aiTx.categoryNameGuess?.toLowerCase())?.id;
+          if (!catId && incomeCategories.length > 0) {
+            catId = incomeCategories[0].id; // Fallback to first category
+          }
         }
         
         const finalExpenseType = (aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
