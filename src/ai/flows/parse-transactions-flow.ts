@@ -95,7 +95,7 @@ const parseTransactionsPrompt = ai.definePrompt({
   output: { schema: ParseTransactionTextOutputSchemaInternal },
   // Model configuration for potentially faster responses
   config: {
-    temperature: 0.3, 
+    temperature: 0.2, 
     maxOutputTokens: 1500, 
     safetySettings: [ 
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -138,8 +138,7 @@ For each transaction identified, provide:
 - expenseTypeNameGuess: (for expenses) Classify as 'need', 'want', or 'investment'.
     Examples for 'need': Rent, essential Groceries, Medicines, commute to work, Loan Repayments, Utilities, Education fees.
     Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
-    Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD). Use this for any transaction involving words like 'invested', 'bought stocks', 'SIP', etc. YOU MUST USE the value 'investment' for this type.
-    YOU have to predict it to the best of your ability and provide an output dynamically.
+    Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD). Use this for any transaction involving words like 'invested', 'bought stocks', 'SIP', etc.
     If 100% unsure or if it's an income transaction, leave blank.
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.
 - splitDetails: (Optional) If splitting is mentioned, provide participant names and ratio.
@@ -151,7 +150,7 @@ Input Text:
 {{{naturalLanguageText}}}
 \`\`\`
 
-Return an array of structured transaction objects. If none, return an empty array.
+Return an array of structured transaction objects. Each object MUST correspond to a distinct financial event mentioned in the text. Do not invent or duplicate transactions. If none, return an empty array.
 Provide a very concise \`summaryMessage\` only if necessary (e.g., general parsing issues). Focus on speed and transaction accuracy.
 `,
 });
@@ -187,6 +186,7 @@ const parseTransactionsFlow = ai.defineFlow(
       throw new Error("AI model failed to return a valid output structure for transaction parsing.");
     }
 
+    const seen = new Set<string>();
     const validatedTransactions = output.parsedTransactions.map(tx => {
       let finalDate = tx.date;
       try {
@@ -208,7 +208,18 @@ const parseTransactionsFlow = ai.defineFlow(
         date: finalDate,
         amount: tx.amount && tx.amount > 0 ? tx.amount : 0, 
       };
-    }).filter(tx => tx.amount > 0 && tx.description); 
+    }).filter(tx => {
+        if (!tx.amount || tx.amount <= 0 || !tx.description) {
+            return false;
+        }
+        // Create a unique key for each transaction to filter out exact duplicates
+        const uniqueKey = `${tx.date}-${tx.description}-${tx.amount}-${tx.type}`;
+        if (seen.has(uniqueKey)) {
+            return false;
+        }
+        seen.add(uniqueKey);
+        return true;
+    });
 
     return {
         parsedTransactions: validatedTransactions,

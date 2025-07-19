@@ -15,15 +15,31 @@ let splitUsersContainerInstance: CosmosContainer;
 let splitExpensesContainerInstance: CosmosContainer;
 
 // --- Azure Cosmos DB Client Helper ---
-async function getCosmosClientAndDb() {
-  const endpoint = process.env.COSMOS_DB_ENDPOINT;
-  const key = process.env.COSMOS_DB_KEY;
-  const databaseId = process.env.COSMOS_DB_DATABASE_ID;
+function checkCosmosDbEnvVariables() {
+    const requiredVars = [
+        'COSMOS_DB_ENDPOINT',
+        'COSMOS_DB_KEY',
+        'COSMOS_DB_DATABASE_ID',
+        'COSMOS_DB_SPLIT_USERS_CONTAINER_ID',
+        'COSMOS_DB_SPLIT_EXPENSES_CONTAINER_ID'
+    ];
+    const missingVars = requiredVars.filter(v => !process.env[v]);
+    if (missingVars.length > 0) {
+        const message = `The following Cosmos DB environment variables are missing, which are required for the Split Expenses feature: ${missingVars.join(', ')}. Please add them to your Vercel project environment variables.`;
+        console.error(`CosmosDB Critical Error: ${message}`);
+        throw new Error(message);
+    }
+    console.log("CosmosDB Info: All required environment variables for Split Expenses are present.");
+}
 
-  if (!endpoint || !key || !databaseId) {
-    console.error("CosmosDB Critical Error: Core Cosmos DB environment variables are not configured (ENDPOINT, KEY, DATABASE_ID).");
-    throw new Error("Cosmos DB core environment variables are not fully configured.");
-  }
+
+async function getCosmosClientAndDb() {
+  // This check will now happen at the start of any database operation
+  checkCosmosDbEnvVariables();
+  const endpoint = process.env.COSMOS_DB_ENDPOINT!;
+  const key = process.env.COSMOS_DB_KEY!;
+  const databaseId = process.env.COSMOS_DB_DATABASE_ID!;
+
   const cosmosClient = new CosmosClient({ endpoint, key });
   const database = cosmosClient.database(databaseId);
   return { database };
@@ -34,11 +50,7 @@ async function getSplitUsersContainer(): Promise<CosmosContainer> {
     return splitUsersContainerInstance;
   }
   const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_SPLIT_USERS_CONTAINER_ID;
-  if (!containerId) {
-    console.error("CosmosDB Critical Error: COSMOS_DB_SPLIT_USERS_CONTAINER_ID is not configured.");
-    throw new Error("Cosmos DB Split Users container ID is not configured.");
-  }
+  const containerId = process.env.COSMOS_DB_SPLIT_USERS_CONTAINER_ID!;
   splitUsersContainerInstance = database.container(containerId);
   return splitUsersContainerInstance;
 }
@@ -48,11 +60,7 @@ async function getSplitExpensesContainer(): Promise<CosmosContainer> {
     return splitExpensesContainerInstance;
   }
   const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_SPLIT_EXPENSES_CONTAINER_ID;
-  if (!containerId) {
-    console.error("CosmosDB Critical Error: COSMOS_DB_SPLIT_EXPENSES_CONTAINER_ID is not configured.");
-    throw new Error("Cosmos DB Split Expenses container ID is not configured.");
-  }
+  const containerId = process.env.COSMOS_DB_SPLIT_EXPENSES_CONTAINER_ID!;
   splitExpensesContainerInstance = database.container(containerId);
   return splitExpensesContainerInstance;
 }
