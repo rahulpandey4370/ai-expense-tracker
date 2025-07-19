@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,45 +36,37 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const monthlySpending = currentMonthTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const getTopCategory = useCallback(() => {
-    const categorySpending: Record<string, number> = {};
-    currentMonthTransactions
-      .filter(t => t.type === 'expense' && t.category && t.category.name) // Ensure category and name exist
-      .forEach(t => {
-        categorySpending[t.category!.name] = (categorySpending[t.category!.name] || 0) + t.amount;
-      });
+  const monthlyMetrics = useMemo(() => {
+    const income = currentMonthTransactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
     
-    if (Object.keys(categorySpending).length === 0) return { name: 'N/A', amount: 0 };
+    const spending = currentMonthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    const sortedCategories = Object.entries(categorySpending).sort(([, a], [, b]) => b - a);
-    return { name: sortedCategories[0][0], amount: sortedCategories[0][1] };
+    const spendingByCategory = currentMonthTransactions
+      .filter(t => t.type === 'expense' && t.category?.name)
+      .reduce((acc, t) => {
+        const categoryName = t.category!.name;
+        acc[categoryName] = (acc[categoryName] || 0) + t.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+    return { income, spending, spendingByCategory };
   }, [currentMonthTransactions]);
+
 
   const generateInsights = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setInsights(null);
-    
-    const topCategoryData = getTopCategory();
-    const topCategoryName = topCategoryData.name;
-    const topCategorySpending = topCategoryData.amount;
-
-    const comparisonWithLastMonth = monthlySpending > lastMonthTotalSpending
-      ? `you spent ₹${(monthlySpending - lastMonthTotalSpending).toFixed(2)} more than the previous month.`
-      : monthlySpending < lastMonthTotalSpending
-      ? `you spent ₹${(lastMonthTotalSpending - monthlySpending).toFixed(2)} less than the previous month.`
-      : `your spending was about the same as the previous month.`;
       
     const input: SpendingInsightsInput = {
-      monthlySpending,
+      currentMonthIncome: monthlyMetrics.income,
+      currentMonthSpending: monthlyMetrics.spending,
       lastMonthSpending: lastMonthTotalSpending,
-      topCategory: topCategoryName,
-      topCategorySpending,
-      comparisonWithLastMonth,
+      spendingByCategory: monthlyMetrics.spendingByCategory,
     };
 
     try {
@@ -86,17 +78,20 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     } finally {
       setIsLoading(false);
     }
-  }, [monthlySpending, lastMonthTotalSpending, getTopCategory]);
+  }, [monthlyMetrics, lastMonthTotalSpending]);
   
   useEffect(() => {
-    if (currentMonthTransactions.length > 0 && monthlySpending > 0) {
+    // Automatically generate insights if there's spending data
+    if (currentMonthTransactions.length > 0 && monthlyMetrics.spending > 0) {
       generateInsights();
     } else {
+      // Clear insights if there's no data
       setInsights(null);
       setError(null);
+      setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlySpending, lastMonthTotalSpending, selectedMonthName, selectedYear, currentMonthTransactions.length, generateInsights]); // Added generateInsights
+  }, [monthlyMetrics.spending, currentMonthTransactions.length, generateInsights]);
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -113,23 +108,24 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
               </div>
             )}
             {error && <p className="text-sm text-destructive">{error}</p>}
             {insights && !isLoading && (
               <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
                 {insights.split('\n').map((line, index) => (
-                  <p key={index} className="text-foreground">{line.replace(/^- /, '• ')}</p>
+                  <p key={index} className="text-foreground">{line.replace(/^- /, '• ').replace(/^\d+\.\s/, '• ')}</p>
                 ))}
               </div>
             )}
-            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlySpending === 0) && (
-              <p className="text-sm text-muted-foreground">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
+            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlyMetrics.spending === 0) && (
+              <p className="text-sm text-muted-foreground p-3 text-center">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
             )}
           </ScrollArea>
           <motion.div {...buttonHoverTap}>
-            <Button onClick={generateInsights} disabled={isLoading || currentMonthTransactions.length === 0 || monthlySpending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-4">
+            <Button onClick={generateInsights} disabled={isLoading || monthlyMetrics.spending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-4">
               <Zap className="mr-2 h-4 w-4" />
               {isLoading ? "Generating..." : "Refresh Insights"}
             </Button>
