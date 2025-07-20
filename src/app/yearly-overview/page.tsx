@@ -58,6 +58,11 @@ export interface MonthlySummary {
   totalIncome: number;
 }
 
+const progressColors = [
+  "bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", 
+  "bg-primary", "bg-accent", "bg-teal-500", "bg-fuchsia-500", "bg-sky-500"
+];
+
 export default function YearlyOverviewPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -273,7 +278,6 @@ export default function YearlyOverviewPage() {
                   </Table>
                 </motion.div>
 
-                {/* New Category-wise Spend Grid */}
                 <motion.div variants={cardVariants}>
                     <Card className="shadow-lg mt-8">
                         <CardHeader>
@@ -287,13 +291,14 @@ export default function YearlyOverviewPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {categoryWiseYearlySpend.map((cat, index) => {
                                 const percentage = yearlyTotals.totalSpend > 0 ? (cat.totalAmount / yearlyTotals.totalSpend) * 100 : 0;
+                                const colorClass = progressColors[index % progressColors.length];
                                 return (
                                 <div key={index} className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
                                   <div className="flex justify-between items-baseline">
                                       <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
                                       <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
                                   </div>
-                                  <Progress value={percentage} className="h-2" />
+                                  <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
                                   <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                               );
