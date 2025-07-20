@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   title: "FinWise AI - Expense Tracker",
   description: "Track your expenses intelligently with FinWise AI.",
   manifest: "/manifest.json",
+  icons: {
+    apple: "/logo.svg", // Use the app logo for apple touch icon
+  },
 };
 
 export const viewport: Viewport = {
