@@ -13,17 +13,61 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, LogOut, Settings, LifeBuoy } from "lucide-react";
+import { User, LogOut, Settings, LifeBuoy, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 import { useRouter } from "next/navigation"; // Import useRouter
+import { useToast } from "@/hooks/use-toast";
 
 export function UserNav() {
   const { logout } = useAuth(); // Get logout function
   const router = useRouter(); // Get router instance
+  const { toast } = useToast();
 
   const handleLogout = () => {
     logout();
     // The logout function in AuthContext already handles router.push('/login')
+  };
+
+  const handleEnableNotifications = async () => {
+    if (!("Notification" in window)) {
+      toast({
+        title: "Notifications Not Supported",
+        description: "This browser does not support desktop notifications.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      toast({
+        title: "Notifications Already Enabled",
+        description: "You're all set to receive notifications.",
+      });
+      // Here you would typically send the subscription to your server
+      // const subscription = await swRegistration.pushManager.getSubscription();
+      // sendSubscriptionToServer(subscription);
+    } else if (Notification.permission !== "denied") {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        toast({
+          title: "Notifications Enabled!",
+          description: "You will now receive updates from FinWise AI.",
+        });
+        // Here you would also send the subscription to your server
+      } else {
+        toast({
+          title: "Notifications Not Enabled",
+          description: "You have blocked notifications. You can change this in your browser settings.",
+          variant: "destructive",
+        });
+      }
+    } else {
+       toast({
+          title: "Notifications Blocked",
+          description: "You have previously blocked notifications. Please enable them in your browser settings.",
+          variant: "destructive",
+        });
+    }
   };
 
   return (
@@ -51,6 +95,10 @@ export function UserNav() {
             <User className="mr-2 h-4 w-4" />
             <span>Profile</span>
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+          </DropdownMenuItem>
+           <DropdownMenuItem onClick={handleEnableNotifications}>
+            <Bell className="mr-2 h-4 w-4" />
+            <span>Enable Notifications</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/settings')}>
             <Settings className="mr-2 h-4 w-4" />
