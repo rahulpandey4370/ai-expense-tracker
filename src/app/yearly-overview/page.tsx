@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
 import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
+import { Progress } from '@/components/ui/progress';
 
 
 const pageVariants = {
@@ -272,7 +273,7 @@ export default function YearlyOverviewPage() {
                   </Table>
                 </motion.div>
 
-                {/* New Category-wise Spend Table */}
+                {/* New Category-wise Spend Grid */}
                 <motion.div variants={cardVariants}>
                     <Card className="shadow-lg mt-8">
                         <CardHeader>
@@ -283,30 +284,24 @@ export default function YearlyOverviewPage() {
                             <CardDescription>Total expense for each category in {selectedYear}.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Category</TableHead>
-                                            <TableHead className="text-right">Total Spend (₹)</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {categoryWiseYearlySpend.map((cat, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell className="font-medium">{cat.categoryName}</TableCell>
-                                                <TableCell className="text-right">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                    <TableFooter>
-                                        <TableRow className="bg-primary/10 font-bold">
-                                            <TableCell>Total Expenses</TableCell>
-                                            <TableCell className="text-right text-primary">₹{yearlyTotals.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </TableRow>
-                                    </TableFooter>
-                                </Table>
-                            </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {categoryWiseYearlySpend.map((cat, index) => {
+                                const percentage = yearlyTotals.totalSpend > 0 ? (cat.totalAmount / yearlyTotals.totalSpend) * 100 : 0;
+                                return (
+                                <div key={index} className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex justify-between items-baseline">
+                                      <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
+                                      <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
+                                  </div>
+                                  <Progress value={percentage} className="h-2" />
+                                  <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                           <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
+                              Total Expenses: ₹{yearlyTotals.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </div>
                         </CardContent>
                     </Card>
                 </motion.div>
