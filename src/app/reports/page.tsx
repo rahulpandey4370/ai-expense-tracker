@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen } from 'lucide-react';
+import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers } from 'lucide-react';
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
@@ -22,6 +22,8 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -100,10 +102,25 @@ export default function ReportsPage() {
       return transactionYear === reportYear && transactionMonth === reportMonth;
     });
   }, [allTransactions, reportYear, reportMonth]);
+  
+  const categorySpendingForPeriod = useMemo(() => {
+    const spendingMap = new Map<string, number>();
+    filteredTransactionsForPeriod
+      .filter(t => t.type === 'expense' && t.category)
+      .forEach(t => {
+        const categoryName = t.category!.name;
+        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
+      });
+
+    return Array.from(spendingMap.entries())
+      .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [filteredTransactionsForPeriod]);
+
 
   const currentPeriodExpensesTotal = useMemo(() =>
-    filteredTransactionsForPeriod.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
-  , [filteredTransactionsForPeriod]);
+    categorySpendingForPeriod.reduce((sum, cat) => sum + cat.totalAmount, 0)
+  , [categorySpendingForPeriod]);
 
   const previousPeriodExpensesTotal = useMemo(() => {
     let prevPeriodYear = reportYear;
@@ -331,6 +348,45 @@ export default function ReportsPage() {
                       <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                       <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                   </div>
+
+                  {/* New Category Spending Table */}
+                   <motion.div variants={cardVariants}>
+                    <Card className="shadow-lg">
+                      <CardHeader>
+                        <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+                          <Layers className="text-primary/80"/>
+                          Category Spending Details
+                        </CardTitle>
+                        <CardDescription>
+                          Total spending per category for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Category</TableHead>
+                              <TableHead className="text-right">Total Spend (₹)</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {categorySpendingForPeriod.map((cat, index) => (
+                              <TableRow key={index}>
+                                <TableCell className="font-medium">{cat.categoryName}</TableCell>
+                                <TableCell className="text-right">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                           <TableFooter>
+                            <TableRow>
+                              <TableCell className="font-bold text-primary">Total</TableCell>
+                              <TableCell className="text-right font-bold text-primary">₹{currentPeriodExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 </>
               )}
 

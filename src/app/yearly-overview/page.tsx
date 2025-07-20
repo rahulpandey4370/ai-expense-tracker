@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AppTransaction } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
-import { Loader2, AlertTriangle, CalendarRange } from 'lucide-react';
+import { Loader2, AlertTriangle, CalendarRange, Layers } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
@@ -119,7 +119,7 @@ export default function YearlyOverviewPage() {
 
       const totalInvestment = monthTransactions
         .filter(t => t.type === 'expense' &&
-                     (t.expenseType === 'investment_expense' ||
+                     (t.expenseType === 'investment' ||
                       (t.category && investmentCategoryNames.includes(t.category.name)))
         )
         .reduce((sum, t) => sum + t.amount, 0);
@@ -157,6 +157,20 @@ export default function YearlyOverviewPage() {
       return acc;
     }, { totalSpend: 0, totalInvestment: 0, totalSavings: 0, totalCashbacksInterestsDividends: 0, totalIncome: 0 });
   }, [yearlySummaryData]);
+
+  const categoryWiseYearlySpend = useMemo(() => {
+    const spendingMap = new Map<string, number>();
+    allTransactions
+      .filter(t => new Date(t.date).getFullYear() === selectedYear && t.type === 'expense' && t.category)
+      .forEach(t => {
+        const categoryName = t.category!.name;
+        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
+      });
+
+    return Array.from(spendingMap.entries())
+      .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [allTransactions, selectedYear]);
 
 
   const handleYearChange = (yearValue: string) => {
@@ -210,9 +224,9 @@ export default function YearlyOverviewPage() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <>
+              <div className="space-y-8">
                 <motion.div 
-                    className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
+                    className="grid grid-cols-1 lg:grid-cols-2 gap-6"
                     variants={cardVariants} 
                     initial="hidden" 
                     animate="visible"
@@ -257,7 +271,47 @@ export default function YearlyOverviewPage() {
                     </TableFooter>
                   </Table>
                 </motion.div>
-              </>
+
+                {/* New Category-wise Spend Table */}
+                <motion.div variants={cardVariants}>
+                    <Card className="shadow-lg mt-8">
+                        <CardHeader>
+                            <CardTitle className="text-xl md:text-2xl text-primary flex items-center gap-2">
+                                <Layers className="text-primary/80" />
+                                Category-wise Yearly Spend
+                            </CardTitle>
+                            <CardDescription>Total expense for each category in {selectedYear}.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Category</TableHead>
+                                            <TableHead className="text-right">Total Spend (₹)</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {categoryWiseYearlySpend.map((cat, index) => (
+                                            <TableRow key={index}>
+                                                <TableCell className="font-medium">{cat.categoryName}</TableCell>
+                                                <TableCell className="text-right">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                    <TableFooter>
+                                        <TableRow className="bg-primary/10 font-bold">
+                                            <TableCell>Total Expenses</TableCell>
+                                            <TableCell className="text-right text-primary">₹{yearlyTotals.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+              </div>
             )}
           </CardContent>
         </Card>
