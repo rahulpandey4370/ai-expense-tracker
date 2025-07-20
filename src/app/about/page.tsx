@@ -104,7 +104,7 @@ export default function AboutPage() {
                     className="mb-4"
                   >
                     <Image
-                      src="https://placehold.co/150x150.png"
+                      src="/rahul_pic.png"
                       alt="Rahul Pandey"
                       width={120}
                       height={120}
@@ -128,7 +128,7 @@ export default function AboutPage() {
                     </Link>
                   </Button>
                   <Button variant="outline" asChild>
-                    <a href="mailto:rahulpandey.22112002@gmail.com">
+                    <a href="https://www.linkedin.com/in/rahul-ranjan-pandey/">
                       <AtSign className="mr-2 h-4 w-4" /> Contact Me
                     </a>
                   </Button>
