@@ -22,7 +22,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Progress } from '@/components/ui/progress';
 
 
 const pageVariants = {
@@ -41,6 +41,12 @@ const buttonHoverTap = {
 };
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+
+const progressColors = [
+  "bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", 
+  "bg-primary", "bg-accent", "bg-teal-500", "bg-fuchsia-500", "bg-sky-500"
+];
+
 
 export default function ReportsPage() {
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
@@ -362,29 +368,26 @@ export default function ReportsPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Category</TableHead>
-                              <TableHead className="text-right">Total Spend (₹)</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {categorySpendingForPeriod.map((cat, index) => (
-                              <TableRow key={index}>
-                                <TableCell className="font-medium">{cat.categoryName}</TableCell>
-                                <TableCell className="text-right">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                           <TableFooter>
-                            <TableRow>
-                              <TableCell className="font-bold text-primary">Total</TableCell>
-                              <TableCell className="text-right font-bold text-primary">₹{currentPeriodExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                            </TableRow>
-                          </TableFooter>
-                        </Table>
-                      </CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {categorySpendingForPeriod.map((cat, index) => {
+                                const percentage = currentPeriodExpensesTotal > 0 ? (cat.totalAmount / currentPeriodExpensesTotal) * 100 : 0;
+                                const colorClass = progressColors[index % progressColors.length];
+                                return (
+                                <div key={index} className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex justify-between items-baseline">
+                                      <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
+                                      <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
+                                  </div>
+                                  <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
+                                  <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                           <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
+                              Total Expenses: ₹{currentPeriodExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </div>
+                        </CardContent>
                     </Card>
                   </motion.div>
                 </>
