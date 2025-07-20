@@ -8,6 +8,7 @@ import { AppLogo } from "@/components/app-logo";
 import { AtSign, Briefcase, Cpu, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from 'next/link';
+import Image from 'next/image';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -94,9 +95,23 @@ export default function AboutPage() {
                 }}
                 className="text-center pt-8 border-t border-primary/20"
               >
-                <motion.h2 variants={itemVariants} className="text-2xl font-semibold text-primary mb-2">
+                <motion.h2 variants={itemVariants} className="text-2xl font-semibold text-primary mb-4">
                   Created By
                 </motion.h2>
+                 <motion.div
+                    variants={itemVariants}
+                    whileHover={{ scale: 1.05 }}
+                    className="mb-4"
+                  >
+                    <Image
+                      src="https://placehold.co/150x150.png"
+                      alt="Rahul Pandey"
+                      width={120}
+                      height={120}
+                      data-ai-hint="profile picture"
+                      className="rounded-full mx-auto border-4 border-accent/50 shadow-lg"
+                    />
+                  </motion.div>
                 <motion.p variants={itemVariants} className="text-xl font-medium text-accent">
                   Rahul Pandey
                 </motion.p>
