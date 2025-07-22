@@ -19,6 +19,7 @@ import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -354,6 +355,15 @@ export default function DashboardPage() {
         animate="visible"
       >
         <motion.div variants={itemVariants}>
+          <IncomeDistributionChart
+            transactions={currentMonthTransactions}
+            selectedMonthName={monthNamesList[selectedMonth]}
+            selectedYear={selectedYear}
+            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
+          />
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
           <ExpenseTypeSplitChart 
             transactions={currentMonthTransactions} 
             selectedMonthName={monthNamesList[selectedMonth]} 
@@ -374,7 +384,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-
-    
-
-    

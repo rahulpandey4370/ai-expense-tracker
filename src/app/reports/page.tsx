@@ -15,6 +15,7 @@ import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
+import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
 import { comparativeExpenseAnalysis, type ComparativeExpenseAnalysisInput } from '@/ai/flows/comparative-expense-analysis';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -325,6 +326,14 @@ export default function ReportsPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-6">
+                    <motion.div variants={cardVariants}>
+                        <IncomeDistributionChart
+                            transactions={filteredTransactionsForPeriod}
+                            selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]}
+                            selectedYear={reportYear}
+                            chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]"
+                        />
+                    </motion.div>
                      <motion.div variants={cardVariants}>
                         <ExpenseTypeSplitChart
                             transactions={filteredTransactionsForPeriod}
