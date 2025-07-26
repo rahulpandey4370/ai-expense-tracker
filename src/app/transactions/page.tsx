@@ -43,7 +43,7 @@ const pageVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-const tableContainerVariants = {
+const listContainerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -53,7 +53,7 @@ const tableContainerVariants = {
   },
 };
 
-const tableRowVariants = {
+const listItemVariants = {
   hidden: { opacity: 0, x: -20 },
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
 };
@@ -452,7 +452,6 @@ export default function TransactionsPage() {
               )}
             </div>
 
-
             {isLoading ? (
               <div className="flex justify-center items-center h-[300px] sm:h-[400px]">
                 <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-accent animate-spin" />
@@ -460,7 +459,46 @@ export default function TransactionsPage() {
               </div>
             ) : (
             <ScrollArea className="h-0 flex-grow rounded-md border border-primary/30 bg-background/50">
-              <div className="overflow-x-auto">
+              {/* Mobile View - Card List */}
+              <div className="md:hidden space-y-3 p-2">
+                {filteredTransactions.length > 0 ? (
+                  filteredTransactions.map(t => (
+                    <motion.div key={t.id} variants={listItemVariants} className="p-3 border rounded-lg bg-card/80 shadow-sm space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <Checkbox
+                          checked={selectedTransactionIds.has(t.id)}
+                          onCheckedChange={() => toggleSelectTransaction(t.id)}
+                          aria-label={`Select transaction ${t.description}`}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-foreground">{t.description}</p>
+                          <p className="text-xs text-muted-foreground">{format(new Date(t.date), "dd MMM, yyyy")}</p>
+                        </div>
+                        <p className={cn("text-lg font-bold", t.type === 'income' ? 'text-green-500' : 'text-red-500')}>
+                          {t.type === 'income' ? '+' : '-'}₹{t.amount.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pl-8">
+                         <Badge variant="outline">{t.category?.name || t.source}</Badge>
+                         {t.paymentMethod && <Badge variant="secondary">{t.paymentMethod.name}</Badge>}
+                         {t.expenseType && <Badge variant="default" className={cn('capitalize', t.expenseType === 'need' ? 'bg-blue-500/80' : t.expenseType === 'want' ? 'bg-purple-500/80' : 'bg-indigo-500/80', 'text-white')}>{t.expenseType.replace('_expense','')}</Badge>}
+                      </div>
+                      <div className="flex justify-end gap-1 pt-2">
+                         <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(t)} className="text-accent h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
+                         <AlertDialog>
+                           <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive h-7 w-7"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                           <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Transaction?</AlertDialogTitle><AlertDialogDescription>This will permanently remove "{t.description}".</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteSingleTransaction(t.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                         </AlertDialog>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-10">No transactions found.</p>
+                )}
+              </div>
+              {/* Desktop View - Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-primary/10 border-b-primary/30">
@@ -482,12 +520,12 @@ export default function TransactionsPage() {
                       <TableHead className="text-muted-foreground font-semibold text-xs sm:text-sm whitespace-nowrap">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <motion.tbody variants={tableContainerVariants} initial="hidden" animate="visible">
+                  <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
                     {filteredTransactions.length > 0 ? (
                       filteredTransactions.map((transaction) => (
                         <motion.tr
                           key={transaction.id}
-                          variants={tableRowVariants}
+                          variants={listItemVariants}
                           layout
                           className={cn("hover:bg-accent/10 border-b-primary/20 text-xs sm:text-sm", selectedTransactionIds.has(transaction.id) && "bg-primary/10 dark:bg-primary/20")}
                         >
