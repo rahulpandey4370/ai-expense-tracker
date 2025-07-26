@@ -1,7 +1,7 @@
 
 "use client"
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Pie, PieChart, Cell } from "recharts"
 import {
   Card,
   CardContent,
@@ -14,6 +14,8 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
 } from "@/components/ui/chart"
 import type { AppTransaction } from "@/lib/types"; 
 import { cn } from "@/lib/utils"
@@ -22,13 +24,24 @@ interface ExpensePaymentMethodChartProps {
   transactions: AppTransaction[]; 
   selectedMonthName: string;
   selectedYear: number;
-  chartHeightClass?: string; // New prop
+  chartHeightClass?: string;
 }
+
+const CHART_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--primary))",
+  "hsl(var(--secondary))",
+  "hsl(var(--accent))",
+];
 
 const glowClass = "shadow-chart-glow dark:shadow-chart-glow-dark";
 
 export function ExpensePaymentMethodChart({ transactions, selectedMonthName, selectedYear, chartHeightClass = "max-h-[300px] w-full" }: ExpensePaymentMethodChartProps) {
- const expenseData = transactions 
+  const expenseData = transactions 
     .filter(t => t.type === 'expense' && t.paymentMethod && t.paymentMethod.name) 
     .reduce((acc, curr) => {
       const paymentMethodName = curr.paymentMethod!.name; 
@@ -36,18 +49,17 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
       return acc;
     }, {} as Record<string, number>);
 
-  const chartData = Object.entries(expenseData).map(([name, expenses]) => ({
-    name,
-    expenses,
-    fill: "hsl(var(--primary))", 
-  }));
+  const chartData = Object.entries(expenseData)
+    .map(([name, value]) => ({ name, value, fill: "" }))
+    .sort((a,b) => b.value - a.value)
+    .map((item, index) => ({...item, fill: CHART_COLORS[index % CHART_COLORS.length]}));
   
-  const chartConfig = {
-    expenses: {
-      label: "Expenses (₹)",
-      color: "hsl(var(--primary))",
-    },
-  }
+  const chartConfig = chartData.reduce((acc, item) => {
+    acc[item.name] = { label: item.name, color: item.fill };
+    return acc;
+  }, {} as any);
+
+  const totalExpenses = chartData.reduce((sum, item) => sum + item.value, 0);
 
   if (chartData.length === 0) {
     return (
@@ -64,40 +76,42 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
   }
   
   return (
-    <Card className={cn("shadow-lg", glowClass)}>
-      <CardHeader>
+    <Card className={cn("flex flex-col shadow-lg", glowClass)}>
+      <CardHeader className="items-center pb-0">
         <CardTitle>Expenses by Payment Method</CardTitle>
         <CardDescription>Payment methods for {selectedMonthName} {selectedYear}.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className={chartHeightClass}>
-          <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
-            <CartesianGrid horizontal={false} />
-            <XAxis type="number" dataKey="expenses" hide tickFormatter={(value) => `₹${value}`} />
-            <YAxis
-              dataKey="name"
-              type="category"
-              tickLine={false}
-              tickMargin={10}
-              axisLine={false}
-              tickFormatter={(value) => value.length > 15 ? `${value.slice(0,12)}...` : value}
-              className="text-xs fill-foreground"
-              width={100} 
-            />
+      <CardContent className="flex-1 pb-0">
+        <ChartContainer
+          config={chartConfig}
+          className={cn("mx-auto aspect-square", chartHeightClass)}
+        >
+          <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, name === 'expenses' ? chartConfig.expenses.label : name ])} />}
+              content={<ChartTooltipContent hideLabel nameKey="name" formatter={(value) => `₹${(value as number).toLocaleString()}`} />}
             />
-            <Bar dataKey="expenses" radius={5} />
-          </BarChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="30%"
+              outerRadius="80%"
+              strokeWidth={2}
+            >
+              {chartData.map((entry, index) => (
+                 <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Pie>
+             <ChartLegend content={<ChartLegendContent nameKey="name" className="flex-wrap justify-center"/>} />
+          </PieChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className="flex-col items-start gap-2 text-sm">
-        <div className="leading-none text-muted-foreground">
-          Breakdown of expenses by payment method for {selectedMonthName} {selectedYear}.
+      <CardFooter className="flex-col gap-2 text-sm mt-auto">
+        <div className="flex items-center gap-2 font-medium leading-none text-foreground">
+          Total Expenses: ₹{totalExpenses.toLocaleString()}
         </div>
       </CardFooter>
     </Card>
   )
 }
-
