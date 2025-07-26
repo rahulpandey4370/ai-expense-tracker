@@ -324,13 +324,14 @@ export default function TransactionsPage() {
   }, [viewMode, selectedMonth, selectedYear, monthNamesList]);
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
+    <div className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div
         variants={pageVariants}
         initial="hidden"
         animate="visible"
+        className="flex-1 flex flex-col"
       >
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 flex-1 flex flex-col", glowClass)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <BookOpen className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-6"/>
@@ -341,7 +342,7 @@ export default function TransactionsPage() {
               Currently viewing: <strong className="text-accent">{currentPeriodText}</strong>
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 flex flex-col">
             <div className="mb-6 space-y-4">
               <Input
                 type="text"
@@ -440,7 +441,7 @@ export default function TransactionsPage() {
                 <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading transactions...</p>
               </div>
             ) : (
-            <ScrollArea className="h-[400px] sm:h-[500px] rounded-md border border-primary/30 p-0 bg-background/50">
+            <ScrollArea className="h-0 flex-grow rounded-md border border-primary/30 bg-background/50">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -584,6 +585,6 @@ export default function TransactionsPage() {
               </div>
           </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </div>
   );
 }
