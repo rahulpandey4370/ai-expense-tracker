@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions } from '@/lib/actions/transactions';
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,6 +27,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
@@ -324,14 +330,14 @@ export default function TransactionsPage() {
   }, [viewMode, selectedMonth, selectedYear, monthNamesList]);
 
   return (
-    <div className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
+    <div className="flex-1 flex flex-col p-0 space-y-6 bg-background/80 backdrop-blur-sm sm:p-2 md:p-4 lg:p-6">
       <motion.div
         variants={pageVariants}
         initial="hidden"
         animate="visible"
         className="flex-1 flex flex-col"
       >
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 flex-1 flex flex-col", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 flex-1 flex flex-col w-full", glowClass)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <BookOpen className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-6"/>
@@ -351,52 +357,64 @@ export default function TransactionsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
               />
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
-                <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
-                  <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="selected_month" className="text-xs md:text-sm">Selected Month ({monthNamesList[selectedMonth]} {selectedYear})</SelectItem>
-                    <SelectItem value="full_year" className="text-xs md:text-sm">Full Year ({selectedYear})</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterType} onValueChange={(value) => setFilterType(value as string | 'all')}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
-                  <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all" className="text-xs md:text-sm">All Types</SelectItem>
-                    <SelectItem value="income" className="text-xs md:text-sm">Income</SelectItem>
-                    <SelectItem value="expense" className="text-xs md:text-sm">Expense</SelectItem>
-                  </SelectContent>
-                </Select>
-                 <Select value={filterExpenseType} onValueChange={setFilterExpenseType} disabled={filterType === 'income'}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Filter by Expense Type" /></SelectTrigger>
-                  <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all" className="text-xs md:text-sm">All Expense Types</SelectItem>
-                    <SelectItem value="need" className="text-xs md:text-sm">Need</SelectItem>
-                    <SelectItem value="want" className="text-xs md:text-sm">Want</SelectItem>
-                    <SelectItem value="investment" className="text-xs md:text-sm">Investment</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
-                  <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all" className="text-xs md:text-sm">All Categories/Sources</SelectItem>
-                    {allCategoriesState.map(cat => <SelectItem key={cat.id} value={cat.id} className="text-xs md:text-sm">{cat.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterPaymentMethodId} onValueChange={setFilterPaymentMethodId}>
-                  <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
-                  <SelectContent className="bg-card border-primary/60 text-foreground">
-                    <SelectItem value="all" className="text-xs md:text-sm">All Payment Methods</SelectItem>
-                    {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id} className="text-xs md:text-sm">{pm.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
-                    <Download className="mr-2 h-4 w-4" />
-                    Export to CSV
-                  </Button>
-                </motion.div>
-              </div>
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="item-1">
+                  <AccordionTrigger className="bg-muted/50 hover:bg-muted/70 px-4 rounded-md text-sm sm:text-base">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-accent" />
+                        Filter Options
+                      </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
+                      <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="selected_month" className="text-xs md:text-sm">Selected Month ({monthNamesList[selectedMonth]} {selectedYear})</SelectItem>
+                          <SelectItem value="full_year" className="text-xs md:text-sm">Full Year ({selectedYear})</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterType} onValueChange={(value) => setFilterType(value as string | 'all')}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="all" className="text-xs md:text-sm">All Types</SelectItem>
+                          <SelectItem value="income" className="text-xs md:text-sm">Income</SelectItem>
+                          <SelectItem value="expense" className="text-xs md:text-sm">Expense</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterExpenseType} onValueChange={setFilterExpenseType} disabled={filterType === 'income'}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Filter by Expense Type" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="all" className="text-xs md:text-sm">All Expense Types</SelectItem>
+                          <SelectItem value="need" className="text-xs md:text-sm">Need</SelectItem>
+                          <SelectItem value="want" className="text-xs md:text-sm">Want</SelectItem>
+                          <SelectItem value="investment" className="text-xs md:text-sm">Investment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Category/Source" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="all" className="text-xs md:text-sm">All Categories/Sources</SelectItem>
+                          {allCategoriesState.map(cat => <SelectItem key={cat.id} value={cat.id} className="text-xs md:text-sm">{cat.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterPaymentMethodId} onValueChange={setFilterPaymentMethodId}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Payment Method" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="all" className="text-xs md:text-sm">All Payment Methods</SelectItem>
+                          {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id} className="text-xs md:text-sm">{pm.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                        <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
+                          <Download className="mr-2 h-4 w-4" />
+                          Export to CSV
+                        </Button>
+                      </motion.div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
 
             <div className="my-4 p-3 md:p-4 border rounded-lg bg-background/50 border-primary/20 flex flex-col sm:flex-row flex-wrap justify-between items-center gap-3 md:gap-4">
