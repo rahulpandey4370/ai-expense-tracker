@@ -108,6 +108,42 @@ export async function getCategories(type?: 'income' | 'expense'): Promise<Catego
   }
 }
 
+export async function addCategory(data: Omit<Category, 'id'>): Promise<Category> {
+  const allCategories = await getCategories();
+  if (allCategories.some(c => c.name.toLowerCase() === data.name.toLowerCase())) {
+    throw new Error(`Category "${data.name}" already exists.`);
+  }
+
+  const newCategory: Category = { id: cuid(), ...data };
+  const updatedCategories = [...allCategories, newCategory];
+
+  const client = await getAzureBlobContainerClient();
+  const blockBlobClient = client.getBlockBlobClient(CATEGORIES_BLOB_PATH);
+  await blockBlobClient.upload(JSON.stringify(updatedCategories, null, 2), Buffer.byteLength(JSON.stringify(updatedCategories, null, 2)));
+
+  revalidatePath('/settings');
+  revalidatePath('/transactions');
+  return newCategory;
+}
+
+export async function deleteCategory(id: string): Promise<{ success: boolean }> {
+  const allCategories = await getCategories();
+  const updatedCategories = allCategories.filter(c => c.id !== id);
+
+  if (allCategories.length === updatedCategories.length) {
+    throw new Error("Category not found.");
+  }
+
+  const client = await getAzureBlobContainerClient();
+  const blockBlobClient = client.getBlockBlobClient(CATEGORIES_BLOB_PATH);
+  await blockBlobClient.upload(JSON.stringify(updatedCategories, null, 2), Buffer.byteLength(JSON.stringify(updatedCategories, null, 2)));
+  
+  revalidatePath('/settings');
+  revalidatePath('/transactions');
+  return { success: true };
+}
+
+
 export async function getPaymentMethods(): Promise<PaymentMethod[]> {
   console.log("Azure Info (getPaymentMethods): Fetching payment methods from Azure Blob Storage.");
   try {
@@ -116,6 +152,41 @@ export async function getPaymentMethods(): Promise<PaymentMethod[]> {
     console.error("Azure Error (getPaymentMethods): Could not fetch payment methods from Blob. Falling back to static defaults. Error:", error.message);
     return [...defaultPaymentMethods];
   }
+}
+
+export async function addPaymentMethod(data: Omit<PaymentMethod, 'id'>): Promise<PaymentMethod> {
+  const allMethods = await getPaymentMethods();
+  if (allMethods.some(pm => pm.name.toLowerCase() === data.name.toLowerCase())) {
+    throw new Error(`Payment method "${data.name}" already exists.`);
+  }
+
+  const newMethod: PaymentMethod = { id: cuid(), ...data };
+  const updatedMethods = [...allMethods, newMethod];
+  
+  const client = await getAzureBlobContainerClient();
+  const blockBlobClient = client.getBlockBlobClient(PAYMENT_METHODS_BLOB_PATH);
+  await blockBlobClient.upload(JSON.stringify(updatedMethods, null, 2), Buffer.byteLength(JSON.stringify(updatedMethods, null, 2)));
+  
+  revalidatePath('/settings');
+  revalidatePath('/transactions');
+  return newMethod;
+}
+
+export async function deletePaymentMethod(id: string): Promise<{ success: boolean }> {
+  const allMethods = await getPaymentMethods();
+  const updatedMethods = allMethods.filter(pm => pm.id !== id);
+
+  if (allMethods.length === updatedMethods.length) {
+    throw new Error("Payment method not found.");
+  }
+  
+  const client = await getAzureBlobContainerClient();
+  const blockBlobClient = client.getBlockBlobClient(PAYMENT_METHODS_BLOB_PATH);
+  await blockBlobClient.upload(JSON.stringify(updatedMethods, null, 2), Buffer.byteLength(JSON.stringify(updatedMethods, null, 2)));
+
+  revalidatePath('/settings');
+  revalidatePath('/transactions');
+  return { success: true };
 }
 
 
@@ -501,4 +572,3 @@ export async function ensureCoreCosmosDBContainersExist() {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
-
