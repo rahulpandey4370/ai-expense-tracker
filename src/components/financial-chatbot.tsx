@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 
 interface FinancialChatbotProps {
   allTransactions: AppTransaction[];
@@ -36,6 +38,39 @@ const examplePrompts = [
   "Compare my income and expenses for the last 3 months.",
   "What are my top 3 spending categories this month?",
 ];
+
+interface ParsedTable {
+    headers: string[];
+    rows: string[][];
+}
+
+const parseTableFromResponse = (text: string): { intro: string; tableData: ParsedTable | null; outro: string } => {
+    const tableStartToken = '[START_TABLE]';
+    const tableEndToken = '[END_TABLE]';
+
+    const startIdx = text.indexOf(tableStartToken);
+    const endIdx = text.indexOf(tableEndToken);
+
+    if (startIdx === -1 || endIdx === -1) {
+        return { intro: text, tableData: null, outro: '' };
+    }
+
+    const intro = text.substring(0, startIdx).trim();
+    const outro = text.substring(endIdx + tableEndToken.length).trim();
+    
+    const tableContent = text.substring(startIdx + tableStartToken.length, endIdx).trim();
+    const rows = tableContent.split('\n').map(row => row.split('|').map(cell => cell.trim()));
+    
+    if (rows.length === 0) {
+        return { intro, tableData: null, outro };
+    }
+
+    // Since we now have a fixed format from the prompt, we can hardcode headers.
+    const headers = ['Date', 'Amount', 'Description', 'Category'];
+
+    return { intro, tableData: { headers, rows }, outro };
+};
+
 
 export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -87,6 +122,40 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
       setIsLoading(false);
     }
   };
+  
+  const ChatMessageContent = ({ content }: { content: string }) => {
+    const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(content), [content]);
+
+    return (
+        <div className="flex-1 break-words text-sm whitespace-pre-wrap">
+            {intro && <p className="mb-2">{intro}</p>}
+            {tableData && (
+                <div className="my-2 overflow-x-auto rounded-md border bg-background/50">
+                    <Table className="text-xs">
+                        <TableHeader>
+                            <TableRow>
+                                {tableData.headers.map((header, i) => (
+                                    <TableHead key={i} className="font-semibold text-foreground">{header}</TableHead>
+                                ))}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {tableData.rows.map((row, i) => (
+                                <TableRow key={i}>
+                                    {row.map((cell, j) => (
+                                        <TableCell key={j}>{cell}</TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+            {outro && <p className="mt-2">{outro}</p>}
+        </div>
+    );
+};
+
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -115,8 +184,8 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
                     <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                   </Avatar>
-                  <div className={cn("flex-1 break-words text-sm whitespace-pre-wrap", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
-                    {message.content}
+                  <div className={cn("flex-1", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
+                     <ChatMessageContent content={message.content} />
                   </div>
                 </motion.div>
               ))}
