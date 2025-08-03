@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lightbulb, Zap } from "lucide-react";
+import { Lightbulb, Zap, LineChart, Target, Handshake } from "lucide-react";
 import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spending-insights";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,14 +19,11 @@ interface SpendingInsightsProps {
   selectedYear: number;
 }
 
+type InsightType = 'default' | 'cost_cutter' | 'growth_investor';
+
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
-
-const buttonHoverTap = {
-  whileHover: { scale: 1.03 },
-  whileTap: { scale: 0.97 },
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
@@ -35,6 +32,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentInsightType, setCurrentInsightType] = useState<InsightType>('default');
 
   const monthlyMetrics = useMemo(() => {
     const income = currentMonthTransactions
@@ -57,16 +55,18 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
   }, [currentMonthTransactions]);
 
 
-  const generateInsights = useCallback(async () => {
+  const generateInsights = useCallback(async (insightType: InsightType = 'default') => {
     setIsLoading(true);
     setError(null);
     setInsights(null);
+    setCurrentInsightType(insightType);
       
     const input: SpendingInsightsInput = {
       currentMonthIncome: monthlyMetrics.income,
       currentMonthSpending: monthlyMetrics.spending,
       lastMonthSpending: lastMonthTotalSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
+      insightType: insightType,
     };
 
     try {
@@ -83,7 +83,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
   useEffect(() => {
     // Automatically generate insights if there's spending data
     if (currentMonthTransactions.length > 0 && monthlyMetrics.spending > 0) {
-      generateInsights();
+      generateInsights(currentInsightType);
     } else {
       // Clear insights if there's no data
       setInsights(null);
@@ -91,7 +91,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyMetrics.spending, currentMonthTransactions.length, generateInsights]);
+  }, [monthlyMetrics.spending]); // Re-run only when spending changes, not on generateInsights itself.
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -124,12 +124,17 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
               <p className="text-sm text-muted-foreground p-3 text-center">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
             )}
           </ScrollArea>
-          <motion.div {...buttonHoverTap}>
-            <Button onClick={generateInsights} disabled={isLoading || monthlyMetrics.spending === 0} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-4">
-              <Zap className="mr-2 h-4 w-4" />
-              {isLoading ? "Generating..." : "Refresh Insights"}
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Button onClick={() => generateInsights('default')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'default' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+              <Handshake className="mr-2 h-4 w-4" /> Default
             </Button>
-          </motion.div>
+             <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+              <Target className="mr-2 h-4 w-4" /> Cost Cutter
+            </Button>
+             <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+              <LineChart className="mr-2 h-4 w-4" /> Growth Advisor
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

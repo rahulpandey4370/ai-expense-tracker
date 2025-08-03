@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, User, SendHorizonal, Zap } from "lucide-react";
+import { Bot, User, SendHorizonal, Zap, Sparkles } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
@@ -30,6 +30,13 @@ const messageVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
+const examplePrompts = [
+  "What was my total spending on groceries this month?",
+  "Show me all my 'want' expenses for July.",
+  "Compare my income and expenses for the last 3 months.",
+  "What are my top 3 spending categories this month?",
+];
+
 export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
@@ -50,11 +57,14 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
-    e?.preventDefault();
-    if (!inputValue.trim()) return;
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | string) => {
+    if (e && typeof e !== 'string') {
+        e.preventDefault();
+    }
+    const query = (typeof e === 'string' ? e : inputValue).trim();
+    if (!query) return;
 
-    const userMessage: ChatMessage = { role: 'user', content: inputValue.trim() };
+    const userMessage: ChatMessage = { role: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
@@ -130,9 +140,17 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                 </div>
               )}
               {messages.length === 0 && !isLoading && !error && (
-                <p className="text-center text-muted-foreground text-sm py-4">
-                  Ask me anything about your transactions! For example: "What was my total spending on groceries this month?" or "Compare my income and expenses."
-                </p>
+                <div className="text-center text-muted-foreground text-sm py-4 space-y-3">
+                    <p>Ask me anything! Or try one of these examples:</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                        {examplePrompts.map((prompt, i) => (
+                            <Button key={i} variant="outline" size="sm" className="text-xs" onClick={() => handleSubmit(prompt)}>
+                                <Sparkles className="mr-1.5 h-3 w-3" />
+                                {prompt}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
               )}
             </div>
           </ScrollArea>
@@ -169,4 +187,3 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     </motion.div>
   );
 }
-    
