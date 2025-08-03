@@ -122,14 +122,14 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
               <p className="text-sm text-muted-foreground p-3 text-center">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
             )}
           </ScrollArea>
-          <div className="flex flex-col sm:flex-row gap-2 pt-2">
-            <Button onClick={() => generateInsights('default')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'default' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button onClick={() => generateInsights('default')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'default' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <Handshake className="mr-2 h-4 w-4" /> Default
             </Button>
-             <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+             <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <Target className="mr-2 h-4 w-4" /> Cost Cutter
             </Button>
-             <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("w-full", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+             <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <LineChart className="mr-2 h-4 w-4" /> Growth Advisor
             </Button>
           </div>

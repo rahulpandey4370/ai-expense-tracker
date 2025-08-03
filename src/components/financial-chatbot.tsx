@@ -109,7 +109,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   animate="visible"
                   className={cn(
                     "flex items-start gap-3 p-3 rounded-lg max-w-[85%]",
-                    message.role === 'user' ? "ml-auto bg-primary/10 text-primary-foreground-dark" : "mr-auto bg-accent/10 text-accent-foreground-dark"
+                    message.role === 'user' ? "ml-auto bg-primary/10" : "mr-auto bg-accent/10"
                   )}
                 >
                   <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
