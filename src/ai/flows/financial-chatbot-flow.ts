@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI-powered chatbot for answering financial questions.
@@ -117,6 +118,15 @@ export async function askFinancialBot(input: {
         });
         dataScopeMessage = `transactions for ${monthNamesForParsing[queryMonth]} ${currentYear}`;
     }
+  } else if (input.query.toLowerCase().includes('this month')) {
+    const today = new Date();
+    const periodStart = startOfMonth(today);
+    const periodEnd = endOfMonth(today);
+    filteredUserTransactions = input.transactions.filter(t => {
+      const transactionDate = new Date(t.date);
+      return transactionDate >= periodStart && transactionDate <= periodEnd;
+    });
+    dataScopeMessage = `transactions for this current month`;
   }
 
   const aiTransactions: AITransaction[] = filteredUserTransactions
@@ -186,15 +196,15 @@ Your primary tasks include:
 - If calculations seem incorrect, recalculate step by step
 
 ## OUTPUT FORMAT REQUIREMENTS
-- Use plain text format only - NO markdown, bold, italics, or special formatting
+- Use plain text format only - NO markdown, bold, italics, or special formatting.
 - Display currency amounts with the rupee symbol: ₹
-- When showing transaction lists, create clean text-based tables using spaces and dashes
-- Use bullet points with simple dashes (-) for lists
-- Keep responses concise but comprehensive
-- Always reference specific categoryName and paymentMethodName when available
+- When showing transaction lists, create clean text-based tables using spaces and dashes for alignment.
+- Use bullet points with simple dashes (-) for lists.
+- Keep responses concise but comprehensive.
+- Always reference specific categoryName and paymentMethodName when available.
 
 ## TABLE FORMAT FOR TRANSACTIONS
-When displaying transaction lists, use this format:
+When displaying transaction lists, use this format. Use spaces to align columns neatly.
 Date       | Amount    | Category     | Description
 ---------- | --------- | ------------ | -----------
 2024-01-15 | ₹1,200.00 | Food         | Lunch at restaurant
@@ -216,11 +226,11 @@ ${JSON.stringify(transactions, null, 2)}
 ${transactions.length >= 250 ? `\n...(Note: Displaying up to 250 transactions. The actual data for the queried period might be larger if not fully shown here)` : ''}
 
 ## RESPONSE GUIDELINES
-- If the user asks for comprehensive yearly summaries or trends, suggest they visit the 'Yearly Overview' page
-- If data is insufficient for a specific query, clearly state the limitations
-- Always specify the time period your analysis covers
-- Provide actionable insights when possible
-- If asked about periods not covered in the data, clearly state this limitation
+- If the user asks for comprehensive yearly summaries or trends, suggest they visit the 'Yearly Overview' page.
+- If data is insufficient for a specific query, clearly state the limitations.
+- Always specify the time period your analysis covers.
+- Provide actionable insights when possible.
+- If asked about periods not covered in the data, clearly state this limitation.
 
 ## EXAMPLES OF GOOD RESPONSES
 - "Based on your transactions for January 2024, your total food expenses were ₹8,500.00 across 15 transactions."

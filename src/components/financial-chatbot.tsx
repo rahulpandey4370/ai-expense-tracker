@@ -32,7 +32,7 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 
 const examplePrompts = [
   "What was my total spending on groceries this month?",
-  "Show me all my 'want' expenses for July.",
+  "Show me all my 'want' expenses for this month.",
   "Compare my income and expenses for the last 3 months.",
   "What are my top 3 spending categories this month?",
 ];
@@ -115,8 +115,8 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
                     <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                   </Avatar>
-                  <div className={cn("flex-1 break-words text-sm", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
-                    {message.content.split('\n').map((line, i) => (<p key={i}>{line}</p>))}
+                  <div className={cn("flex-1 break-words text-sm whitespace-pre-wrap", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
+                    {message.content}
                   </div>
                 </motion.div>
               ))}

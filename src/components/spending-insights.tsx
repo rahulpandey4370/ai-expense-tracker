@@ -114,10 +114,8 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
             )}
             {error && <p className="text-sm text-destructive">{error}</p>}
             {insights && !isLoading && (
-              <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md">
-                {insights.split('\n').map((line, index) => (
-                  <p key={index} className="text-foreground">{line.replace(/^- /, '• ').replace(/^\d+\.\s/, '• ')}</p>
-                ))}
+              <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md whitespace-pre-wrap">
+                <p className="text-foreground">{insights}</p>
               </div>
             )}
             {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlyMetrics.spending === 0) && (
