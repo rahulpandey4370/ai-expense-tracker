@@ -50,14 +50,6 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
 
   const sidebarContent = (
     <>
-       {/* Visually hidden titles for screen reader accessibility in mobile view (Sheet) */}
-      <SheetHeader className="sr-only">
-        <SheetTitle>App Navigation</SheetTitle>
-        <SheetDescription>
-          Main navigation menu for the FinWise AI application.
-        </SheetDescription>
-      </SheetHeader>
-
       <SidebarHeader className="p-4">
         <Link href={isDemoMode ? "/demo" : "/"} aria-label="FinWise AI Home" onClick={handleLinkClick}>
           <AppLogo appName="FinWise AI" />
@@ -114,13 +106,27 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
     </>
   );
 
+  const mobileSidebarContent = (
+    <>
+      {/* Visually hidden titles for screen reader accessibility in mobile view (Sheet) */}
+      <SheetHeader className="sr-only">
+        <SheetTitle>App Navigation</SheetTitle>
+        <SheetDescription>
+          Main navigation menu for the FinWise AI application.
+        </SheetDescription>
+      </SheetHeader>
+      {/* The rest of the sidebar content */}
+      {sidebarContent}
+    </>
+  );
+
   return (
     <Sidebar
       collapsible="icon"
       variant="sidebar"
       side="left"
       // Pass content as a child to the SheetContent within the Sidebar component
-      sheetContentProps={{ children: sidebarContent }}
+      sheetContentProps={{ children: mobileSidebarContent }}
     >
       {/* This content is for the desktop view */}
       {sidebarContent}
