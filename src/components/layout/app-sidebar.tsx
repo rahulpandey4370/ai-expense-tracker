@@ -13,11 +13,12 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'; // Import Sheet components
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home } from "lucide-react"; // Added Home
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -43,12 +44,20 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
     }
   };
 
-  const currentNavItems = isDemoMode 
+  const currentNavItems = isDemoMode
     ? [{ href: "/demo", label: "Demo Dashboard", icon: LayoutDashboard }, { href: "/", label: "Back to Main App", icon: Home }]
     : navItems;
 
-  return (
-    <Sidebar collapsible="icon" variant="sidebar" side="left">
+  const sidebarContent = (
+    <>
+       {/* Visually hidden titles for screen reader accessibility in mobile view (Sheet) */}
+      <SheetHeader className="sr-only">
+        <SheetTitle>App Navigation</SheetTitle>
+        <SheetDescription>
+          Main navigation menu for the FinWise AI application.
+        </SheetDescription>
+      </SheetHeader>
+
       <SidebarHeader className="p-4">
         <Link href={isDemoMode ? "/demo" : "/"} aria-label="FinWise AI Home" onClick={handleLinkClick}>
           <AppLogo appName="FinWise AI" />
@@ -102,6 +111,19 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
           </SidebarFooter>
         </>
       )}
+    </>
+  );
+
+  return (
+    <Sidebar
+      collapsible="icon"
+      variant="sidebar"
+      side="left"
+      // Pass content as a child to the SheetContent within the Sidebar component
+      sheetContentProps={{ children: sidebarContent }}
+    >
+      {/* This content is for the desktop view */}
+      {sidebarContent}
     </Sidebar>
   );
 }
