@@ -103,11 +103,6 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   )}
                 >
                   <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
-                    <AvatarImage
-                      src={message.role === 'user' ? "https://placehold.co/100x100.png" : "https://placehold.co/100x100.png"}
-                      alt={message.role}
-                      data-ai-hint={message.role === 'user' ? 'user avatar' : 'robot avatar'}
-                    />
                     <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                   </Avatar>
                   <div className={cn("flex-1 break-words text-sm", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
@@ -118,7 +113,6 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               {isLoading && (
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/10 mr-auto max-w-[85%]">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="https://placehold.co/100x100.png" alt="AI thinking" data-ai-hint="robot avatar" />
                     <AvatarFallback><Bot className="h-4 w-4 animate-pulse" /></AvatarFallback>
                   </Avatar>
                   <div className="flex-1 space-y-2 py-1">
