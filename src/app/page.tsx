@@ -336,6 +336,7 @@ export default function DashboardPage() {
             currentMonthTransactions={currentMonthTransactions} 
             lastMonthTotalSpending={lastMonthCoreExpenses} 
             selectedMonthName={monthNamesList[selectedMonth]}
+            selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
         </motion.div>

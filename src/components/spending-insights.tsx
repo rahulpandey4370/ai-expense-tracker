@@ -16,6 +16,7 @@ interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
   lastMonthTotalSpending: number; 
   selectedMonthName: string;
+  selectedMonth: number; // Pass numeric month
   selectedYear: number;
 }
 
@@ -28,7 +29,7 @@ const cardVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedYear }: SpendingInsightsProps) {
+export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedMonth, selectedYear }: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +68,8 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       lastMonthSpending: lastMonthTotalSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
       insightType: insightType,
+      selectedMonth: selectedMonth, // Pass selected month
+      selectedYear: selectedYear,   // Pass selected year
     };
 
     try {
@@ -78,10 +81,10 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     } finally {
       setIsLoading(false);
     }
-  }, [monthlyMetrics, lastMonthTotalSpending]);
+  }, [monthlyMetrics, lastMonthTotalSpending, selectedMonth, selectedYear]);
   
   useEffect(() => {
-    // Automatically generate insights if there's spending data
+    // Automatically generate insights if there's spending data for the selected month
     if (currentMonthTransactions.length > 0 && monthlyMetrics.spending > 0) {
       generateInsights(currentInsightType);
     } else {
@@ -91,7 +94,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyMetrics.spending]); // Re-run only when spending changes, not on generateInsights itself.
+  }, [monthlyMetrics.spending, selectedMonth, selectedYear]); // Re-run when spending or selected period changes
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
