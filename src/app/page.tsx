@@ -11,8 +11,8 @@ import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
-import type { AppTransaction } from '@/lib/types';
-import { getTransactions } from '@/lib/actions/transactions';
+import type { AppTransaction, Category } from '@/lib/types';
+import { getTransactions, getCategories } from '@/lib/actions/transactions';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
+import { BudgetTrackerCard } from '@/components/budget-tracker-card';
+import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -53,29 +55,41 @@ const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
+const hardcodedBudgets = [
+    { id: 'want-type', name: 'Wants (Expense Type)', amount: 10000, type: 'expenseType' as const, categoryId: 'want' },
+    { id: 'groceries-cat', name: 'Groceries', amount: 5000, type: 'category' as const, categoryId: '' },
+    { id: 'food-cat', name: 'Food and Dining', amount: 5000, type: 'category' as const, categoryId: '' },
+    { id: 'transport-cat', name: 'Auto & Transportation', amount: 2000, type: 'category' as const, categoryId: '' },
+];
+
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
 
-  const fetchAndSetTransactions = useCallback(async () => {
+  const fetchAndSetData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // Limit to fetching a reasonable number for dashboard performance
-      const fetchedTransactions = await getTransactions({ limit: 500 }); 
+      const [fetchedTransactions, fetchedCategories] = await Promise.all([
+        getTransactions({ limit: 500 }),
+        getCategories(),
+      ]);
       setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
+      setAllCategories(fetchedCategories);
     } catch (error) {
-      console.error("Failed to fetch transactions for dashboard:", error);
+      console.error("Failed to fetch data for dashboard:", error);
       toast({
         title: "Error Loading Data",
-        description: error instanceof Error ? error.message : "Could not fetch transactions. Please try refreshing.",
+        description: error instanceof Error ? error.message : "Could not fetch data. Please try refreshing.",
         variant: "destructive",
       });
       setTransactions([]);
+      setAllCategories([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -83,12 +97,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setIsClient(true);
-    fetchAndSetTransactions();
-  }, [fetchAndSetTransactions]);
+    fetchAndSetData();
+  }, [fetchAndSetData]);
 
   const handleAddTransactionCallback = async () => {
     try {
-        await fetchAndSetTransactions();
+        await fetchAndSetData();
     } catch (error) {
         console.error("Error after attempting to add/update transaction:", error);
         toast({ title: "Data Sync Error", description: "Could not refresh data after the last operation.", variant: "destructive" });
@@ -120,33 +134,27 @@ export default function DashboardPage() {
       )
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalOutgoings = coreExpenses + totalInvestments; // Total expenses including investments
-    
+    const totalOutgoings = coreExpenses + totalInvestments;
     const availableToSaveOrInvest = income - coreExpenses; 
-    const netMonthlyCashflow = income - totalOutgoings; // This is cash savings
-    
+    const netMonthlyCashflow = income - totalOutgoings;
     const investmentPercentage = income > 0 ? (totalInvestments / income) * 100 : 0;
-
     const totalCashbackInterestsDividends = currentMonthTransactions
       .filter(t => t.type === 'income' && t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
       .reduce((sum, t) => sum + t.amount, 0);
-
     const cashSavingsPercentage = income > 0 ? (netMonthlyCashflow / income) * 100 : 0;
-    // Total pool available for saving or investing, as a percentage of income
     const totalSavingsAndInvestmentPercentage = income > 0 ? ((income - coreExpenses) / income) * 100 : 0;
-
 
     return { 
       income, 
       coreExpenses,
       totalInvestments,
       totalOutgoings,
-      availableToSaveOrInvest, // Amount after core expenses, which can be saved or invested
-      netMonthlyCashflow, // Cash savings after all expenses (core + investment)
+      availableToSaveOrInvest,
+      netMonthlyCashflow,
       investmentPercentage,
       totalCashbackInterestsDividends,
-      cashSavingsPercentage, // Percentage of income saved as cash
-      totalSavingsAndInvestmentPercentage // Percentage of income available for saving/investing
+      cashSavingsPercentage,
+      totalSavingsAndInvestmentPercentage
     };
   }, [currentMonthTransactions]);
 
@@ -158,7 +166,7 @@ export default function DashboardPage() {
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
-    return transactions // Uses the limited set of transactions fetched for the dashboard
+    return transactions
       .filter(t => {
         const transactionDate = new Date(t.date);
         return t.type === 'expense' && 
@@ -169,6 +177,33 @@ export default function DashboardPage() {
       .reduce((sum, t) => sum + t.amount, 0) || 0;
   }, [transactions, selectedDate]);
 
+  const budgetData = useMemo(() => {
+        const resolvedBudgets = hardcodedBudgets.map(b => {
+            if (b.type === 'category' && !b.categoryId) {
+                const category = allCategories.find(c => c.name === b.name);
+                return { ...b, categoryId: category?.id || '' };
+            }
+            return b;
+        }).filter(b => b.categoryId); // Ensure we have an ID
+
+        return resolvedBudgets.map(budget => {
+            const spent = currentMonthTransactions
+                .filter(t => {
+                    if (budget.type === 'expenseType') return t.expenseType === budget.categoryId;
+                    if (budget.type === 'category') return t.category?.id === budget.categoryId;
+                    return false;
+                })
+                .reduce((sum, t) => sum + t.amount, 0);
+            return {
+                id: budget.id,
+                name: budget.name,
+                budgetAmount: budget.amount,
+                spentAmount: spent,
+            };
+        });
+    }, [currentMonthTransactions, allCategories]);
+
+    useBudgetAlerts(budgetData);
 
   if (!isClient || isLoadingData) {
     return (
@@ -320,6 +355,10 @@ export default function DashboardPage() {
           </Alert>
         </motion.div>
       )}
+      
+      <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+          <BudgetTrackerCard budgets={budgetData} />
+      </motion.div>
 
       <Card className={cn("p-0 sm:p-0 bg-card/80", glowClass)}>
         <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
