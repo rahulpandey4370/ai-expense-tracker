@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -22,6 +23,7 @@ import { IncomeDistributionChart } from '@/components/charts/income-distribution
 import { BudgetTrackerCard } from '@/components/budget-tracker-card';
 import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
+import { subMonths } from 'date-fns';
 
 const containerVariants = {
   hidden: { opacity: 0 },
