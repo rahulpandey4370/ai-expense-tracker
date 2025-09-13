@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -165,10 +164,7 @@ export default function DashboardPage() {
   }, [currentMonthTransactions]);
 
   const lastMonthCoreExpenses = useMemo(() => {
-    const prevMonthDate = new Date(selectedDate);
-    prevMonthDate.setDate(1); 
-    prevMonthDate.setMonth(selectedDate.getMonth() - 1);
-
+    const prevMonthDate = subMonths(selectedDate, 1);
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
@@ -181,7 +177,7 @@ export default function DashboardPage() {
                transactionDate.getFullYear() === yearForLastMonth;
       })
       .reduce((sum, t) => sum + t.amount, 0) || 0;
-  }, [transactions, selectedDate]);
+  }, [transactions, selectedDate, selectedMonth, selectedYear]);
 
   const budgetData = useMemo(() => {
         const resolvedBudgets = hardcodedBudgets.map(b => {
