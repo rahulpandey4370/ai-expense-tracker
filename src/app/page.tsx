@@ -81,7 +81,7 @@ export default function DashboardPage() {
     setIsLoadingData(true);
     try {
       const [fetchedTransactions, fetchedCategories] = await Promise.all([
-        getTransactions({ limit: 500 }),
+        getTransactions({ limit: 5000 }),
         getCategories(),
       ]);
       setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
