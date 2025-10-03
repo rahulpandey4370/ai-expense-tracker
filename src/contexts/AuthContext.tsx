@@ -3,8 +3,9 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; // Changed from 'next/router'
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { serverLogin } from '@/lib/actions/auth'; // Import the server action
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -15,18 +16,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const HARDCODED_EMAIL = "rahul@example.com";
-const HARDCODED_PASSWORD = "finwise_@i";
 const AUTH_STORAGE_KEY = "finwiseAuthStatus";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true); // Start true to check localStorage
+  const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check localStorage on initial load
     try {
       const storedAuthStatus = localStorage.getItem(AUTH_STORAGE_KEY);
       if (storedAuthStatus === 'true') {
@@ -34,14 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error("Error reading auth status from localStorage:", error);
-      // If localStorage is not available or blocked, default to not authenticated
     } finally {
       setIsLoadingAuth(false);
     }
   }, []);
 
   const login = useCallback(async (email?: string, password?: string): Promise<boolean> => {
-    if (email === HARDCODED_EMAIL && password === HARDCODED_PASSWORD) {
+    // Call the server action to securely check credentials
+    const result = await serverLogin(email, password);
+
+    if (result.success) {
       setIsAuthenticated(true);
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, 'true');
@@ -52,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({ title: "Login Successful", description: "Welcome back!" });
       return true;
     }
-    toast({ title: "Login Failed", description: "Invalid email or password.", variant: "destructive" });
+
+    toast({ title: "Login Failed", description: result.error || "Invalid email or password.", variant: "destructive" });
     return false;
   }, [router, toast]);
 
