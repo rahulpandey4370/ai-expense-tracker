@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat } from "lucide-react";
+import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat, FilePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getTransactions } from '@/lib/actions/transactions';
-import { addGoal, getGoals, updateGoalProgress, deleteGoal, type Goal } from '@/lib/actions/goals';
+import { addGoal, getGoals, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, type Goal, type FundAllocation } from '@/lib/actions/goals';
 import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
@@ -76,7 +76,9 @@ export default function AIPlaygroundPage() {
   const [savedGoals, setSavedGoals] = useState<Goal[]>([]);
   const [isLoadingGoals, setIsLoadingGoals] = useState(false);
   const [allocationAmounts, setAllocationAmounts] = useState<Record<string, string>>({});
+  const [allocationNames, setAllocationNames] = useState<Record<string, string>>({});
   const [isSavingGoal, setIsSavingGoal] = useState(false);
+  const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null);
 
   // Financial Health Check State
   const [healthCheckPeriodType, setHealthCheckPeriodType] = useState<HealthCheckPeriodType>('current_week');
@@ -153,7 +155,7 @@ export default function AIPlaygroundPage() {
 
     try {
       const result = await analyzeFixedExpenses(input);
-      if (result.summary.toLowerCase().includes("error")) {
+      if (result.summary.toLowerCase().includes("error") || result.summary.toLowerCase().includes("could not perform")) {
         setAiFixedExpenseError(result.summary);
         toast({ title: "AI Fixed Expense Error", description: result.summary, variant: "destructive" });
       } else {
@@ -299,6 +301,12 @@ export default function AIPlaygroundPage() {
 
   const handleAllocateSavings = async (goalId: string) => {
     const amountStr = allocationAmounts[goalId];
+    const nameStr = allocationNames[goalId];
+
+    if (!nameStr?.trim()) {
+        toast({ title: "Allocation Name Required", description: "Please enter a name for this fund allocation (e.g., 'HDFC Bank', 'Parag Parikh MF').", variant: "destructive" });
+        return;
+    }
     if (!amountStr) {
       toast({ title: "No Amount Entered", description: "Please enter an amount to allocate.", variant: "destructive" });
       return;
@@ -309,17 +317,33 @@ export default function AIPlaygroundPage() {
       return;
     }
 
-    setIsLoadingGoals(true);
+    setIsLoadingGoals(true); // Re-use loading state to indicate activity
     try {
-      await updateGoalProgress(goalId, amountToAllocate);
-      toast({ title: "Savings Allocated!", description: `₹${amountToAllocate} allocated to your goal.` });
+      await addAllocationToGoal(goalId, nameStr, amountToAllocate);
+      toast({ title: "Fund Allocated!", description: `₹${amountToAllocate} allocated to '${nameStr}'.` });
+      // Clear inputs for this specific goal
       setAllocationAmounts(prev => ({ ...prev, [goalId]: '' }));
-      fetchInitialDataCallback();
+      setAllocationNames(prev => ({...prev, [goalId]: ''}));
+      fetchInitialDataCallback(); // Refresh data
     } catch (error: any) {
       toast({ title: "Allocation Error", description: error.message || "Could not allocate savings.", variant: "destructive" });
       setIsLoadingGoals(false);
     }
   };
+
+  const handleDeleteAllocation = async (goalId: string, allocationId: string) => {
+    setIsDeletingAllocation(allocationId);
+    try {
+        await deleteAllocationFromGoal(goalId, allocationId);
+        toast({ title: "Allocation Removed", description: "The fund allocation has been removed." });
+        fetchInitialDataCallback();
+    } catch (error: any) {
+        toast({ title: "Deletion Error", description: error.message || "Could not remove the allocation.", variant: "destructive" });
+    } finally {
+        setIsDeletingAllocation(null);
+    }
+  };
+
 
   const handleDeleteGoal = async (goalId: string, goalDesc: string) => {
     setIsLoadingGoals(true);
@@ -816,7 +840,7 @@ export default function AIPlaygroundPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Delete: {goal.description}?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete this item and its progress.
+                                    This action cannot be undone. This will permanently delete this item and all its fund allocations.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -842,29 +866,44 @@ export default function AIPlaygroundPage() {
                         <p className="text-xs text-muted-foreground">{monthsRemaining} month(s) remaining.</p>
                      )}
                   </div>
+                  
+                  {/* Detailed Allocations */}
+                  {goal.allocations && goal.allocations.length > 0 && (
+                    <div className="pt-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-1">Fund Allocations:</h4>
+                        <ul className="space-y-1">
+                            {goal.allocations.map((alloc: FundAllocation) => (
+                                <li key={alloc.id} className="flex justify-between items-center text-xs p-1.5 rounded bg-background/50 border border-border/50">
+                                    <span>{alloc.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">₹{alloc.amount.toLocaleString()}</span>
+                                      <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/70 hover:bg-destructive/10" onClick={() => handleDeleteAllocation(goal.id, alloc.id)} disabled={isDeletingAllocation === alloc.id}>
+                                        {isDeletingAllocation === alloc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                      </Button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                  )}
+
                   {goal.status !== 'completed' && (
-                    <div className="flex flex-col sm:flex-row items-end gap-2 pt-2">
-                      <div className="flex-grow w-full sm:w-auto">
-                        <Label htmlFor={`allocate-${goal.id}`} className="text-xs text-foreground/80">Allocate Savings (₹)</Label>
-                        <Input
-                          id={`allocate-${goal.id}`}
-                          type="number"
-                          placeholder="e.g., 500"
-                          value={allocationAmounts[goal.id] || ''}
-                          onChange={(e) => setAllocationAmounts(prev => ({ ...prev, [goal.id]: e.target.value }))}
-                          className="mt-1 h-9 text-sm bg-background/80 border-border/60 focus:border-accent"
-                        />
+                    <div className="pt-3 border-t border-border/50">
+                      <p className="text-sm font-medium mb-2">Add New Fund Allocation</p>
+                      <div className="flex flex-col sm:flex-row items-end gap-2">
+                          <div className="flex-grow w-full sm:w-auto">
+                              <Label htmlFor={`allocate-name-${goal.id}`} className="text-xs text-foreground/80">Allocation Name</Label>
+                              <Input id={`allocate-name-${goal.id}`} type="text" placeholder="e.g., HDFC Bank, MF" value={allocationNames[goal.id] || ''} onChange={(e) => setAllocationNames(prev => ({...prev, [goal.id]: e.target.value}))} className="mt-1 h-9 text-sm bg-background/80 border-border/60 focus:border-accent" />
+                          </div>
+                          <div className="flex-grow w-full sm:w-auto">
+                              <Label htmlFor={`allocate-amount-${goal.id}`} className="text-xs text-foreground/80">Amount (₹)</Label>
+                              <Input id={`allocate-amount-${goal.id}`} type="number" placeholder="e.g., 5000" value={allocationAmounts[goal.id] || ''} onChange={(e) => setAllocationAmounts(prev => ({ ...prev, [goal.id]: e.target.value }))} className="mt-1 h-9 text-sm bg-background/80 border-border/60 focus:border-accent" />
+                          </div>
+                          <Button onClick={() => handleAllocateSavings(goal.id)} disabled={isLoadingGoals || !allocationAmounts[goal.id]?.trim() || !allocationNames[goal.id]?.trim()} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto whitespace-nowrap" withMotion>
+                              {isLoadingGoals && allocationAmounts[goal.id]?.trim() && allocationNames[goal.id]?.trim() ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FilePlus className="mr-1.5 h-4 w-4" />}
+                              Add Allocation
+                          </Button>
                       </div>
-                      <Button
-                        onClick={() => handleAllocateSavings(goal.id)}
-                        disabled={isLoadingGoals || !allocationAmounts[goal.id]?.trim()}
-                        size="sm"
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto whitespace-nowrap"
-                        withMotion
-                      >
-                        {isLoadingGoals && allocationAmounts[goal.id]?.trim() ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Wallet className="mr-1.5 h-4 w-4" />}
-                        Allocate
-                      </Button>
                     </div>
                   )}
                 </motion.div>
@@ -1084,3 +1123,5 @@ export default function AIPlaygroundPage() {
     </main>
   );
 }
+
+    
