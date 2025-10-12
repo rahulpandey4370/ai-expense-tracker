@@ -1,3 +1,4 @@
+
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
@@ -186,14 +187,29 @@ export async function addAllocationToGoal(goalId: string, allocationName: string
         throw new Error(`Could not retrieve goal. Original error: ${error.message}`);
     }
 
-    const newAllocation: FundAllocation = {
-        id: cuid(),
-        name: allocationName,
-        amount: allocationAmount,
-        addedAt: new Date().toISOString(),
-    };
+    const existingAllocationIndex = (existingGoal.allocations || []).findIndex(alloc => alloc.name.toLowerCase() === allocationName.trim().toLowerCase());
+    let updatedAllocations: FundAllocation[];
 
-    const updatedAllocations = [...(existingGoal.allocations || []), newAllocation];
+    if (existingAllocationIndex > -1) {
+        // Update existing allocation
+        updatedAllocations = [...(existingGoal.allocations || [])];
+        const existing = updatedAllocations[existingAllocationIndex];
+        updatedAllocations[existingAllocationIndex] = {
+            ...existing,
+            amount: existing.amount + allocationAmount,
+            addedAt: new Date().toISOString(), // Update timestamp
+        };
+    } else {
+        // Add new allocation
+        const newAllocation: FundAllocation = {
+            id: cuid(),
+            name: allocationName.trim(),
+            amount: allocationAmount,
+            addedAt: new Date().toISOString(),
+        };
+        updatedAllocations = [...(existingGoal.allocations || []), newAllocation];
+    }
+    
     const newTotalSaved = updatedAllocations.reduce((sum, alloc) => sum + alloc.amount, 0);
 
     const updatedGoal: Goal = {
@@ -213,7 +229,7 @@ export async function addAllocationToGoal(goalId: string, allocationName: string
         revalidatePath(AI_PLAYGROUND_PATH);
         return updatedGoal;
     } catch (error: any) {
-        throw new Error(`Could not add allocation to goal. Original error: ${error.message}`);
+        throw new Error(`Could not add/update allocation for goal. Original error: ${error.message}`);
     }
 }
 
