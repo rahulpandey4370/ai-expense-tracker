@@ -165,21 +165,31 @@ export default function DashboardPage() {
     };
   }, [currentMonthTransactions]);
 
-  const lastMonthCoreExpenses = useMemo(() => {
+  const previousMonthMetrics = useMemo(() => {
     const prevMonthDate = subMonths(selectedDate, 1);
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
-    return transactions
-      .filter(t => {
+    const lastMonthTransactions = transactions.filter(t => {
         const transactionDate = new Date(t.date);
-        return t.type === 'expense' && 
-               (t.expenseType === 'need' || t.expenseType === 'want') &&
-               transactionDate.getMonth() === lastMonth && 
-               transactionDate.getFullYear() === yearForLastMonth;
-      })
-      .reduce((sum, t) => sum + t.amount, 0) || 0;
-  }, [transactions, selectedDate, selectedMonth, selectedYear]);
+        return transactionDate.getMonth() === lastMonth && transactionDate.getFullYear() === yearForLastMonth;
+    });
+
+    const lastMonthCoreExpenses = lastMonthTransactions
+        .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want'))
+        .reduce((sum, t) => sum + t.amount, 0) || 0;
+
+    const lastMonthSpendingByCategory = lastMonthTransactions
+        .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && t.category?.name)
+        .reduce((acc, t) => {
+            const categoryName = t.category!.name;
+            acc[categoryName] = (acc[categoryName] || 0) + t.amount;
+            return acc;
+        }, {} as Record<string, number>);
+
+    return { lastMonthCoreExpenses, lastMonthSpendingByCategory };
+  }, [transactions, selectedDate]);
+
 
   const budgetData = useMemo(() => {
         const resolvedBudgets = hardcodedBudgets.map(b => {
@@ -382,7 +392,8 @@ export default function DashboardPage() {
               currentMonthTransactions={currentMonthTransactions}
               currentMonthCoreSpending={monthlyMetrics.coreExpenses}
               currentMonthInvestmentSpending={monthlyMetrics.totalInvestments}
-              lastMonthCoreSpending={lastMonthCoreExpenses}
+              lastMonthCoreSpending={previousMonthMetrics.lastMonthCoreExpenses}
+              lastMonthSpendingByCategory={previousMonthMetrics.lastMonthSpendingByCategory}
               selectedMonthName={monthNamesList[selectedMonth]}
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}

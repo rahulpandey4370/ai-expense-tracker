@@ -21,6 +21,7 @@ const SpendingInsightsInputSchema = z.object({
   currentMonthInvestmentSpending: z.number().describe('The total amount actively invested this month (e.g., stocks, mutual funds) in INR.'),
   lastMonthCoreSpending: z.number().describe('The total core spending for the last month in INR.'),
   spendingByCategory: z.record(z.number()).describe('A JSON object mapping each core spending category to its total amount for the current month in INR. E.g., {"Food and Dining": 5000, "Shopping": 3500, "Utilities": 2000}.'),
+  lastMonthSpendingByCategory: z.record(z.number()).describe('A JSON object mapping each core spending category to its total amount for the previous month in INR.'),
   insightType: z.enum(['default', 'cost_cutter', 'growth_investor']).optional().default('default'),
   selectedMonth: z.number().min(0).max(11).describe("The selected month for analysis (0=Jan, 11=Dec)."),
   selectedYear: z.number().describe("The selected year for analysis."),
@@ -66,6 +67,11 @@ const spendingInsightsFlow = ai.defineFlow(
     const spendingByCategoryString = Object.entries(input.spendingByCategory)
       .map(([category, amount]) => `${category}: ₹${amount.toFixed(2)}`)
       .join(', ');
+    
+    const lastMonthSpendingByCategoryString = Object.entries(input.lastMonthSpendingByCategory)
+      .map(([category, amount]) => `${category}: ₹${amount.toFixed(2)}`)
+      .join(', ');
+
 
     const personas = {
       default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore and understands the city's cost dynamics. You give hard truths, call out wasteful spending, and provide actionable insights. You're supportive but won't sugarcoat financial mistakes. You understand that rent, transport, and food are expensive in Bangalore, but you also know when someone is overspending on wants vs needs. Investments are NOT expenses.`,
@@ -108,12 +114,13 @@ Provide 4-6 insightful, time-aware, and actionable points based on your persona 
 
 1.  **SEPARATE INVESTMENTS**: Explicitly mention the amount invested as a positive action, separate from core spending.
 2.  **ANALYZE CORE SPENDING**: Focus your main analysis on the Core Spending. Compare it to income and last month.
-3.  **PERSONA-BASED ANALYSIS**:
+3.  **ANALYZE THE CAUSE OF SPENDING CHANGE**: When comparing to last month, you MUST analyze the category-wise spending data for both months. Identify the top 2-3 specific categories that contributed most to any spending increase or decrease and explicitly mention them. For example, "Your spending increased mainly due to higher costs in 'Shopping' and 'Food and Dining'."
+4.  **PERSONA-BASED ANALYSIS**:
     - **Default**: Call out wasteful core spending vs. genuine high costs.
     - **Cost Cutter**: Identify ALL non-essential core spending (Wants) as a target for reduction.
     - **Growth Investor**: Identify money from Core Spending that could be re-allocated to investments.
-4.  **CASH SAVINGS**: Mention the final Cash Savings amount (or deficit) and what it implies.
-5.  **SPECIFIC ACTIONS**: Give concrete steps with amounts related to CORE SPENDING categories.
+5.  **CASH SAVINGS**: Mention the final Cash Savings amount (or deficit) and what it implies.
+6.  **SPECIFIC ACTIONS**: Give concrete steps with amounts related to CORE SPENDING categories.
 
 ## AVAILABLE DATA FOR ANALYSIS
 - Period Income: ₹${input.currentMonthIncome}
@@ -122,7 +129,8 @@ Provide 4-6 insightful, time-aware, and actionable points based on your persona 
 - Cash Savings (Income - Core Spending - Investments): ₹${cashSavings}
 - Previous Month Core Spending: ₹${input.lastMonthCoreSpending}
 - Month-over-Month Change (Core Spending): ${percentageChange}%
-- Period Core Spending Breakdown: ${spendingByCategoryString || "No categorized core spending this month."}
+- **Current Month Core Spending Breakdown**: ${spendingByCategoryString || "No categorized core spending this month."}
+- **Previous Month Core Spending Breakdown**: ${lastMonthSpendingByCategoryString || "No categorized core spending last month."}
 
 ## OUTPUT FORMAT REQUIREMENTS
 - Use plain text format only - NO markdown formatting

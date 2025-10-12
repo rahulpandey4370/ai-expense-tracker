@@ -17,6 +17,7 @@ interface SpendingInsightsProps {
   currentMonthCoreSpending: number;
   currentMonthInvestmentSpending: number;
   lastMonthCoreSpending: number;
+  lastMonthSpendingByCategory: Record<string, number>;
   selectedMonthName: string;
   selectedMonth: number;
   selectedYear: number;
@@ -36,6 +37,7 @@ export function SpendingInsights({
   currentMonthCoreSpending,
   currentMonthInvestmentSpending,
   lastMonthCoreSpending,
+  lastMonthSpendingByCategory,
   selectedMonthName,
   selectedMonth,
   selectedYear,
@@ -74,6 +76,7 @@ export function SpendingInsights({
       currentMonthInvestmentSpending: currentMonthInvestmentSpending,
       lastMonthCoreSpending: lastMonthCoreSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
+      lastMonthSpendingByCategory: lastMonthSpendingByCategory,
       insightType: insightType,
       selectedMonth: selectedMonth,
       selectedYear: selectedYear,
@@ -88,7 +91,7 @@ export function SpendingInsights({
     } finally {
       setIsLoading(false);
     }
-  }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, selectedMonth, selectedYear]);
+  }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, lastMonthSpendingByCategory, selectedMonth, selectedYear]);
   
   useEffect(() => {
     // Automatically generate insights if there's spending data for the selected month
