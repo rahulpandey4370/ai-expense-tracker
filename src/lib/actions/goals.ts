@@ -191,13 +191,13 @@ export async function addAllocationToGoal(goalId: string, allocationName: string
     let updatedAllocations: FundAllocation[];
 
     if (existingAllocationIndex > -1) {
-        // Update existing allocation
+        // Update existing allocation by adding to its amount
         updatedAllocations = [...(existingGoal.allocations || [])];
         const existing = updatedAllocations[existingAllocationIndex];
         updatedAllocations[existingAllocationIndex] = {
             ...existing,
             amount: existing.amount + allocationAmount,
-            addedAt: new Date().toISOString(), // Update timestamp
+            updatedAt: new Date().toISOString(), // Add/update timestamp
         };
     } else {
         // Add new allocation
@@ -205,7 +205,8 @@ export async function addAllocationToGoal(goalId: string, allocationName: string
             id: cuid(),
             name: allocationName.trim(),
             amount: allocationAmount,
-            addedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
         };
         updatedAllocations = [...(existingGoal.allocations || []), newAllocation];
     }
@@ -230,6 +231,60 @@ export async function addAllocationToGoal(goalId: string, allocationName: string
         return updatedGoal;
     } catch (error: any) {
         throw new Error(`Could not add/update allocation for goal. Original error: ${error.message}`);
+    }
+}
+
+export async function editAllocation(goalId: string, allocationId: string, newAmount: number): Promise<Goal> {
+    if (newAmount <= 0) {
+        throw new Error("Allocation amount must be positive.");
+    }
+    const client = await getAzureGoalsContainerClient();
+    const filePath = `${GOALS_DIR}${goalId}.json`;
+    const blobClient = client.getBlobClient(filePath);
+    let existingGoal: Goal;
+
+    try {
+        const downloadResponse = await blobClient.download(0);
+        if (!downloadResponse.readableStreamBody) throw new Error("Goal blob has no content.");
+        const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
+        existingGoal = JSON.parse(buffer.toString());
+    } catch (error: any) {
+        if (error instanceof RestError && error.statusCode === 404) throw new Error(`Goal with ID ${goalId} not found.`);
+        throw new Error(`Could not retrieve goal. Original error: ${error.message}`);
+    }
+
+    const allocationIndex = (existingGoal.allocations || []).findIndex(alloc => alloc.id === allocationId);
+    if (allocationIndex === -1) {
+        throw new Error("Allocation not found within the goal.");
+    }
+
+    const updatedAllocations = [...(existingGoal.allocations || [])];
+    updatedAllocations[allocationIndex] = {
+        ...updatedAllocations[allocationIndex],
+        amount: newAmount,
+        updatedAt: new Date().toISOString(),
+    };
+
+    const newTotalSaved = updatedAllocations.reduce((sum, alloc) => sum + alloc.amount, 0);
+
+    const updatedGoal: Goal = {
+        ...existingGoal,
+        allocations: updatedAllocations,
+        amountSavedSoFar: newTotalSaved,
+        status: newTotalSaved >= existingGoal.targetAmount ? 'completed' : 'active',
+        updatedAt: new Date().toISOString(),
+    };
+
+    const blockBlobClient = client.getBlockBlobClient(filePath);
+    try {
+        const content = JSON.stringify(updatedGoal, null, 2);
+        await blockBlobClient.upload(content, Buffer.byteLength(content), {
+            blobHTTPHeaders: { blobContentType: 'application/json' }
+        });
+        revalidatePath(AI_PLAYGROUND_PATH);
+        return updatedGoal;
+    } catch (error: any) {
+        throw new Error(`Could not edit allocation. Original error: ${error.message}`);
     }
 }
 

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat, FilePlus } from "lucide-react";
+import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat, FilePlus, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getTransactions } from '@/lib/actions/transactions';
-import { addGoal, getGoals, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, type Goal, type FundAllocation } from '@/lib/actions/goals';
+import { addGoal, getGoals, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, editAllocation, type Goal, type FundAllocation } from '@/lib/actions/goals';
 import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 
 const pageVariants = {
@@ -79,6 +80,10 @@ export default function AIPlaygroundPage() {
   const [allocationNames, setAllocationNames] = useState<Record<string, string>>({});
   const [isSavingGoal, setIsSavingGoal] = useState(false);
   const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null);
+  const [editingAllocation, setEditingAllocation] = useState<{ goalId: string; allocation: FundAllocation } | null>(null);
+  const [editAllocationAmount, setEditAllocationAmount] = useState<string>('');
+  const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false);
+
 
   // Financial Health Check State
   const [healthCheckPeriodType, setHealthCheckPeriodType] = useState<HealthCheckPeriodType>('current_week');
@@ -552,6 +557,33 @@ export default function AIPlaygroundPage() {
     }
   };
 
+  const handleEditAllocation = (goalId: string, allocation: FundAllocation) => {
+    setEditingAllocation({ goalId, allocation });
+    setEditAllocationAmount(allocation.amount.toString());
+  };
+
+  const handleUpdateAllocation = async () => {
+    if (!editingAllocation) return;
+
+    const newAmount = parseFloat(editAllocationAmount);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      toast({ title: "Invalid Amount", description: "Allocation amount must be a positive number.", variant: "destructive" });
+      return;
+    }
+
+    setIsUpdatingAllocation(true);
+    try {
+      await editAllocation(editingAllocation.goalId, editingAllocation.allocation.id, newAmount);
+      toast({ title: "Allocation Updated!", description: "The fund allocation has been updated." });
+      setEditingAllocation(null);
+      fetchInitialDataCallback();
+    } catch (error: any) {
+      toast({ title: "Update Error", description: error.message || "Could not update the allocation.", variant: "destructive" });
+    } finally {
+      setIsUpdatingAllocation(false);
+    }
+  };
+
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
@@ -877,6 +909,9 @@ export default function AIPlaygroundPage() {
                                     <span>{alloc.name}</span>
                                     <div className="flex items-center gap-2">
                                       <span className="font-medium">₹{alloc.amount.toLocaleString()}</span>
+                                      <Button variant="ghost" size="icon" className="h-5 w-5 text-primary/70 hover:bg-primary/10" onClick={() => handleEditAllocation(goal.id, alloc)}>
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
                                       <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/70 hover:bg-destructive/10" onClick={() => handleDeleteAllocation(goal.id, alloc.id)} disabled={isDeletingAllocation === alloc.id}>
                                         {isDeletingAllocation === alloc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                                       </Button>
@@ -1119,9 +1154,35 @@ export default function AIPlaygroundPage() {
           </CardContent>
         </Card>
       </motion.div>
-
+       {/* Edit Allocation Dialog */}
+      <Dialog open={editingAllocation !== null} onOpenChange={(isOpen) => !isOpen && setEditingAllocation(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Allocation Amount</DialogTitle>
+            <DialogDescription>
+              Update the amount for '{editingAllocation?.allocation.name}'.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="edit-allocation-amount">Amount (₹)</Label>
+            <Input
+              id="edit-allocation-amount"
+              type="number"
+              value={editAllocationAmount}
+              onChange={(e) => setEditAllocationAmount(e.target.value)}
+              placeholder="e.g., 5000"
+              className="mt-1"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingAllocation(null)}>Cancel</Button>
+            <Button onClick={handleUpdateAllocation} disabled={isUpdatingAllocation}>
+              {isUpdatingAllocation && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Amount
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
-
-    

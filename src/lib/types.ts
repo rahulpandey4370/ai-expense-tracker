@@ -177,7 +177,8 @@ export interface FundAllocation {
   id: string; // Unique ID for the allocation
   name: string; // e.g., 'HDFC Savings Account', 'Parag Parikh MF'
   amount: number;
-  addedAt: string; // ISO string date
+  createdAt: string; // ISO string date
+  updatedAt: string; // ISO string date
 }
 
 export interface Goal extends GoalInput {
@@ -321,4 +322,4 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
 });
-export type FixedExpenseAnalyzerOutput = z.
+export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
