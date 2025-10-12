@@ -10,5 +10,5 @@ import '@/ai_flows/parse-receipt-flow.ts';
 import '@/ai_flows/goal-forecaster-flow.ts';
 import '@/ai_flows/budgeting-assistant-flow.ts';
 import '@/ai_flows/financial-health-check-flow.ts'; // Ensure this is imported
-import '@/ai/flows/fixed-expense-analyzer-flow.ts'; // Import the new flow
+
     
