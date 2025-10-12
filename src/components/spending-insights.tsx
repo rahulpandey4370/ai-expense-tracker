@@ -14,9 +14,11 @@ import { ScrollArea } from './ui/scroll-area';
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
-  lastMonthTotalSpending: number; 
+  currentMonthCoreSpending: number;
+  currentMonthInvestmentSpending: number;
+  lastMonthCoreSpending: number;
   selectedMonthName: string;
-  selectedMonth: number; // Pass numeric month
+  selectedMonth: number;
   selectedYear: number;
 }
 
@@ -29,7 +31,15 @@ const cardVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpending, selectedMonthName, selectedMonth, selectedYear }: SpendingInsightsProps) {
+export function SpendingInsights({
+  currentMonthTransactions,
+  currentMonthCoreSpending,
+  currentMonthInvestmentSpending,
+  lastMonthCoreSpending,
+  selectedMonthName,
+  selectedMonth,
+  selectedYear,
+}: SpendingInsightsProps) {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,20 +49,16 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     const income = currentMonthTransactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
-    
-    const spending = currentMonthTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
 
     const spendingByCategory = currentMonthTransactions
-      .filter(t => t.type === 'expense' && t.category?.name)
+      .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && t.category?.name)
       .reduce((acc, t) => {
         const categoryName = t.category!.name;
         acc[categoryName] = (acc[categoryName] || 0) + t.amount;
         return acc;
       }, {} as Record<string, number>);
 
-    return { income, spending, spendingByCategory };
+    return { income, spendingByCategory };
   }, [currentMonthTransactions]);
 
 
@@ -64,12 +70,13 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       
     const input: SpendingInsightsInput = {
       currentMonthIncome: monthlyMetrics.income,
-      currentMonthSpending: monthlyMetrics.spending,
-      lastMonthSpending: lastMonthTotalSpending,
+      currentMonthCoreSpending: currentMonthCoreSpending,
+      currentMonthInvestmentSpending: currentMonthInvestmentSpending,
+      lastMonthCoreSpending: lastMonthCoreSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
       insightType: insightType,
-      selectedMonth: selectedMonth, // Pass selected month
-      selectedYear: selectedYear,   // Pass selected year
+      selectedMonth: selectedMonth,
+      selectedYear: selectedYear,
     };
 
     try {
@@ -81,11 +88,11 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
     } finally {
       setIsLoading(false);
     }
-  }, [monthlyMetrics, lastMonthTotalSpending, selectedMonth, selectedYear]);
+  }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, selectedMonth, selectedYear]);
   
   useEffect(() => {
     // Automatically generate insights if there's spending data for the selected month
-    if (currentMonthTransactions.length > 0 && monthlyMetrics.spending > 0) {
+    if (currentMonthTransactions.length > 0 && currentMonthCoreSpending > 0) {
       generateInsights(currentInsightType);
     } else {
       // Clear insights if there's no data
@@ -94,7 +101,7 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyMetrics.spending, selectedMonth, selectedYear]); // Re-run when spending or selected period changes
+  }, [currentMonthCoreSpending, selectedMonth, selectedYear]); // Re-run when spending or selected period changes
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -121,18 +128,18 @@ export function SpendingInsights({ currentMonthTransactions, lastMonthTotalSpend
                 <p className="text-foreground">{insights}</p>
               </div>
             )}
-            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || monthlyMetrics.spending === 0) && (
-              <p className="text-sm text-muted-foreground p-3 text-center">No spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
+            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || currentMonthCoreSpending === 0) && (
+              <p className="text-sm text-muted-foreground p-3 text-center">No core spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
             )}
           </ScrollArea>
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button onClick={() => generateInsights('default')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'default' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+            <Button onClick={() => generateInsights('default')} disabled={isLoading || currentMonthCoreSpending === 0} className={cn("flex-1", currentInsightType === 'default' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <Handshake className="mr-2 h-4 w-4" /> Default
             </Button>
-             <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+             <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || currentMonthCoreSpending === 0} className={cn("flex-1", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <Target className="mr-2 h-4 w-4" /> Cost Cutter
             </Button>
-             <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || monthlyMetrics.spending === 0} className={cn("flex-1", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
+             <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || currentMonthCoreSpending === 0} className={cn("flex-1", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
               <LineChart className="mr-2 h-4 w-4" /> Growth Advisor
             </Button>
           </div>

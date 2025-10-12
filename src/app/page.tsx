@@ -379,8 +379,10 @@ export default function DashboardPage() {
         >
           <motion.div variants={itemVariants}>
             <SpendingInsights
-              currentMonthTransactions={currentMonthTransactions} 
-              lastMonthTotalSpending={lastMonthCoreExpenses} 
+              currentMonthTransactions={currentMonthTransactions}
+              currentMonthCoreSpending={monthlyMetrics.coreExpenses}
+              currentMonthInvestmentSpending={monthlyMetrics.totalInvestments}
+              lastMonthCoreSpending={lastMonthCoreExpenses}
               selectedMonthName={monthNamesList[selectedMonth]}
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
