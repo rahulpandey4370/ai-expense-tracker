@@ -117,7 +117,7 @@ export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSc
 
 // AI Goal Forecaster Schemas
 export const GoalForecasterInputSchema = z.object({
-  goalDescription: z.string().describe("The user's description of their financial goal (e.g., 'Save for a vacation to Europe', 'Buy a new gaming laptop')."),
+  goalDescription: z.string().min(1, "Goal description is required.").describe("The user's description of their financial goal (e.g., 'Save for a vacation to Europe', 'Buy a new gaming laptop')."),
   goalAmount: z.number().min(0.01).optional().describe("The target monetary amount for the goal in INR. If not provided, AI should estimate this based on the description."),
   goalDurationMonths: z.number().int().min(1).describe("The desired duration in months to achieve the goal."),
   averageMonthlyIncome: z.number().min(0).describe("The user's average monthly income in INR based on recent data. Can be 0."),
