@@ -66,6 +66,8 @@ const fixedExpensePrompt = ai.definePrompt({
   prompt: `You are an expert financial analyst for FinWise AI. Your task is to identify fixed, recurring monthly expenses from a list of transactions for a specific month.
 Fixed expenses are payments that are the same, or very similar, each month. Examples include rent, loan EMIs, subscriptions (Netflix, Spotify), insurance premiums, and utility bills. Some expenses like 'Groceries' or 'Auto & Transportation' (petrol) can also be considered fixed if they show a consistent, recurring pattern.
 
+**CRITICAL RULE: DO NOT include investments in this analysis.** Exclude any transactions related to Stocks, Mutual Funds, Bonds, Recurring Deposits, or any other form of financial investment. Fixed expenses are for living costs (goods and services), not wealth-building.
+
 Analyze the provided transactions for {{monthName}} {{year}}.
 
 Transaction Data:
@@ -91,6 +93,7 @@ Your Task:
 
 IMPORTANT:
 - Do NOT include discretionary one-off purchases like "Dinner at a fancy restaurant", "Movie tickets", or "Clothing shopping" unless there is very strong evidence of a recurring subscription (e.g., "Clothing Box Subscription").
+- Again, **explicitly exclude all investment-related transactions.**
 - Structure your output precisely according to the defined JSON schema.
 - If no fixed expenses can be identified, return an empty 'identifiedExpenses' array and a summary stating that.
 `,
@@ -107,3 +110,4 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
     return result.output!;
   }
 );
+
