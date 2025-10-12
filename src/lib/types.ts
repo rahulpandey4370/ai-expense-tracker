@@ -173,9 +173,17 @@ export const GoalInputSchema = z.object({
 });
 export type GoalInput = z.infer<typeof GoalInputSchema>;
 
+export interface FundAllocation {
+  id: string; // Unique ID for the allocation
+  name: string; // e.g., 'HDFC Savings Account', 'Parag Parikh MF'
+  amount: number;
+  addedAt: string; // ISO string date
+}
+
 export interface Goal extends GoalInput {
   id: string;
-  amountSavedSoFar: number;
+  amountSavedSoFar: number; // This will now be a derived value: sum of allocations.amount
+  allocations: FundAllocation[]; // Detailed breakdown of where the funds are
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   status?: 'active' | 'completed' | 'on_hold';
@@ -313,4 +321,4 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
 });
-export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
+export type FixedExpenseAnalyzerOutput = z.

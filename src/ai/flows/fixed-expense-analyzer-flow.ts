@@ -64,7 +64,7 @@ const fixedExpensePrompt = ai.definePrompt({
     ],
   },
   prompt: `You are an expert financial analyst for FinWise AI. Your task is to identify fixed, recurring monthly expenses from a list of transactions for a specific month.
-Fixed expenses are payments that are the same, or very similar, each month. Examples include rent, loan EMIs, subscriptions (Netflix, Spotify), insurance premiums, and sometimes utility bills (though they can vary).
+Fixed expenses are payments that are the same, or very similar, each month. Examples include rent, loan EMIs, subscriptions (Netflix, Spotify), insurance premiums, and utility bills. Some expenses like 'Groceries' or 'Auto & Transportation' (petrol) can also be considered fixed if they show a consistent, recurring pattern.
 
 Analyze the provided transactions for {{monthName}} {{year}}.
 
@@ -76,18 +76,21 @@ Transaction Data:
 \`\`\`
 
 Your Task:
-1.  **Identify Fixed Expenses**: Scrutinize the transaction descriptions and categories. Look for keywords like "Rent", "EMI", "Subscription", "Insurance", "Premium", "Bill". Even if the amount varies slightly (like for a utility bill), if the description suggests it's a recurring monthly payment, consider it.
-2.  **Estimate Monthly Amount**: For each identified fixed expense, use the amount from the transaction. If multiple transactions seem to be for the same recurring expense (e.g., two parts of a bill), sum them up.
-3.  **Assess Confidence**: For each identified expense, assess your confidence ('High', 'Medium', 'Low') that it's a true recurring monthly expense.
-    - 'High': Keywords like "Rent", "EMI", "Subscription" are present.
-    - 'Medium': Keywords like "Bill", "Premium" are present, or description suggests a regular service.
-    - 'Low': Based on merchant name that is often a subscription but not explicitly stated (e.g., 'Google', 'Amazon Prime').
-4.  **Provide Reasoning**: Briefly explain your reasoning.
+1.  **Identify Fixed Expenses**: Scrutinize transaction descriptions and categories.
+    - **High Priority Keywords**: "Rent", "EMI", "Subscription", "Insurance", "Premium", "Salary" (for maid/driver).
+    - **Medium Priority Keywords**: "Bill" (for utilities), "Fee".
+    - **Analyze Patterns for Variable Costs**: For categories like "Groceries" and "Auto & Transportation" (petrol), if there are multiple transactions that suggest a regular, essential pattern (e.g., weekly grocery shopping, daily commute costs), consider them as a combined fixed expense. Sum up these recurring costs for the month to estimate the total fixed expense for that category.
+2.  **Estimate Monthly Amount**: For each identified fixed expense, use the amount from the transaction. If multiple transactions make up a single recurring cost (like several grocery trips), sum them up to create a single entry for that category (e.g., 'Groceries').
+3.  **Assess Confidence**: For each identified expense, assess your confidence ('High', 'Medium', 'Low').
+    - 'High': Clear keywords like "Rent", "EMI", "Subscription".
+    - 'Medium': Keywords like "Bill", "Premium", or strong recurring patterns in categories like Groceries or Transportation.
+    - 'Low': Based on merchant name that is often a subscription but not explicitly stated (e.g., 'Google', 'Amazon Prime') or less frequent patterns.
+4.  **Provide Reasoning**: Briefly explain your reasoning. For pattern-based expenses like groceries, state "Identified a recurring pattern of essential purchases."
 5.  **Calculate Total**: Sum up the estimated amounts of all identified fixed expenses.
 6.  **Summarize Findings**: Write a brief summary of your analysis.
 
 IMPORTANT:
-- Only include expenses you are reasonably sure are recurring. Do not include one-off purchases, groceries, or dining out unless there is strong evidence of a recurring meal plan subscription.
+- Do NOT include discretionary one-off purchases like "Dinner at a fancy restaurant", "Movie tickets", or "Clothing shopping" unless there is very strong evidence of a recurring subscription (e.g., "Clothing Box Subscription").
 - Structure your output precisely according to the defined JSON schema.
 - If no fixed expenses can be identified, return an empty 'identifiedExpenses' array and a summary stating that.
 `,
