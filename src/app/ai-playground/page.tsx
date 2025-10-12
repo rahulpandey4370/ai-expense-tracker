@@ -9,15 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity } from "lucide-react";
+import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getTransactions } from '@/lib/actions/transactions';
 import { addGoal, getGoals, updateGoalProgress, deleteGoal, type Goal } from '@/lib/actions/goals';
-import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput } from '@/lib/types';
+import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
 import { getFinancialHealthCheck } from '@/ai/flows/financial-health-check-flow';
+import { analyzeFixedExpenses } from '@/ai/flows/fixed-expense-analyzer-flow';
 import { subMonths, getMonth, getYear, startOfMonth, endOfMonth, format, addMonths, differenceInMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -34,6 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useDateSelection } from '@/contexts/DateSelectionContext';
 
 
 const pageVariants = {
@@ -53,6 +55,7 @@ export default function AIPlaygroundPage() {
   const { toast } = useToast();
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const { years: contextYears, monthNamesList } = useDateSelection();
 
   // Goal Planner State
   const [goalDescription, setGoalDescription] = useState<string>('');
@@ -80,6 +83,13 @@ export default function AIPlaygroundPage() {
   const [isAILoadingHealthCheck, setIsAILoadingHealthCheck] = useState<boolean>(false);
   const [aiHealthCheckSummary, setAiHealthCheckSummary] = useState<FinancialHealthCheckOutput | null>(null);
   const [aiHealthCheckError, setAiHealthCheckError] = useState<string | null>(null);
+  
+  // Fixed Expense Analyzer State
+  const [fixedExpenseMonth, setFixedExpenseMonth] = useState<number>(new Date().getMonth());
+  const [fixedExpenseYear, setFixedExpenseYear] = useState<number>(new Date().getFullYear());
+  const [isAILoadingFixedExpenses, setIsAILoadingFixedExpenses] = useState<boolean>(false);
+  const [aiFixedExpenseAnalysis, setAiFixedExpenseAnalysis] = useState<FixedExpenseAnalyzerOutput | null>(null);
+  const [aiFixedExpenseError, setAiFixedExpenseError] = useState<string | null>(null);
 
 
   const fetchInitialDataCallback = useCallback(async () => {
@@ -110,6 +120,55 @@ export default function AIPlaygroundPage() {
   useEffect(() => {
     fetchInitialDataCallback();
   }, [fetchInitialDataCallback]);
+  
+  const handleGetFixedExpenses = async () => {
+    setIsAILoadingFixedExpenses(true);
+    setAiFixedExpenseAnalysis(null);
+    setAiFixedExpenseError(null);
+
+    const targetMonthTransactions = allTransactions.filter(t => {
+      const transactionDate = new Date(t.date);
+      return transactionDate.getFullYear() === fixedExpenseYear && transactionDate.getMonth() === fixedExpenseMonth && t.type === 'expense';
+    });
+    
+     if (targetMonthTransactions.length === 0) {
+      toast({ title: "No Data", description: `No expense transactions found for ${monthNamesList[fixedExpenseMonth]} ${fixedExpenseYear}.`, variant: "default" });
+      setIsAILoadingFixedExpenses(false);
+      setAiFixedExpenseError(`No expense transactions found for ${monthNamesList[fixedExpenseMonth]} ${fixedExpenseYear}.`);
+      return;
+    }
+
+    const aiTransactions: AITransactionForAnalysis[] = targetMonthTransactions.map(t => ({
+      description: t.description,
+      amount: t.amount,
+      date: t.date.toISOString(),
+      categoryName: t.category?.name,
+    }));
+
+    const input: FixedExpenseAnalyzerInput = {
+      transactions: aiTransactions,
+      monthName: monthNamesList[fixedExpenseMonth],
+      year: fixedExpenseYear,
+    };
+
+    try {
+      const result = await analyzeFixedExpenses(input);
+      if (result.summary.toLowerCase().includes("error")) {
+        setAiFixedExpenseError(result.summary);
+        toast({ title: "AI Fixed Expense Error", description: result.summary, variant: "destructive" });
+      } else {
+        setAiFixedExpenseAnalysis(result);
+      }
+    } catch (err: any) {
+      console.error("Error getting AI fixed expense analysis:", err);
+      const message = err.message || "Failed to get AI fixed expense analysis.";
+      setAiFixedExpenseError(message);
+      toast({ title: "AI Error", description: message, variant: "destructive" });
+    } finally {
+      setIsAILoadingFixedExpenses(false);
+    }
+  };
+
 
   const calculateGoalPlannerAverages = useCallback(() => {
     const today = new Date();
@@ -472,36 +531,129 @@ export default function AIPlaygroundPage() {
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
-      {/* AI Financial Goal Planner Section */}
+      {/* AI Fixed Expense Analyzer Section */}
+      <motion.div variants={pageVariants} initial="hidden" animate="visible">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+          <CardHeader>
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <Repeat className="w-7 h-7 md:w-8 md:h-8 text-accent" />
+              AI Fixed Expense Analyzer
+            </CardTitle>
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
+              Let AI identify your recurring fixed expenses from any given month's transactions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <motion.div variants={cardVariants} className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="fixed-expense-month">Month</Label>
+                    <Select value={fixedExpenseMonth.toString()} onValueChange={(val) => setFixedExpenseMonth(Number(val))}>
+                        <SelectTrigger id="fixed-expense-month" className="w-full mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary">
+                            <SelectValue placeholder="Select Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {monthNamesList.map((month, index) => <SelectItem key={index} value={index.toString()}>{month}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div>
+                    <Label htmlFor="fixed-expense-year">Year</Label>
+                    <Select value={fixedExpenseYear.toString()} onValueChange={(val) => setFixedExpenseYear(Number(val))}>
+                        <SelectTrigger id="fixed-expense-year" className="w-full mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary">
+                            <SelectValue placeholder="Select Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {contextYears.map(year => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+              </div>
+              <Button onClick={handleGetFixedExpenses} disabled={isAILoadingFixedExpenses || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
+                {isAILoadingFixedExpenses ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
+                {isLoadingTransactions ? "Loading data..." : (isAILoadingFixedExpenses ? "Analyzing..." : "Analyze Fixed Expenses")}
+              </Button>
+            </motion.div>
+            
+            {isAILoadingFixedExpenses && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-background/50 border-primary/20">
+                <CardTitle className="text-lg text-primary mb-2">AI Analyzing Expenses...</CardTitle>
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-3/4 bg-muted" />
+                  <Skeleton className="h-4 w-full bg-muted" />
+                </div>
+              </motion.div>
+            )}
+
+            {aiFixedExpenseError && !isAILoadingFixedExpenses && (
+              <motion.div variants={cardVariants}>
+                <Alert variant="destructive" className="shadow-md">
+                  <AlertTriangle className="h-5 w-5" />
+                  <AlertTitle>Fixed Expense Analysis Error</AlertTitle>
+                  <AlertDescription>{aiFixedExpenseError}</AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+            
+            {aiFixedExpenseAnalysis && !isAILoadingFixedExpenses && !aiFixedExpenseError && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
+                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">Fixed Expense Analysis Results</CardTitle>
+                <div className="space-y-3 text-sm">
+                    <p className="whitespace-pre-wrap"><strong className="text-foreground">Summary:</strong> {aiFixedExpenseAnalysis.summary}</p>
+                    <p><strong className="text-foreground">Total Identified Fixed Expenses:</strong> <span className="font-semibold text-primary">₹{aiFixedExpenseAnalysis.totalFixedExpenses.toLocaleString()}</span></p>
+                    <hr className="border-accent/30 my-2" />
+                    <strong className="text-foreground block mb-1">Identified Expenses:</strong>
+                    {aiFixedExpenseAnalysis.identifiedExpenses.length > 0 ? (
+                        <ul className="space-y-2">
+                          {aiFixedExpenseAnalysis.identifiedExpenses.map((exp, index) => (
+                            <li key={index} className="p-2 border border-accent/20 rounded-md bg-background/30">
+                                <p className="font-semibold">{exp.description} - <span className="text-primary">₹{exp.estimatedAmount.toLocaleString()}</span></p>
+                                <p className="text-xs text-muted-foreground">Category: {exp.category} | Confidence: {exp.confidence}</p>
+                                <p className="text-xs italic text-muted-foreground/80">Reason: {exp.reasoning}</p>
+                            </li>
+                          ))}
+                        </ul>
+                    ) : (
+                        <p className="text-muted-foreground italic">No fixed expenses were identified by the AI for this period.</p>
+                    )}
+                </div>
+              </motion.div>
+            )}
+
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <Separator />
+
+      {/* AI Financial Goal Planner & Funds Tracker Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <FlaskConical className="w-7 h-7 md:w-8 md:h-8 text-accent transform rotate-[-3deg]" />
-              AI Financial Goal Planner
+              AI Financial Goals & Funds Tracker
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Define your financial goal, get an AI forecast, and save it for tracking.
-              Analysis is based on your average income/core expenses from the last 6 months.
-              Target amount is optional; AI will estimate if left blank.
+              Define a financial goal (e.g., "Emergency Fund", "Vacation") and get an AI forecast. Saved goals/funds appear below for tracking.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <motion.div variants={cardVariants} className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
               <div>
-                <Label htmlFor="goalDescription" className="text-foreground/90">What's your financial goal?</Label>
+                <Label htmlFor="goalDescription" className="text-foreground/90">What's your financial goal or fund name?</Label>
                 <Textarea
                   id="goalDescription"
                   value={goalDescription}
                   onChange={(e) => setGoalDescription(e.target.value)}
-                  placeholder="e.g., Save for a down payment on a new car, Trip to Bali for 2, New Gaming Laptop"
+                  placeholder="e.g., Emergency Fund, Vacation to Bali, New Gaming Laptop"
                   className="mt-1 bg-background/70 border-border/70 focus:border-primary focus:ring-primary"
                   rows={2}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="goalAmount" className="text-foreground/90">Target Amount (₹) <span className="text-xs text-muted-foreground">(Optional - AI will estimate if blank)</span></Label>
+                  <Label htmlFor="goalAmount" className="text-foreground/90">Target Amount (₹) <span className="text-xs text-muted-foreground">(Optional - AI can estimate)</span></Label>
                   <Input
                     id="goalAmount"
                     type="number"
@@ -585,7 +737,7 @@ export default function AIPlaygroundPage() {
                 </div>
                  <Button onClick={handleSaveGoal} disabled={isSavingGoal} className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white" withMotion>
                   {isSavingGoal ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Target className="mr-2 h-4 w-4" />}
-                  Save This Goal
+                  Save This Goal/Fund
                 </Button>
               </motion.div>
             )}
@@ -602,31 +754,31 @@ export default function AIPlaygroundPage() {
         </Card>
       </motion.div>
 
-      {/* Saved Goals Section */}
+      {/* Saved Goals & Funds Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <Target className="w-7 h-7 md:w-8 md:h-8 text-accent" />
-              Your Saved Financial Goals
+              Your Saved Goals & Funds
             </CardTitle>
             <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Track your progress and allocate savings to your financial goals.
+              Track your progress and allocate savings to your financial goals and funds.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {isLoadingGoals && !savedGoals.length && (
               <div className="p-4 text-center text-muted-foreground">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                <p>Loading your saved goals...</p>
+                <p>Loading your saved goals & funds...</p>
               </div>
             )}
             {!isLoadingGoals && savedGoals.length === 0 && (
               <Alert variant="default" className="border-primary/20 bg-primary/5">
                 <Target className="h-5 w-5 text-primary" />
-                <AlertTitle className="text-primary">No Saved Goals Yet</AlertTitle>
+                <AlertTitle className="text-primary">No Saved Goals or Funds Yet</AlertTitle>
                 <AlertDescription className="text-muted-foreground">
-                  Use the AI Goal Planner above to create and save your first financial goal!
+                  Use the AI Planner above to create and save your first financial goal or fund!
                 </AlertDescription>
               </Alert>
             )}
@@ -657,14 +809,14 @@ export default function AIPlaygroundPage() {
                         <AlertDialogTrigger asChild>
                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 p-1 h-7 w-7">
                               <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete Goal</span>
+                              <span className="sr-only">Delete Goal/Fund</span>
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Goal: {goal.description}?</AlertDialogTitle>
+                                <AlertDialogTitle>Delete: {goal.description}?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete your goal and its progress.
+                                    This action cannot be undone. This will permanently delete this item and its progress.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -682,7 +834,7 @@ export default function AIPlaygroundPage() {
                       <span>{progress.toFixed(1)}%</span>
                     </div>
                     <Progress value={progress} className="h-3 [&>div]:bg-accent" />
-                     {goal.status === 'completed' && <p className="text-xs text-green-600 dark:text-green-400 font-semibold">Goal Completed!</p>}
+                     {goal.status === 'completed' && <p className="text-xs text-green-600 dark:text-green-400 font-semibold">Completed!</p>}
                      {goal.status === 'active' && monthsRemaining < 0 && goal.amountSavedSoFar < goal.targetAmount && (
                        <p className="text-xs text-orange-500 dark:text-orange-400">Target date passed.</p>
                      )}
@@ -932,5 +1084,3 @@ export default function AIPlaygroundPage() {
     </main>
   );
 }
-
-

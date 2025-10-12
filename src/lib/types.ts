@@ -194,7 +194,7 @@ export const FinancialHealthCheckInputSchema = z.object({
 export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInputSchema>;
 
 export const FinancialHealthCheckOutputSchema = z.object({
-  healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (e.g., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+  healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (eg., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
 
@@ -282,3 +282,35 @@ export interface UserBalance {
   owes: { toUserId: string; toUserName: string; amount: number }[];
   owedBy: { fromUserId: string; fromUserName: string; amount: number }[];
 }
+
+// AI Fixed Expense Analyzer Schemas
+export const AITransactionForAnalysisSchema = z.object({
+  description: z.string().nullish(),
+  amount: z.number(),
+  date: z.string().describe("Date in ISO format string"),
+  categoryName: z.string().nullish(),
+});
+export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSchema>;
+
+export const FixedExpenseAnalyzerInputSchema = z.object({
+  transactions: z.array(AITransactionForAnalysisSchema).describe("An array of financial transactions for a specific month."),
+  monthName: z.string().describe("The name of the month being analyzed (e.g., 'January')."),
+  year: z.number().describe("The year being analyzed (e.g., 2024).")
+});
+export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
+
+const IdentifiedFixedExpenseSchema = z.object({
+  description: z.string().describe("The common description of the recurring expense (e.g., 'Netflix Subscription', 'Rent Payment')."),
+  category: z.string().describe("The category of the fixed expense (e.g., 'Subscriptions', 'Rent')."),
+  estimatedAmount: z.number().describe("The estimated monthly amount for this fixed expense in INR."),
+  confidence: z.enum(['High', 'Medium', 'Low']).describe("The AI's confidence that this is a true fixed/recurring expense."),
+  reasoning: z.string().describe("A brief explanation for why this was identified as a fixed expense (e.g., 'Similar amount and description across months', 'Name indicates a subscription')."),
+});
+export type IdentifiedFixedExpense = z.infer<typeof IdentifiedFixedExpenseSchema>;
+
+export const FixedExpenseAnalyzerOutputSchema = z.object({
+  identifiedExpenses: z.array(IdentifiedFixedExpenseSchema).describe("A list of all identified fixed/recurring expenses for the month."),
+  totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
+  summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
+});
+export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;

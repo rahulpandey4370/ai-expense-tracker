@@ -1,0 +1,106 @@
+
+'use server';
+/**
+ * @fileOverview AI flow for analyzing and identifying fixed/recurring monthly expenses.
+ *
+ * - analyzeFixedExpenses - A function that uses AI to find fixed expenses from transactions.
+ * - FixedExpenseAnalyzerInput - The input type for the function.
+ * - FixedExpenseAnalyzerOutput - The return type for the function.
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+import { 
+    FixedExpenseAnalyzerInputSchema, 
+    FixedExpenseAnalyzerOutputSchema, 
+    type FixedExpenseAnalyzerInput, 
+    type FixedExpenseAnalyzerOutput 
+} from '@/lib/types';
+
+export async function analyzeFixedExpenses(
+  input: FixedExpenseAnalyzerInput
+): Promise<FixedExpenseAnalyzerOutput> {
+  try {
+    const validatedInput = FixedExpenseAnalyzerInputSchema.parse(input);
+    if (validatedInput.transactions.length === 0) {
+      return {
+        identifiedExpenses: [],
+        totalFixedExpenses: 0,
+        summary: `No transactions were provided for ${input.monthName} ${input.year}, so no analysis could be performed.`,
+      };
+    }
+    return await fixedExpenseAnalyzerFlow(validatedInput);
+  } catch (flowError: any) {
+    console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
+    const errorMessage = flowError.message || 'Unknown error during AI processing.';
+    if (flowError instanceof z.ZodError) {
+      return {
+        identifiedExpenses: [],
+        totalFixedExpenses: 0,
+        summary: `Could not perform analysis due to invalid input: ${JSON.stringify(flowError.flatten().fieldErrors)}.`,
+      };
+    }
+    return {
+      identifiedExpenses: [],
+      totalFixedExpenses: 0,
+      summary: `An unexpected error occurred while analyzing fixed expenses: ${errorMessage}`,
+    };
+  }
+}
+
+const fixedExpensePrompt = ai.definePrompt({
+  name: 'fixedExpenseAnalyzerPrompt',
+  input: { schema: FixedExpenseAnalyzerInputSchema },
+  output: { schema: FixedExpenseAnalyzerOutputSchema },
+  config: {
+    temperature: 0.2, // Low temperature for factual analysis
+    maxOutputTokens: 1000,
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+    ],
+  },
+  prompt: `You are an expert financial analyst for FinWise AI. Your task is to identify fixed, recurring monthly expenses from a list of transactions for a specific month.
+Fixed expenses are payments that are the same, or very similar, each month. Examples include rent, loan EMIs, subscriptions (Netflix, Spotify), insurance premiums, and sometimes utility bills (though they can vary).
+
+Analyze the provided transactions for {{monthName}} {{year}}.
+
+Transaction Data:
+\`\`\`json
+{{#each transactions}}
+- {{this.description}} ({{this.categoryName}}): ₹{{this.amount}} on {{this.date}}
+{{/each}}
+\`\`\`
+
+Your Task:
+1.  **Identify Fixed Expenses**: Scrutinize the transaction descriptions and categories. Look for keywords like "Rent", "EMI", "Subscription", "Insurance", "Premium", "Bill". Even if the amount varies slightly (like for a utility bill), if the description suggests it's a recurring monthly payment, consider it.
+2.  **Estimate Monthly Amount**: For each identified fixed expense, use the amount from the transaction. If multiple transactions seem to be for the same recurring expense (e.g., two parts of a bill), sum them up.
+3.  **Assess Confidence**: For each identified expense, assess your confidence ('High', 'Medium', 'Low') that it's a true recurring monthly expense.
+    - 'High': Keywords like "Rent", "EMI", "Subscription" are present.
+    - 'Medium': Keywords like "Bill", "Premium" are present, or description suggests a regular service.
+    - 'Low': Based on merchant name that is often a subscription but not explicitly stated (e.g., 'Google', 'Amazon Prime').
+4.  **Provide Reasoning**: Briefly explain your reasoning.
+5.  **Calculate Total**: Sum up the estimated amounts of all identified fixed expenses.
+6.  **Summarize Findings**: Write a brief summary of your analysis.
+
+IMPORTANT:
+- Only include expenses you are reasonably sure are recurring. Do not include one-off purchases, groceries, or dining out unless there is strong evidence of a recurring meal plan subscription.
+- Structure your output precisely according to the defined JSON schema.
+- If no fixed expenses can be identified, return an empty 'identifiedExpenses' array and a summary stating that.
+`,
+});
+
+const fixedExpenseAnalyzerFlow = ai.defineFlow(
+  {
+    name: 'fixedExpenseAnalyzerFlow',
+    inputSchema: FixedExpenseAnalyzerInputSchema,
+    outputSchema: FixedExpenseAnalyzerOutputSchema,
+  },
+  async (input) => {
+    const result = await retryableAIGeneration(() => fixedExpensePrompt(input));
+    return result.output!;
+  }
+);
