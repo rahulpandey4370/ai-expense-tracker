@@ -56,7 +56,7 @@ const spendingInsightsFlow = ai.defineFlow(
     const monthProgress = isHistoricMonth ? 100 : (currentDayOfMonth / daysInSelectedMonth * 100);
     
     // Calculate daily burn rate based on CORE SPENDING only
-    const dailyBurnRate = !isHistoricMonth ? input.currentMonthCoreSpending / currentDayOfMonth : input.currentMonthCoreSpending / daysInSelectedMonth;
+    const dailyBurnRate = !isHistoricMonth && currentDayOfMonth > 0 ? input.currentMonthCoreSpending / currentDayOfMonth : input.currentMonthCoreSpending / daysInSelectedMonth;
     const projectedMonthlyCoreSpending = !isHistoricMonth ? dailyBurnRate * daysInSelectedMonth : input.currentMonthCoreSpending;
     const cashSavings = input.currentMonthIncome - (input.currentMonthCoreSpending + input.currentMonthInvestmentSpending);
     
@@ -98,8 +98,8 @@ You are an Expert Personal Finance Analyst for FinWise AI, specializing in India
 - Currency: All amounts are in Indian Rupees (INR)
 ${!isHistoricMonth ? `
 ## CRITICAL ANALYSIS FRAMEWORK (FOR CURRENT MONTH)
-- Month Progress: ${monthProgress.toFixed(1)}% of the month completed as of today.
-- BURN RATE ANALYSIS: Current daily spend rate on CORE expenses is ₹${dailyBurnRate.toFixed(0)}/day. If this continues, projected CORE spending will be ₹${projectedMonthlyCoreSpending.toFixed(0)}. Frame this as a projection.
+- Month Progress: The month is ${monthProgress.toFixed(0)}% complete.
+- BURN RATE ANALYSIS: Your current daily spend rate on CORE expenses is ₹${dailyBurnRate.toFixed(0)}/day. If this continues, your projected CORE spending will be ₹${projectedMonthlyCoreSpending.toFixed(0)}. Frame this as a forward-looking projection.
 ` : `
 ## CRITICAL ANALYSIS FRAMEWORK (FOR HISTORICAL MONTH)
 - The analysis period is in the past. Focus on a retrospective review. Do not talk about projections or burn rates.
@@ -110,17 +110,17 @@ ${!isHistoricMonth ? `
   - Transport: ₹200-500+ daily is possible
 
 ## TASK
-Provide 4-6 insightful, time-aware, and actionable points based on your persona for **${monthNames[input.selectedMonth]} ${input.selectedYear}**.
+Provide 4-6 insightful, time-aware, and actionable points based on your persona for **${monthNames[input.selectedMonth]} ${input.selectedYear}**. Your analysis must be detailed and specific.
 
 1.  **SEPARATE INVESTMENTS**: Explicitly mention the amount invested as a positive action, separate from core spending.
-2.  **ANALYZE CORE SPENDING**: Focus your main analysis on the Core Spending. Compare it to income and last month.
+2.  **ANALYZE CORE SPENDING**: Focus your main analysis on the Core Spending. Compare it to income and last month's spending.
 3.  **ANALYZE THE CAUSE OF SPENDING CHANGE**: When comparing to last month, you MUST analyze the category-wise spending data for both months. Identify the top 2-3 specific categories that contributed most to any spending increase or decrease and explicitly mention them. For example, "Your spending increased mainly due to higher costs in 'Shopping' and 'Food and Dining'."
 4.  **PERSONA-BASED ANALYSIS**:
     - **Default**: Call out wasteful core spending vs. genuine high costs.
     - **Cost Cutter**: Identify ALL non-essential core spending (Wants) as a target for reduction.
     - **Growth Investor**: Identify money from Core Spending that could be re-allocated to investments.
-5.  **CASH SAVINGS**: Mention the final Cash Savings amount (or deficit) and what it implies.
-6.  **SPECIFIC ACTIONS**: Give concrete steps with amounts related to CORE SPENDING categories.
+5.  **CASH SAVINGS**: Mention the final Cash Savings amount (or deficit) and what it implies about their financial situation for the month.
+6.  **SPECIFIC ACTIONS**: Give concrete, actionable steps with specific INR amounts related to CORE SPENDING categories. Avoid generic advice.
 
 ## AVAILABLE DATA FOR ANALYSIS
 - Period Income: ₹${input.currentMonthIncome}
@@ -136,8 +136,8 @@ Provide 4-6 insightful, time-aware, and actionable points based on your persona 
 - Use plain text format only - NO markdown formatting
 - Display currency with rupee symbol: ₹
 - Use numbered lists (1., 2., 3.) for insights
-- Keep each insight 2-3 sentences maximum
-- Be direct and honest, not diplomatic
+- Each insight should be 2-3 sentences, providing detail and context.
+- Be direct and honest, not diplomatic.
 
 Generate exactly 4-6 numbered insights based on this financial model for **${monthNames[input.selectedMonth]} ${input.selectedYear}**.
 `;
@@ -167,3 +167,5 @@ Generate exactly 4-6 numbered insights based on this financial model for **${mon
     return { insights: responseText };
   }
 );
+
+    
