@@ -206,7 +206,7 @@ export default function ReportsPage() {
       currentMonth: currentPeriodName,
       previousMonth: previousPeriodName,
       currentMonthExpenses: currentPeriodExpensesTotal,
-      previousMonthExpenses: previousPeriodExpensesTotal,
+      previousMonthExpenses: previousMonthExpensesTotal,
       expenseCategoriesCurrent: formatExpenseCategoriesForAI(filteredTransactionsForPeriod),
       expenseCategoriesPrevious: formatExpenseCategoriesForAI(previousPeriodTransactions),
     };
@@ -424,7 +424,7 @@ export default function ReportsPage() {
                                           <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                         </div>
                                       </TooltipTrigger>
-                                      <TooltipContent className="p-2 bg-background border-primary/30 max-w-xs w-full">
+                                      <TooltipContent className="p-2 bg-background border-primary/30 max-w-md w-full">
                                         <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
                                         {transactionsForCategory.length > 0 ? (
                                           <ScrollArea className="h-auto max-h-[150px]">
@@ -504,4 +504,5 @@ export default function ReportsPage() {
       </motion.div>
     </main>
   );
-}
+
+    
