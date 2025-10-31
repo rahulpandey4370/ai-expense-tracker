@@ -24,6 +24,9 @@ import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { format } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const pageVariants = {
@@ -405,16 +408,42 @@ export default function ReportsPage() {
                             {categorySpendingForPeriod.map((cat, index) => {
                                 const percentage = currentPeriodExpensesTotal > 0 ? (cat.totalAmount / currentPeriodExpensesTotal) * 100 : 0;
                                 const colorClass = progressColors[index % progressColors.length];
+                                
+                                const transactionsForCategory = filteredTransactionsForPeriod.filter(t => t.category?.name === cat.categoryName);
+
                                 return (
-                                <div key={index} className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
-                                  <div className="flex justify-between items-baseline">
-                                      <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
-                                      <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
-                                  </div>
-                                  <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
-                                  <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                </div>
-                              );
+                                  <TooltipProvider key={index}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-help">
+                                          <div className="flex justify-between items-baseline">
+                                              <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
+                                              <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
+                                          </div>
+                                          <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
+                                          <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="p-2 bg-background border-primary/30 max-w-xs w-full">
+                                        <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
+                                        {transactionsForCategory.length > 0 ? (
+                                          <ScrollArea className="h-auto max-h-[150px]">
+                                            <ul className="space-y-1 text-xs">
+                                              {transactionsForCategory.map(tx => (
+                                                <li key={tx.id} className="flex justify-between gap-2">
+                                                  <span className="truncate text-muted-foreground" title={tx.description}>{format(tx.date, 'dd/MM')}: {tx.description}</span>
+                                                  <span className="font-semibold text-foreground whitespace-nowrap">₹{tx.amount.toLocaleString()}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </ScrollArea>
+                                        ) : (
+                                          <p className="text-xs text-muted-foreground">No transactions found.</p>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
                             })}
                           </div>
                            <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
