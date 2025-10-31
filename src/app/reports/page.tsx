@@ -430,9 +430,13 @@ export default function ReportsPage() {
                                           <ScrollArea className="h-auto max-h-[150px]">
                                             <ul className="space-y-1 text-xs">
                                               {transactionsForCategory.map(tx => (
-                                                <li key={tx.id} className="flex justify-between gap-2">
-                                                  <span className="truncate text-muted-foreground" title={tx.description}>{format(tx.date, 'dd/MM')}: {tx.description}</span>
-                                                  <span className="font-semibold text-foreground whitespace-nowrap">₹{tx.amount.toLocaleString()}</span>
+                                                <li key={tx.id} className="flex items-center justify-between gap-2">
+                                                  <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
+                                                    {format(tx.date, 'dd/MM')}: {tx.description}
+                                                  </span>
+                                                  <span className="flex-shrink-0 font-semibold text-foreground">
+                                                    ₹{tx.amount.toLocaleString()}
+                                                  </span>
                                                 </li>
                                               ))}
                                             </ul>
