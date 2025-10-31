@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { AppTransaction } from '@/lib/types';
+import type { AppTransaction, ExpenseType } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers } from 'lucide-react';
@@ -60,6 +60,9 @@ export default function ReportsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  
+  const [categoryExpenseTypeFilter, setCategoryExpenseTypeFilter] = useState<'all' | ExpenseType>('all');
+
 
   const { toast } = useToast();
 
@@ -112,7 +115,13 @@ export default function ReportsPage() {
   
   const categorySpendingForPeriod = useMemo(() => {
     const spendingMap = new Map<string, number>();
-    filteredTransactionsForPeriod
+    let transactionsToProcess = filteredTransactionsForPeriod;
+
+    if (categoryExpenseTypeFilter !== 'all') {
+      transactionsToProcess = transactionsToProcess.filter(t => t.expenseType === categoryExpenseTypeFilter);
+    }
+
+    transactionsToProcess
       .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         const categoryName = t.category!.name;
@@ -122,7 +131,7 @@ export default function ReportsPage() {
     return Array.from(spendingMap.entries())
       .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
       .sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [filteredTransactionsForPeriod]);
+  }, [filteredTransactionsForPeriod, categoryExpenseTypeFilter]);
 
 
   const currentPeriodExpensesTotal = useMemo(() =>
@@ -368,13 +377,28 @@ export default function ReportsPage() {
                    <motion.div variants={cardVariants}>
                     <Card className="shadow-lg">
                       <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
-                          <Layers className="text-primary/80"/>
-                          Category Spending Details
-                        </CardTitle>
-                        <CardDescription>
-                          Total spending per category for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}.
-                        </CardDescription>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                            <div>
+                                <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+                                <Layers className="text-primary/80"/>
+                                Category Spending Details
+                                </CardTitle>
+                                <CardDescription>
+                                Total spending per category for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}.
+                                </CardDescription>
+                            </div>
+                            <Select value={categoryExpenseTypeFilter} onValueChange={(val) => setCategoryExpenseTypeFilter(val as any)}>
+                                <SelectTrigger className="w-full sm:w-[180px] bg-background/70 border-primary/30 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm">
+                                    <SelectValue placeholder="Filter by Expense Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Expense Types</SelectItem>
+                                    <SelectItem value="need">Needs</SelectItem>
+                                    <SelectItem value="want">Wants</SelectItem>
+                                    <SelectItem value="investment">Investments</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                       </CardHeader>
                       <CardContent>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
