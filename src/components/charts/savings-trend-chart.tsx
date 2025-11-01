@@ -1,6 +1,7 @@
 
 "use client"
 
+import { useState } from "react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import {
   Card,
@@ -25,33 +26,38 @@ interface MonthlyFinancialTrendsChartProps {
 
 const glowClass = "shadow-card-glow";
 
+const initialChartConfig = {
+  income: {
+    label: "Income",
+    color: "hsl(140, 60%, 50%)", // Green
+  },
+  coreSpend: {
+    label: "Core Spend",
+    color: "hsl(0, 70%, 55%)", // Red
+  },
+  investment: {
+    label: "Investments",
+    color: "hsl(48, 90%, 55%)", // Yellow
+  },
+  savings: {
+    label: "Cash Savings",
+    color: "hsl(220, 80%, 60%)", // A new distinct blue
+  },
+};
+
+
 export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartProps) {
+  const [activeChart, setActiveChart] = useState<keyof typeof initialChartConfig>("income");
+  const [config, setConfig] = useState(initialChartConfig);
+
+
   const chartData = monthlyData.map(data => ({
     name: `${data.monthShortName} '${String(data.year).slice(-2)}`,
     income: data.totalIncome,
-    coreSpend: data.totalSpend - data.totalInvestment, // Core spend is total spend minus investments
+    coreSpend: data.totalSpend - data.totalInvestment,
     investment: data.totalInvestment,
     savings: data.totalSavings,
   }));
-
-  const chartConfig = {
-    income: {
-      label: "Income (₹)",
-      color: "hsl(140, 60%, 50%)", // Green
-    },
-    coreSpend: {
-      label: "Core Spend (₹)",
-      color: "hsl(0, 70%, 55%)", // Red
-    },
-    investment: {
-        label: "Investments (₹)",
-        color: "hsl(48, 90%, 55%)", // Yellow
-    },
-    savings: {
-      label: "Cash Savings (₹)",
-      color: "hsl(var(--chart-3))", // Purple/Accent
-    },
-  }
 
   if (!monthlyData || monthlyData.length === 0) {
     return (
@@ -71,10 +77,13 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
     <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
         <CardTitle>Monthly Financial Trends</CardTitle>
-        <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
+        <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}. Click legend to toggle.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        <ChartContainer config={chartConfig} className="h-full w-full">
+        <ChartContainer
+          config={config}
+          className="h-full w-full"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               accessibilityLayer
@@ -93,7 +102,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 className="fill-foreground" 
               />
               <YAxis
-                tickFormatter={(value) => `₹${value / 1000}k`}
+                tickFormatter={(value) => `₹${Number(value) / 1000}k`}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -103,55 +112,41 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                    formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, chartConfig[name as keyof typeof chartConfig]?.label || String(name)])} 
+                    formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, config[name as keyof typeof config]?.label || String(name)])} 
                     indicator="line" 
                 />}
               />
-              <ChartLegend content={<ChartLegendContent />} />
-              <Line
-                dataKey="income"
-                type="monotone"
-                stroke={chartConfig.income.color}
-                strokeWidth={2}
-                dot={{
-                  fill: chartConfig.income.color,
-                }}
-                activeDot={{ r: 6 }}
+              <ChartLegend
+                content={
+                  <ChartLegendContent
+                    onClick={(item) => {
+                      setConfig((prevConfig) => ({
+                        ...prevConfig,
+                        [item.dataKey as keyof typeof config]: {
+                          ...prevConfig[item.dataKey as keyof typeof config],
+                          inactive: !prevConfig[item.dataKey as keyof typeof config]?.inactive,
+                        },
+                      }))
+                    }}
+                  />
+                }
               />
-               <Line
-                dataKey="coreSpend"
-                type="monotone"
-                stroke={chartConfig.coreSpend.color}
-                strokeWidth={2}
-                dot={{
-                  fill: chartConfig.coreSpend.color,
-                }}
-                activeDot={{ r: 6 }}
-              />
-               <Line
-                dataKey="investment"
-                type="monotone"
-                stroke={chartConfig.investment.color}
-                strokeWidth={2}
-                dot={{
-                  fill: chartConfig.investment.color,
-                }}
-                activeDot={{ r: 6 }}
-              />
-              <Line
-                dataKey="savings"
-                type="monotone"
-                stroke={chartConfig.savings.color}
-                strokeWidth={3} // Make savings line thicker
-                strokeDasharray="3 3"
-                dot={{
-                  fill: chartConfig.savings.color,
-                  r: 5,
-                }}
-                activeDot={{
-                  r: 7,
-                }}
-              />
+              {Object.keys(config).map((key) => {
+                  const configItem = config[key as keyof typeof config];
+                  if (configItem.inactive) return null;
+                  return (
+                    <Line
+                      key={key}
+                      dataKey={key}
+                      type="monotone"
+                      stroke={configItem.color}
+                      strokeWidth={key === 'savings' ? 3 : 2}
+                      strokeDasharray={key === 'savings' ? "3 3" : ""}
+                      dot={{ fill: configItem.color, r: key === 'savings' ? 4 : 2 }}
+                      activeDot={{ r: key === 'savings' ? 6 : 4 }}
+                    />
+                  )
+              })}
             </LineChart>
           </ResponsiveContainer>
         </ChartContainer>
