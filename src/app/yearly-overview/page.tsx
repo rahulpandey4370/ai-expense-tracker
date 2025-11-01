@@ -11,12 +11,12 @@ import { getTransactions } from '@/lib/actions/transactions';
 import { Loader2, AlertTriangle, CalendarRange, Layers } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
 import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
 
 
 const pageVariants = {
