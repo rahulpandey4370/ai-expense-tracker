@@ -14,11 +14,10 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
 } from "@/components/ui/chart"
 import type { MonthlySummary } from "@/app/yearly-overview/page"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 interface MonthlyFinancialTrendsChartProps {
   monthlyData: MonthlySummary[];
@@ -47,8 +46,17 @@ const initialChartConfig = {
 
 
 export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartProps) {
-  const [config, setConfig] = useState(initialChartConfig);
+  const [config, setConfig] = useState(initialChartConfig as typeof initialChartConfig & { [key: string]: { inactive?: boolean } });
 
+  const toggleSeries = (key: string) => {
+    setConfig(prevConfig => ({
+      ...prevConfig,
+      [key]: {
+        ...prevConfig[key],
+        inactive: !prevConfig[key]?.inactive,
+      }
+    }));
+  };
 
   const chartData = monthlyData.map(data => ({
     name: `${data.monthShortName} '${String(data.year).slice(-2)}`,
@@ -75,8 +83,34 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
   return (
     <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
-        <CardTitle>Monthly Financial Trends</CardTitle>
-        <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}. Click legend to toggle.</CardDescription>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <CardTitle>Monthly Financial Trends</CardTitle>
+                <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                {Object.entries(config).map(([key, value]) => (
+                  <Button
+                    key={key}
+                    variant={value.inactive ? "outline" : "default"}
+                    size="sm"
+                    className={cn(
+                      "h-7 px-2 text-xs",
+                      !value.inactive && "text-white",
+                      !value.inactive && {
+                        "bg-green-600 hover:bg-green-700": key === 'income',
+                        "bg-red-600 hover:bg-red-700": key === 'coreSpend',
+                        "bg-yellow-600 hover:bg-yellow-700": key === 'investment',
+                        "bg-blue-600 hover:bg-blue-700": key === 'savings',
+                      }
+                    )}
+                    onClick={() => toggleSeries(key)}
+                  >
+                    {value.label}
+                  </Button>
+                ))}
+            </div>
+        </div>
       </CardHeader>
       <CardContent className="flex-1">
         <ChartContainer
@@ -115,23 +149,8 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                     indicator="line" 
                 />}
               />
-              <ChartLegend
-                content={
-                  <ChartLegendContent
-                    onClick={(item) => {
-                      setConfig((prevConfig) => ({
-                        ...prevConfig,
-                        [item.dataKey as keyof typeof config]: {
-                          ...prevConfig[item.dataKey as keyof typeof config],
-                          inactive: !prevConfig[item.dataKey as keyof typeof config]?.inactive,
-                        },
-                      }))
-                    }}
-                  />
-                }
-              />
               {Object.keys(config).map((key) => {
-                  const configItem = config[key as keyof typeof config] as (typeof config)[keyof typeof config] & { inactive?: boolean };
+                  const configItem = config[key as keyof typeof config];
                   if (configItem.inactive) return null;
                   return (
                     <Line
