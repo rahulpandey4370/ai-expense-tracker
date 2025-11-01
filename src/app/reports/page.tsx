@@ -24,7 +24,7 @@ import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -412,41 +412,39 @@ export default function ReportsPage() {
                                 const transactionsForCategory = filteredTransactionsForPeriod.filter(t => t.category?.name === cat.categoryName);
 
                                 return (
-                                  <TooltipProvider key={index}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-help">
-                                          <div className="flex justify-between items-baseline">
-                                              <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
-                                              <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
-                                          </div>
-                                          <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
-                                          <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <Popover key={index}>
+                                    <PopoverTrigger asChild>
+                                      <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                                        <div className="flex justify-between items-baseline">
+                                            <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
+                                            <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
                                         </div>
-                                      </TooltipTrigger>
-                                       <TooltipContent className="p-2 bg-background border-primary/30 max-w-md w-full">
-                                        <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
-                                        {transactionsForCategory.length > 0 ? (
-                                          <ScrollArea className="h-auto max-h-[150px]">
-                                            <ul className="space-y-1 text-xs">
-                                              {transactionsForCategory.map(tx => (
-                                                <li key={tx.id} className="flex items-center justify-between gap-2">
-                                                  <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
-                                                    {format(tx.date, 'dd/MM')}: {tx.description}
-                                                  </span>
-                                                  <span className="flex-shrink-0 font-semibold text-foreground">
-                                                    ₹{tx.amount.toLocaleString()}
-                                                  </span>
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </ScrollArea>
-                                        ) : (
-                                          <p className="text-xs text-muted-foreground">No transactions found.</p>
-                                        )}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
+                                        <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
+                                        <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
+                                      <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
+                                      {transactionsForCategory.length > 0 ? (
+                                        <ScrollArea className="h-auto max-h-[150px]">
+                                          <ul className="space-y-1 text-xs">
+                                            {transactionsForCategory.map(tx => (
+                                              <li key={tx.id} className="flex items-center justify-between gap-2">
+                                                <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
+                                                  {format(tx.date, 'dd/MM')}: {tx.description}
+                                                </span>
+                                                <span className="flex-shrink-0 font-semibold text-foreground">
+                                                  ₹{tx.amount.toLocaleString()}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </ScrollArea>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">No transactions found.</p>
+                                      )}
+                                    </PopoverContent>
+                                  </Popover>
                                 );
                             })}
                           </div>
