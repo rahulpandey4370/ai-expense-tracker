@@ -110,4 +110,3 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
     return result.output!;
   }
 );
-

@@ -1059,6 +1059,93 @@ export default function AIPlaygroundPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+       <Separator />
+      
+      {/* AI Fixed Expense Analyzer Section */}
+      <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+          <CardHeader>
+            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+              <Repeat className="w-7 h-7 md:w-8 md:h-8 text-accent" />
+              AI Fixed Expense Analyzer
+            </CardTitle>
+            <CardDescription className="text-sm md:text-base text-muted-foreground">
+              Let AI identify your recurring monthly expenses like rent, subscriptions, and EMIs from your transaction history.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <motion.div variants={cardVariants} className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
+               <div className="flex flex-col sm:flex-row gap-2">
+                  <div className='flex-1'>
+                    <Label htmlFor="fixed-expense-month">Month</Label>
+                    <Select value={fixedExpenseMonth.toString()} onValueChange={(val) => setFixedExpenseMonth(Number(val))}>
+                      <SelectTrigger id="fixed-expense-month" className="w-full mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {monthNamesList.map((name, index) => <SelectItem key={index} value={index.toString()}>{name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='flex-1'>
+                    <Label htmlFor="fixed-expense-year">Year</Label>
+                    <Select value={fixedExpenseYear.toString()} onValueChange={(val) => setFixedExpenseYear(Number(val))}>
+                      <SelectTrigger id="fixed-expense-year" className="w-full mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {contextYears.map(year => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+               </div>
+              <Button onClick={handleGetFixedExpenses} disabled={isAILoadingFixedExpenses || isLoadingTransactions} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
+                {isAILoadingFixedExpenses ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
+                {isLoadingTransactions ? "Loading data..." : (isAILoadingFixedExpenses ? "Analyzing Expenses..." : "Analyze Fixed Expenses")}
+              </Button>
+            </motion.div>
+
+            {isAILoadingFixedExpenses && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-background/50 border-primary/20">
+                <CardTitle className="text-lg text-primary mb-2">AI Analyzing for Fixed Expenses...</CardTitle>
+                 <div className="space-y-3">
+                  <Skeleton className="h-4 w-full bg-muted" /><Skeleton className="h-4 w-5/6 bg-muted" />
+                </div>
+              </motion.div>
+            )}
+            
+            {aiFixedExpenseError && !isAILoadingFixedExpenses && (
+              <motion.div variants={cardVariants}>
+                 <Alert variant="destructive"><AlertTriangle className="h-5 w-5" /><AlertTitle>Analysis Error</AlertTitle><AlertDescription>{aiFixedExpenseError}</AlertDescription></Alert>
+              </motion.div>
+            )}
+
+            {aiFixedExpenseAnalysis && !isAILoadingFixedExpenses && !aiFixedExpenseError && (
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
+                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">AI Fixed Expense Analysis</CardTitle>
+                <div className="space-y-4 text-sm">
+                  <p className="whitespace-pre-wrap font-medium text-foreground/90">{aiFixedExpenseAnalysis.summary}</p>
+                   {aiFixedExpenseAnalysis.identifiedExpenses.length > 0 && (
+                     <div>
+                        <h4 className="font-semibold text-foreground mb-2">Identified Recurring Expenses:</h4>
+                        <ul className="space-y-2">
+                           {aiFixedExpenseAnalysis.identifiedExpenses.map((exp, index) => (
+                              <li key={index} className="p-2 border-b border-accent/20">
+                                 <div className="flex justify-between font-semibold">
+                                    <span>{exp.description} <span className="text-xs text-muted-foreground">({exp.category})</span></span>
+                                    <span>₹{exp.estimatedAmount.toLocaleString()}</span>
+                                 </div>
+                                 <p className="text-xs text-muted-foreground italic">Confidence: {exp.confidence} - {exp.reasoning}</p>
+                              </li>
+                           ))}
+                        </ul>
+                         <p className="text-right font-bold mt-2 text-primary">Total Identified Fixed Expenses: ₹{aiFixedExpenseAnalysis.totalFixedExpenses.toLocaleString()}</p>
+                     </div>
+                   )}
+                </div>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
        {/* Edit Allocation Dialog */}
       <Dialog open={editingAllocation !== null} onOpenChange={(isOpen) => !isOpen && setEditingAllocation(null)}>
         <DialogContent>
@@ -1091,5 +1178,3 @@ export default function AIPlaygroundPage() {
     </main>
   );
 }
-
-    
