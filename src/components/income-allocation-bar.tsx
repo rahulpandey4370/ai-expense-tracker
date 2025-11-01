@@ -22,25 +22,25 @@ const segmentConfig = {
     name: "Needs", 
     gradient: "from-blue-400 to-blue-600", 
     icon: HandCoins, 
-    ideal: "50%" 
+    ideal: "<=50%" 
   },
   wants: { 
     name: "Wants", 
     gradient: "from-purple-400 to-purple-600", 
     icon: ShoppingBasket, 
-    ideal: "30%" 
+    ideal: "<=30%" 
   },
   investments: { 
     name: "Investments", 
     gradient: "from-yellow-400 to-yellow-600", 
     icon: TrendingUp, 
-    ideal: "20%" 
+    ideal: ">=20%" 
   },
   savings: { 
     name: "Cash Savings", 
     gradient: "from-green-400 to-green-600", 
     icon: Wallet, 
-    ideal: "Part of Wants/Investments" 
+    ideal: "Flexible" 
   },
 };
 
