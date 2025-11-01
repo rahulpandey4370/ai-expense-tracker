@@ -41,10 +41,10 @@ export function IncomeAllocationBar({ income, needs, wants, investments }: Incom
   const savingsPercentage = (savings / income) * 100;
 
   const segments = [
-    { name: "Needs", percentage: needsPercentage, value: needs, color: "bg-sky-500", icon: HandCoins, ideal: "50%" },
-    { name: "Wants", percentage: wantsPercentage, value: wants, color: "bg-fuchsia-500", icon: ShoppingBasket, ideal: "30% (Wants+Savings)" },
-    { name: "Investments", percentage: investmentsPercentage, value: investments, color: "bg-amber-500", icon: TrendingUp, ideal: "20%" },
-    { name: "Cash Savings", percentage: savingsPercentage, value: savings, color: "bg-emerald-500", icon: Wallet, ideal: "30% (Wants+Savings)" },
+    { name: "Needs", percentage: needsPercentage, value: needs, color: "bg-blue-500", icon: HandCoins, ideal: "50%" },
+    { name: "Wants", percentage: wantsPercentage, value: wants, color: "bg-purple-500", icon: ShoppingBasket, ideal: "30%" },
+    { name: "Investments", percentage: investmentsPercentage, value: investments, color: "bg-yellow-500", icon: TrendingUp, ideal: "20%" },
+    { name: "Cash Savings", percentage: savingsPercentage, value: savings, color: "bg-green-500", icon: Wallet, ideal: "Part of 30%" },
   ].filter(segment => segment.percentage > 0.1); 
 
 
@@ -97,4 +97,3 @@ export function IncomeAllocationBar({ income, needs, wants, investments }: Incom
      </Card>
   );
 }
-
