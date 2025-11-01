@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
 import { Progress } from '@/components/ui/progress';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
@@ -245,40 +245,42 @@ export default function YearlyOverviewPage() {
                 </motion.div>
 
                 <motion.div className="overflow-x-auto" variants={tableContainerVariants} initial="hidden" animate="visible">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-primary/5 border-b-primary/20">
-                        <TableHead className="font-semibold text-muted-foreground w-[100px] sm:w-[120px] text-xs sm:text-sm whitespace-nowrap">Month</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Income</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Spend</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Savings</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Investment</TableHead>
-                        <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Cashbacks/Interests/Dividends</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {yearlySummaryData.map((data) => (
-                        <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50 text-xs sm:text-sm">
-                          <TableCell className="font-medium text-foreground whitespace-nowrap">{data.monthName}</TableCell>
-                          <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
-                          <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
-                        </motion.tr>
-                      ))}
-                    </TableBody>
-                    <TableFooter>
-                      <TableRow className="bg-primary/10 border-t-2 border-primary/30 text-xs sm:text-sm">
-                        <TableHead className="font-bold text-primary whitespace-nowrap">Total ({selectedYear})</TableHead>
-                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
-                        <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-primary/5 border-b-primary/20">
+                          <TableHead className="font-semibold text-muted-foreground w-[100px] sm:w-[120px] text-xs sm:text-sm whitespace-nowrap">Month</TableHead>
+                          <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Income</TableHead>
+                          <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Spend</TableHead>
+                          <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Savings</TableHead>
+                          <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Total Investment</TableHead>
+                          <TableHead className="text-right font-semibold text-muted-foreground text-xs sm:text-sm whitespace-nowrap">Cashbacks/Interests/Dividends</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {yearlySummaryData.map((data) => (
+                          <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50 text-xs sm:text-sm">
+                            <TableCell className="font-medium text-foreground whitespace-nowrap">{data.monthName}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
+                          </motion.tr>
+                        ))}
+                      </TableBody>
+                      <TableFooter>
+                        <TableRow className="bg-primary/10 border-t-2 border-primary/30 text-xs sm:text-sm">
+                          <TableHead className="font-bold text-primary whitespace-nowrap">Total ({selectedYear})</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
+                        </TableRow>
+                      </TableFooter>
+                    </Table>
+                  </div>
                 </motion.div>
 
                 <motion.div variants={cardVariants}>
@@ -295,39 +297,44 @@ export default function YearlyOverviewPage() {
                             {categoryWiseYearlySpend.map((cat, index) => {
                                 const percentage = yearlyTotals.totalSpend > 0 ? (cat.totalAmount / yearlyTotals.totalSpend) * 100 : 0;
                                 const colorClass = progressColors[index % progressColors.length];
+                                
+                                const transactionsForCategory = allTransactions.filter(tx => tx.category?.name === cat.categoryName && new Date(tx.date).getFullYear() === selectedYear);
+
                                 return (
-                                <TooltipProvider key={index}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-help">
-                                  <div className="flex justify-between items-baseline">
-                                      <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
-                                      <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
-                                  </div>
-                                  <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
-                                  <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                </div>
-                                </TooltipTrigger>
-                                       <TooltipContent className="p-2 bg-background border-primary/30 max-w-xs w-full">
-                                        <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
+                                  <Popover key={index}>
+                                    <PopoverTrigger asChild>
+                                      <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                                        <div className="flex justify-between items-baseline">
+                                            <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
+                                            <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
+                                        </div>
+                                        <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
+                                        <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                    </PopoverTrigger>
+                                     <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
+                                      <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
+                                      {transactionsForCategory.length > 0 ? (
                                         <ScrollArea className="h-auto max-h-[150px]">
-                                        <ul className="space-y-1 text-xs">
-                                          {allTransactions.filter(tx => tx.category?.name === cat.categoryName && new Date(tx.date).getFullYear() === selectedYear).map(tx => (
-                                            <li key={tx.id} className="flex items-center justify-between gap-2">
-                                              <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
-                                                {format(tx.date, 'dd/MM')}: {tx.description}
-                                              </span>
-                                              <span className="flex-shrink-0 font-semibold text-foreground">
-                                                ₹{tx.amount.toLocaleString()}
-                                              </span>
-                                            </li>
-                                          ))}
-                                        </ul>
+                                          <ul className="space-y-1 text-xs">
+                                            {transactionsForCategory.map(tx => (
+                                              <li key={tx.id} className="flex items-center justify-between gap-2">
+                                                <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
+                                                  {format(tx.date, 'dd/MM')}: {tx.description}
+                                                </span>
+                                                <span className="flex-shrink-0 font-semibold text-foreground">
+                                                  ₹{tx.amount.toLocaleString()}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
                                         </ScrollArea>
-                                      </TooltipContent>
-                                </Tooltip>
-                                </TooltipProvider>
-                              );
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">No transactions found.</p>
+                                      )}
+                                    </PopoverContent>
+                                  </Popover>
+                                );
                             })}
                           </div>
                            <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
