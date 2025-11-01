@@ -113,7 +113,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
       <CardContent className="flex-1">
         <ChartContainer
           config={config}
-          className="h-full w-full"
+          className="h-[250px] sm:h-[300px] w-full"
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -130,7 +130,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                className="fill-foreground" 
+                className="fill-foreground text-xs" 
               />
               <YAxis
                 tickFormatter={(value) => `₹${Number(value) / 1000}k`}
@@ -138,7 +138,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 axisLine={false}
                 tickMargin={8}
                 width={50}
-                className="fill-foreground" 
+                className="fill-foreground text-xs" 
               />
               <ChartTooltip
                 cursor={false}

@@ -60,7 +60,7 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
         <CardDescription>Income, spend, and savings per month for {monthlyData[0]?.year}.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        <ChartContainer config={chartConfig} className="h-full w-full min-h-[250px]">
+        <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart accessibilityLayer data={chartData} margin={{left:12, right: 12}}>
               <CartesianGrid vertical={false} />
@@ -69,7 +69,7 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
-                className="fill-foreground" 
+                className="fill-foreground text-xs" 
               />
               <YAxis 
                 tickFormatter={(value) => `₹${Number(value) / 1000}k`} 
@@ -77,7 +77,7 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
                 axisLine={false}
                 tickMargin={8}
                 width={50}
-                className="fill-foreground" 
+                className="fill-foreground text-xs" 
               />
               <ChartTooltip
                 cursor={false}
