@@ -37,15 +37,15 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
   const chartConfig = {
     income: {
       label: "Income (₹)",
-      color: "hsl(var(--chart-2))", // Greenish
+      color: "hsl(140, 60%, 50%)", // Green
     },
     coreSpend: {
       label: "Core Spend (₹)",
-      color: "hsl(var(--chart-5))", // Reddish/Orange
+      color: "hsl(0, 70%, 55%)", // Red
     },
     investment: {
         label: "Investments (₹)",
-        color: "hsl(var(--chart-1))", // Teal/Blue
+        color: "hsl(48, 90%, 55%)", // Yellow
     },
     savings: {
       label: "Cash Savings (₹)",
