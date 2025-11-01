@@ -19,23 +19,37 @@ import {
 import type { MonthlySummary } from "@/app/yearly-overview/page"
 import { cn } from "@/lib/utils"
 
-interface SavingsTrendChartProps {
+interface MonthlyFinancialTrendsChartProps {
   monthlyData: MonthlySummary[];
 }
 
 const glowClass = "shadow-card-glow";
 
-export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
-  // totalSavings here is Income - Core Spend
+export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartProps) {
   const chartData = monthlyData.map(data => ({
     name: `${data.monthShortName} '${String(data.year).slice(-2)}`,
-    savings: data.totalSavings, 
+    income: data.totalIncome,
+    coreSpend: data.totalSpend - data.totalInvestment, // Core spend is total spend minus investments
+    investment: data.totalInvestment,
+    savings: data.totalSavings,
   }));
 
   const chartConfig = {
+    income: {
+      label: "Income (₹)",
+      color: "hsl(var(--chart-2))", // Greenish
+    },
+    coreSpend: {
+      label: "Core Spend (₹)",
+      color: "hsl(var(--chart-5))", // Reddish/Orange
+    },
+    investment: {
+        label: "Investments (₹)",
+        color: "hsl(var(--chart-1))", // Teal/Blue
+    },
     savings: {
-      label: "Savings (Income - Core Spend) (₹)",
-      color: "hsl(var(--chart-4))", 
+      label: "Cash Savings (₹)",
+      color: "hsl(var(--chart-3))", // Purple/Accent
     },
   }
 
@@ -43,11 +57,11 @@ export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
     return (
       <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
         <CardHeader>
-          <CardTitle>Monthly Savings Trend</CardTitle>
-          <CardDescription>Savings (Income - Core Spend) trend over the months.</CardDescription>
+          <CardTitle>Monthly Financial Trends</CardTitle>
+          <CardDescription>Income, spending, investment, and savings trends.</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground">No data available for savings trend.</p>
+          <p className="text-muted-foreground">No data available for trend chart.</p>
         </CardContent>
       </Card>
     );
@@ -56,8 +70,8 @@ export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
   return (
     <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
       <CardHeader>
-        <CardTitle>Monthly Savings Trend</CardTitle>
-        <CardDescription>Savings (Income - Core Spend) trend for {monthlyData[0]?.year}.</CardDescription>
+        <CardTitle>Monthly Financial Trends</CardTitle>
+        <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
         <ChartContainer config={chartConfig} className="h-full w-full">
@@ -89,16 +103,47 @@ export function SavingsTrendChart({ monthlyData }: SavingsTrendChartProps) {
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                    formatter={(value) => `₹${(value as number).toLocaleString()}`} 
+                    formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, chartConfig[name as keyof typeof chartConfig]?.label || String(name)])} 
                     indicator="line" 
                 />}
               />
               <ChartLegend content={<ChartLegendContent />} />
               <Line
+                dataKey="income"
+                type="monotone"
+                stroke={chartConfig.income.color}
+                strokeWidth={2}
+                dot={{
+                  fill: chartConfig.income.color,
+                }}
+                activeDot={{ r: 6 }}
+              />
+               <Line
+                dataKey="coreSpend"
+                type="monotone"
+                stroke={chartConfig.coreSpend.color}
+                strokeWidth={2}
+                dot={{
+                  fill: chartConfig.coreSpend.color,
+                }}
+                activeDot={{ r: 6 }}
+              />
+               <Line
+                dataKey="investment"
+                type="monotone"
+                stroke={chartConfig.investment.color}
+                strokeWidth={2}
+                dot={{
+                  fill: chartConfig.investment.color,
+                }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
                 dataKey="savings"
                 type="monotone"
                 stroke={chartConfig.savings.color}
-                strokeWidth={3}
+                strokeWidth={3} // Make savings line thicker
+                strokeDasharray="3 3"
                 dot={{
                   fill: chartConfig.savings.color,
                   r: 5,

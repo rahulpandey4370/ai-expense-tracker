@@ -14,6 +14,9 @@ import { cn } from '@/lib/utils';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
 import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { format } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const pageVariants = {
@@ -293,7 +296,10 @@ export default function YearlyOverviewPage() {
                                 const percentage = yearlyTotals.totalSpend > 0 ? (cat.totalAmount / yearlyTotals.totalSpend) * 100 : 0;
                                 const colorClass = progressColors[index % progressColors.length];
                                 return (
-                                <div key={index} className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
+                                <TooltipProvider key={index}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                <div className="p-3 rounded-lg border bg-background/50 space-y-1.5 shadow-sm hover:shadow-md transition-shadow cursor-help">
                                   <div className="flex justify-between items-baseline">
                                       <span className="font-semibold text-sm text-foreground truncate" title={cat.categoryName}>{cat.categoryName}</span>
                                       <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
@@ -301,6 +307,26 @@ export default function YearlyOverviewPage() {
                                   <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
                                   <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
+                                </TooltipTrigger>
+                                       <TooltipContent className="p-2 bg-background border-primary/30 max-w-xs w-full">
+                                        <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
+                                        <ScrollArea className="h-auto max-h-[150px]">
+                                        <ul className="space-y-1 text-xs">
+                                          {allTransactions.filter(tx => tx.category?.name === cat.categoryName && new Date(tx.date).getFullYear() === selectedYear).map(tx => (
+                                            <li key={tx.id} className="flex items-center justify-between gap-2">
+                                              <span className="flex-1 truncate text-muted-foreground" title={tx.description}>
+                                                {format(tx.date, 'dd/MM')}: {tx.description}
+                                              </span>
+                                              <span className="flex-shrink-0 font-semibold text-foreground">
+                                                ₹{tx.amount.toLocaleString()}
+                                              </span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                        </ScrollArea>
+                                      </TooltipContent>
+                                </Tooltip>
+                                </TooltipProvider>
                               );
                             })}
                           </div>
