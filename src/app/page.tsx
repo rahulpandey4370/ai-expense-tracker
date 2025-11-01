@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -24,6 +23,7 @@ import { BudgetTrackerCard } from '@/components/budget-tracker-card';
 import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
+import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -130,9 +130,15 @@ export default function DashboardPage() {
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const coreExpenses = currentMonthTransactions
-      .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want'))
+    const needsExpenses = currentMonthTransactions
+      .filter(t => t.type === 'expense' && t.expenseType === 'need')
       .reduce((sum, t) => sum + t.amount, 0);
+
+    const wantsExpenses = currentMonthTransactions
+      .filter(t => t.type === 'expense' && t.expenseType === 'want')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const coreExpenses = needsExpenses + wantsExpenses;
     
     const totalInvestments = currentMonthTransactions
       .filter(t => t.type === 'expense' && 
@@ -152,7 +158,9 @@ export default function DashboardPage() {
     const totalSavingsAndInvestmentPercentage = income > 0 ? ((income - coreExpenses) / income) * 100 : 0;
 
     return { 
-      income, 
+      income,
+      needsExpenses,
+      wantsExpenses, 
       coreExpenses,
       totalInvestments,
       totalOutgoings,
@@ -233,6 +241,15 @@ export default function DashboardPage() {
   return (
     <>
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
+        <motion.div variants={sectionVariants} initial="hidden" animate="visible" className="mb-6">
+          <IncomeAllocationBar 
+            income={monthlyMetrics.income}
+            needs={monthlyMetrics.needsExpenses}
+            wants={monthlyMetrics.wantsExpenses}
+            investments={monthlyMetrics.totalInvestments}
+          />
+        </motion.div>
+
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
           variants={containerVariants}
