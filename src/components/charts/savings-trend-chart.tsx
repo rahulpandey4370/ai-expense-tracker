@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/chart"
 import type { MonthlySummary } from "@/app/yearly-overview/page"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+
 
 interface MonthlyFinancialTrendsChartProps {
   monthlyData: MonthlySummary[];
@@ -88,26 +90,22 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 <CardTitle>Monthly Financial Trends</CardTitle>
                 <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 mt-2 sm:mt-0">
                 {Object.entries(config).map(([key, value]) => (
-                  <Button
-                    key={key}
-                    variant={value.inactive ? "outline" : "default"}
-                    size="sm"
-                    className={cn(
-                      "h-7 px-2 text-xs",
-                      !value.inactive && "text-white",
-                      !value.inactive && {
-                        "bg-green-600 hover:bg-green-700": key === 'income',
-                        "bg-red-600 hover:bg-red-700": key === 'coreSpend',
-                        "bg-yellow-600 hover:bg-yellow-700": key === 'investment',
-                        "bg-blue-600 hover:bg-blue-700": key === 'savings',
-                      }
-                    )}
-                    onClick={() => toggleSeries(key)}
-                  >
-                    {value.label}
-                  </Button>
+                   <div key={key} className="flex items-center space-x-2">
+                    <Switch
+                        id={key}
+                        checked={!value.inactive}
+                        onCheckedChange={() => toggleSeries(key)}
+                        style={{
+                            '--switch-bg-checked': value.color,
+                        } as React.CSSProperties}
+                        className="data-[state=checked]:bg-[var(--switch-bg-checked)]"
+                    />
+                    <Label htmlFor={key} className="text-xs" style={{ color: value.inactive ? undefined : value.color }}>
+                        {value.label}
+                    </Label>
+                    </div>
                 ))}
             </div>
         </div>
