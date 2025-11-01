@@ -47,7 +47,6 @@ const initialChartConfig = {
 
 
 export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartProps) {
-  const [activeChart, setActiveChart] = useState<keyof typeof initialChartConfig>("income");
   const [config, setConfig] = useState(initialChartConfig);
 
 
@@ -132,7 +131,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 }
               />
               {Object.keys(config).map((key) => {
-                  const configItem = config[key as keyof typeof config];
+                  const configItem = config[key as keyof typeof config] as (typeof config)[keyof typeof config] & { inactive?: boolean };
                   if (configItem.inactive) return null;
                   return (
                     <Line
