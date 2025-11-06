@@ -21,6 +21,7 @@ interface KpiCardProps {
   selectedYear: number;
   secondaryTitle?: string;
   secondaryValue?: string;
+  isVisible: boolean; // New prop to control visibility
 }
 
 const glowClass = "shadow-card-glow";
@@ -38,6 +39,7 @@ export function KpiCard({
   selectedYear,
   secondaryTitle,
   secondaryValue,
+  isVisible,
 }: KpiCardProps) {
   const router = useRouter();
   const [showSecondary, setShowSecondary] = useState(false);
@@ -51,6 +53,7 @@ export function KpiCard({
 
   const handleCardClick = () => {
     if (!isClient) return;
+    if (!isVisible) return; // Don't navigate if not visible
 
     if (clickTimeout) {
       clearTimeout(clickTimeout);
@@ -92,6 +95,7 @@ export function KpiCard({
 
   const handleDoubleClick = () => {
     if (!isClient) return;
+    if (!isVisible) return; // Don't allow double click if not visible
 
     if (clickTimeout) {
       clearTimeout(clickTimeout);
@@ -107,18 +111,20 @@ export function KpiCard({
 
   const displayTitle = showSecondary && secondaryTitle ? secondaryTitle : title;
   const displayValue = showSecondary && secondaryValue ? secondaryValue : value;
+  const displayDescription = showSecondary ? (isVisible ? 'Total Saved + Invested' : '•••••') : description;
 
   return (
     <motion.div
       className={cn(
-        "shadow-lg h-full flex flex-col cursor-pointer",
+        "shadow-lg h-full flex flex-col",
+        isVisible ? "cursor-pointer" : "cursor-default",
         glowClass,
         className
       )}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
-      whileHover={{ scale: 1.02, transition: { duration: 0.1 } }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={isVisible ? { scale: 1.02, transition: { duration: 0.1 } } : {}}
+      whileTap={isVisible ? { scale: 0.98 } : {}}
     >
       <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -128,10 +134,10 @@ export function KpiCard({
           <Icon className="h-5 w-5 text-primary" />
         </CardHeader>
         <CardContent className="flex-1 flex flex-col justify-center">
-          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>
-            {typeof displayValue === 'number' ? displayValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : displayValue}
+          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", !isVisible && "blur-sm", valueClassName)}>
+            {displayValue}
           </div>
-          {description && !showSecondary && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
+          {displayDescription && <p className={cn("text-xs text-muted-foreground pt-1", !isVisible && "blur-sm")}>{displayDescription}</p>}
            {showSecondary && secondaryValue && kpiKey === "savingsPercentage" && (
             <p className="text-xs text-accent pt-1 animate-pulse">Showing total saved/invested %</p>
            )}
@@ -140,5 +146,3 @@ export function KpiCard({
     </motion.div>
   );
 }
-
-    

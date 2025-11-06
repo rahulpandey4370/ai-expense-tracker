@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -12,7 +13,7 @@ import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-tren
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
 import type { AppTransaction, Category } from '@/lib/types';
 import { getTransactions, getCategories } from '@/lib/actions/transactions';
-import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -70,6 +71,7 @@ export default function DashboardPage() {
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [kpisVisible, setKpisVisible] = useState(false);
   const addTransactionRef = useRef<HTMLDivElement>(null);
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
@@ -241,14 +243,28 @@ export default function DashboardPage() {
   return (
     <>
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible" className="mb-6">
-          <IncomeAllocationBar 
-            income={monthlyMetrics.income}
-            needs={monthlyMetrics.needsExpenses}
-            wants={monthlyMetrics.wantsExpenses}
-            investments={monthlyMetrics.totalInvestments}
-          />
-        </motion.div>
+        <div className="flex justify-end mb-4">
+            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="sm" withMotion>
+                {kpisVisible ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                {kpisVisible ? 'Hide Balances' : 'Show Balances'}
+            </Button>
+        </div>
+        
+        {kpisVisible && (
+            <motion.div 
+              variants={sectionVariants} 
+              initial="hidden" 
+              animate="visible" 
+              className="mb-6"
+            >
+                <IncomeAllocationBar 
+                    income={monthlyMetrics.income}
+                    needs={monthlyMetrics.needsExpenses}
+                    wants={monthlyMetrics.wantsExpenses}
+                    investments={monthlyMetrics.totalInvestments}
+                />
+            </motion.div>
+        )}
 
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
@@ -259,7 +275,8 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Income" 
-              value={`₹${monthlyMetrics.income.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.income.toFixed(2)}` : '•••••'}
+              isVisible={kpisVisible}
               icon={Banknote} 
               description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
               className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-700/50 dark:bg-green-900/20 dark:hover:bg-green-800/30"
@@ -272,7 +289,8 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Core Expenses" 
-              value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.coreExpenses.toFixed(2)}` : '•••••'} 
+              isVisible={kpisVisible}
               icon={TrendingDown} 
               description="Needs & Wants this month"
               valueClassName="text-red-500 dark:text-red-400" 
@@ -286,7 +304,8 @@ export default function DashboardPage() {
            <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Investments" 
-              value={`₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.totalInvestments.toFixed(2)}` : '•••••'} 
+              isVisible={kpisVisible}
               icon={Landmark} 
               description="Dedicated investment outflows"
               valueClassName="text-blue-500 dark:text-blue-400"
@@ -300,9 +319,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Outgoings" 
-              value={`₹${monthlyMetrics.totalOutgoings.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.totalOutgoings.toFixed(2)}` : '•••••'} 
+              isVisible={kpisVisible}
               icon={Sigma} 
-              description={`Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}`}
+              description={kpisVisible ? `Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}` : '•••••'}
               valueClassName="text-orange-500 dark:text-orange-400" 
               className="border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 dark:border-orange-700/50 dark:bg-orange-900/20 dark:hover:bg-orange-800/30"
               kpiKey="totalOutgoings"
@@ -314,9 +334,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
              <KpiCard
               title="Cash Savings %"
-              value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
+              value={kpisVisible ? `${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%` : '•••%'} 
+              isVisible={kpisVisible}
               icon={Percent}
-              description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
+              description={kpisVisible ? `Of total income: ₹${monthlyMetrics.income.toFixed(0)}` : '•••••'}
               valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
               className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
               kpiKey="savingsPercentage" 
@@ -324,13 +345,14 @@ export default function DashboardPage() {
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
               secondaryTitle="Total Saved/Invested %"
-              secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
+              secondaryValue={kpisVisible ? `${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%` : '•••%'}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Cashback/Interests" 
-              value={`₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}` : '•••••'} 
+              isVisible={kpisVisible}
               icon={HandCoins} 
               description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
               className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"
@@ -343,9 +365,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Investment Rate %" 
-              value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
+              value={kpisVisible ? `${monthlyMetrics.investmentPercentage.toFixed(1)}%` : '•••%'} 
+              isVisible={kpisVisible}
               icon={Target} 
-              description={`Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
+              description={kpisVisible ? `Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}` : '•••••'}
               valueClassName="text-indigo-500 dark:text-indigo-400"
               className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"
               kpiKey="investmentRate"
@@ -357,7 +380,8 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Cash Savings" 
-              value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
+              value={kpisVisible ? `₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}` : '•••••'} 
+              isVisible={kpisVisible}
               icon={Wallet} 
               description="Actual cash saved after all outgoings"
               valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
@@ -370,7 +394,7 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
-         {(monthlyMetrics.totalOutgoings) > monthlyMetrics.income && (
+         {(kpisVisible && monthlyMetrics.totalOutgoings) > monthlyMetrics.income && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Alert 
               variant="destructive" 
@@ -388,9 +412,11 @@ export default function DashboardPage() {
           </motion.div>
         )}
         
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-            <BudgetTrackerCard budgets={budgetData} />
-        </motion.div>
+        {kpisVisible && (
+            <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+                <BudgetTrackerCard budgets={budgetData} />
+            </motion.div>
+        )}
 
         <div ref={addTransactionRef} className="scroll-mt-20">
           <Card className={cn("p-0 sm:p-0 bg-card/80", glowClass)}>
