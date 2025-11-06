@@ -110,8 +110,9 @@ export function KpiCard({
   };
 
   const displayTitle = showSecondary && secondaryTitle ? secondaryTitle : title;
-  const displayValue = showSecondary && secondaryValue ? secondaryValue : value;
-  const displayDescription = showSecondary ? (isVisible ? 'Total Saved + Invested' : '•••••') : description;
+  const displayValue = isVisible ? (showSecondary && secondaryValue ? secondaryValue : value) : '•••••';
+  const displayDescription = isVisible ? (showSecondary ? 'Total Saved + Invested' : description) : '•••••';
+
 
   return (
     <motion.div
@@ -134,10 +135,10 @@ export function KpiCard({
           <Icon className="h-5 w-5 text-primary" />
         </CardHeader>
         <CardContent className="flex-1 flex flex-col justify-center">
-          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", !isVisible && "blur-sm", valueClassName)}>
+          <div className={cn("text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words", valueClassName)}>
             {displayValue}
           </div>
-          {displayDescription && <p className={cn("text-xs text-muted-foreground pt-1", !isVisible && "blur-sm")}>{displayDescription}</p>}
+          {displayDescription && <p className={cn("text-xs text-muted-foreground pt-1")}>{displayDescription}</p>}
            {showSecondary && secondaryValue && kpiKey === "savingsPercentage" && (
             <p className="text-xs text-accent pt-1 animate-pulse">Showing total saved/invested %</p>
            )}
@@ -146,3 +147,5 @@ export function KpiCard({
     </motion.div>
   );
 }
+
+    

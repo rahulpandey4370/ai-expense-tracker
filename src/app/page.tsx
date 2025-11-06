@@ -244,27 +244,25 @@ export default function DashboardPage() {
     <>
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
         <div className="flex justify-end mb-4">
-            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="sm" withMotion>
-                {kpisVisible ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                {kpisVisible ? 'Hide Balances' : 'Show Balances'}
+            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
+                {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
             </Button>
         </div>
         
-        {kpisVisible && (
-            <motion.div 
-              variants={sectionVariants} 
-              initial="hidden" 
-              animate="visible" 
-              className="mb-6"
-            >
-                <IncomeAllocationBar 
-                    income={monthlyMetrics.income}
-                    needs={monthlyMetrics.needsExpenses}
-                    wants={monthlyMetrics.wantsExpenses}
-                    investments={monthlyMetrics.totalInvestments}
-                />
-            </motion.div>
-        )}
+        <motion.div 
+          variants={sectionVariants} 
+          initial="hidden" 
+          animate="visible" 
+          className="mb-6"
+        >
+            <IncomeAllocationBar 
+                income={monthlyMetrics.income}
+                needs={monthlyMetrics.needsExpenses}
+                wants={monthlyMetrics.wantsExpenses}
+                investments={monthlyMetrics.totalInvestments}
+            />
+        </motion.div>
 
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
@@ -497,3 +495,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    
