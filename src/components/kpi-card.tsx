@@ -110,8 +110,8 @@ export function KpiCard({
   };
 
   const displayTitle = showSecondary && secondaryTitle ? secondaryTitle : title;
-  const displayValue = isVisible ? (showSecondary && secondaryValue ? secondaryValue : value) : '•••••';
-  const displayDescription = isVisible ? (showSecondary ? 'Total Saved + Invested' : description) : '•••••';
+  const displayValue = isVisible ? (showSecondary && secondaryValue ? secondaryValue : value) : '*****';
+  const displayDescription = isVisible ? (showSecondary ? 'Total Saved + Invested' : description) : '*****';
 
 
   return (
@@ -147,5 +147,3 @@ export function KpiCard({
     </motion.div>
   );
 }
-
-    

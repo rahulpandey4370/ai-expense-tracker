@@ -243,13 +243,6 @@ export default function DashboardPage() {
   return (
     <>
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
-        <div className="flex justify-end mb-4">
-            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
-                {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
-            </Button>
-        </div>
-        
         <motion.div 
           variants={sectionVariants} 
           initial="hidden" 
@@ -263,7 +256,14 @@ export default function DashboardPage() {
                 investments={monthlyMetrics.totalInvestments}
             />
         </motion.div>
-
+        
+        <div className="flex justify-end mb-4">
+            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
+                {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
+            </Button>
+        </div>
+        
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
           variants={containerVariants}
@@ -273,7 +273,7 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Income" 
-              value={kpisVisible ? `₹${monthlyMetrics.income.toFixed(2)}` : '•••••'}
+              value={`₹${monthlyMetrics.income.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={Banknote} 
               description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
@@ -287,7 +287,7 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Core Expenses" 
-              value={kpisVisible ? `₹${monthlyMetrics.coreExpenses.toFixed(2)}` : '•••••'} 
+              value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={TrendingDown} 
               description="Needs & Wants this month"
@@ -302,7 +302,7 @@ export default function DashboardPage() {
            <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Investments" 
-              value={kpisVisible ? `₹${monthlyMetrics.totalInvestments.toFixed(2)}` : '•••••'} 
+              value={`₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={Landmark} 
               description="Dedicated investment outflows"
@@ -317,10 +317,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Total Outgoings" 
-              value={kpisVisible ? `₹${monthlyMetrics.totalOutgoings.toFixed(2)}` : '•••••'} 
+              value={`₹${monthlyMetrics.totalOutgoings.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={Sigma} 
-              description={kpisVisible ? `Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}` : '•••••'}
+              description={`Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}`}
               valueClassName="text-orange-500 dark:text-orange-400" 
               className="border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 dark:border-orange-700/50 dark:bg-orange-900/20 dark:hover:bg-orange-800/30"
               kpiKey="totalOutgoings"
@@ -332,10 +332,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
              <KpiCard
               title="Cash Savings %"
-              value={kpisVisible ? `${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%` : '•••%'} 
+              value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
               isVisible={kpisVisible}
               icon={Percent}
-              description={kpisVisible ? `Of total income: ₹${monthlyMetrics.income.toFixed(0)}` : '•••••'}
+              description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
               valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
               className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
               kpiKey="savingsPercentage" 
@@ -343,13 +343,13 @@ export default function DashboardPage() {
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
               secondaryTitle="Total Saved/Invested %"
-              secondaryValue={kpisVisible ? `${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%` : '•••%'}
+              secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Cashback/Interests" 
-              value={kpisVisible ? `₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}` : '•••••'} 
+              value={`₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={HandCoins} 
               description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
@@ -363,10 +363,10 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Investment Rate %" 
-              value={kpisVisible ? `${monthlyMetrics.investmentPercentage.toFixed(1)}%` : '•••%'} 
+              value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
               isVisible={kpisVisible}
               icon={Target} 
-              description={kpisVisible ? `Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}` : '•••••'}
+              description={`Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}`}
               valueClassName="text-indigo-500 dark:text-indigo-400"
               className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"
               kpiKey="investmentRate"
@@ -378,7 +378,7 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <KpiCard 
               title="Cash Savings" 
-              value={kpisVisible ? `₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}` : '•••••'} 
+              value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
               isVisible={kpisVisible}
               icon={Wallet} 
               description="Actual cash saved after all outgoings"
@@ -495,5 +495,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
