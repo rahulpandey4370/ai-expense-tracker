@@ -102,7 +102,7 @@ export default function SettingsPage() {
     } finally {
         setIsLoadingData(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -141,7 +141,7 @@ export default function SettingsPage() {
       await deleteCategory(id);
       toast({ title: "Category Deleted!", description: "The category has been removed." });
       fetchData();
-    } catch (error: any) => {
+    } catch (error: any) {
       toast({ title: "Error deleting category", description: `${error.message}. It might be in use by some transactions.`, variant: "destructive" });
     } finally {
       setIsDeleting(null);
@@ -173,7 +173,7 @@ export default function SettingsPage() {
       await deletePaymentMethod(id);
       toast({ title: "Payment Method Deleted!", description: "The payment method has been removed." });
       fetchData();
-    } catch (error: any) => {
+    } catch (error: any) {
       toast({ title: "Error deleting payment method", description: `${error.message}. It might be in use by some transactions.`, variant: "destructive" });
     } finally {
       setIsDeleting(null);
