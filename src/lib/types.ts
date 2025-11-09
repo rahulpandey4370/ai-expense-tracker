@@ -339,3 +339,34 @@ export interface Budget extends BudgetInput {
   createdAt: string; // ISO String
   updatedAt: string; // ISO String
 }
+
+
+// --- Investment Analysis Feature Types ---
+
+const InvestmentAllocationSchema = z.object({
+  name: z.string().describe("Name of the individual fund, stock, or asset (e.g., 'Parag Parikh Flexi Cap', 'Reliance Industries', 'SGB Gold Bond')."),
+  percentage: z.number().describe("Percentage allocation for this specific asset relative to the total monthly investment."),
+  amount: z.number().describe("The amount invested in this asset in INR."),
+});
+
+const InvestmentCategoryAllocationSchema = z.object({
+  category: z.enum(['Equity', 'Debt', 'Gold', 'US Stocks', 'Crypto', 'Other']).describe("The high-level investment category."),
+  percentage: z.number().describe("Total percentage allocation for this entire category."),
+  amount: z.number().describe("Total amount invested in this category in INR."),
+  allocations: z.array(InvestmentAllocationSchema).describe("A breakdown of individual assets within this category."),
+});
+
+export const InvestmentAnalysisOutputSchema = z.object({
+  totalInvestment: z.number().describe("Total investment amount for the month in INR."),
+  categoryAllocations: z.array(InvestmentCategoryAllocationSchema).describe("Breakdown of investments by major categories."),
+  rating: z.number().min(1).max(5).describe("An overall rating of the monthly investment strategy from 1 (poor/undiversified) to 5 (excellent/well-diversified)."),
+  justification: z.string().describe("A brief (2-3 sentences) justification for the rating, commenting on diversification, risk, and alignment with common investment principles."),
+});
+export type InvestmentAnalysisOutput = z.infer<typeof InvestmentAnalysisOutputSchema>;
+
+export interface MonthlyInvestmentAnalysis {
+  monthYear: string; // Format: "YYYY-MM"
+  investmentNotes: string;
+  aiAnalysis?: InvestmentAnalysisOutput;
+  updatedAt: string; // ISO string
+}

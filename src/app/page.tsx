@@ -26,6 +26,7 @@ import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
+import { InvestmentAnalysis } from '@/components/investment-analysis';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -438,6 +439,10 @@ export default function DashboardPage() {
           <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
         </motion.div>
 
+        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+          <InvestmentAnalysis />
+        </motion.div>
+        
         <motion.div
           className="grid grid-cols-1 gap-6" 
           variants={containerVariants}
