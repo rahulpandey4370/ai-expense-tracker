@@ -26,8 +26,8 @@ const investmentAnalysisPrompt = ai.definePrompt({
   input: { schema: InvestmentAnalyzerInputSchema },
   output: { schema: InvestmentAnalysisOutputSchema },
   config: {
-    temperature: 0.3,
-    maxOutputTokens: 1200,
+    temperature: 0.1,
+    maxOutputTokens: 12000,
   },
   prompt: `You are an expert investment analyst for Indian retail investors with a strict focus on mathematical accuracy.
 Your task is to analyze the user's raw text notes about their monthly investments and provide a structured analysis in INR.
