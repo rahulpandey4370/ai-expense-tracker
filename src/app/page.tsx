@@ -11,8 +11,9 @@ import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
-import type { AppTransaction, Category } from '@/lib/types';
+import type { AppTransaction, Category, Budget } from '@/lib/types';
 import { getTransactions, getCategories } from '@/lib/actions/transactions';
+import { getBudgets } from '@/lib/actions/budgets';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -58,17 +59,10 @@ const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]
 const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
-const hardcodedBudgets = [
-    { id: 'want-type', name: 'Wants (Expense Type)', amount: 10000, type: 'expenseType' as const, categoryId: 'want' },
-    { id: 'groceries-cat', name: 'Groceries', amount: 5000, type: 'category' as const, categoryId: '' },
-    { id: 'food-cat', name: 'Food and Dining', amount: 5000, type: 'category' as const, categoryId: '' },
-    { id: 'transport-cat', name: 'Auto & Transportation', amount: 2000, type: 'category' as const, categoryId: '' },
-];
-
-
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [kpisVisible, setKpisVisible] = useState(false);
@@ -84,12 +78,14 @@ export default function DashboardPage() {
   const fetchAndSetData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [fetchedTransactions, fetchedCategories] = await Promise.all([
+      const [fetchedTransactions, fetchedCategories, fetchedBudgets] = await Promise.all([
         getTransactions({ limit: 5000 }),
         getCategories(),
+        getBudgets(),
       ]);
       setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
       setAllCategories(fetchedCategories);
+      setBudgets(fetchedBudgets);
     } catch (error) {
       console.error("Failed to fetch data for dashboard:", error);
       toast({
@@ -99,6 +95,7 @@ export default function DashboardPage() {
       });
       setTransactions([]);
       setAllCategories([]);
+      setBudgets([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -202,19 +199,11 @@ export default function DashboardPage() {
 
 
   const budgetData = useMemo(() => {
-        const resolvedBudgets = hardcodedBudgets.map(b => {
-            if (b.type === 'category' && !b.categoryId) {
-                const category = allCategories.find(c => c.name === b.name);
-                return { ...b, categoryId: category?.id || '' };
-            }
-            return b;
-        }).filter(b => b.categoryId); // Ensure we have an ID
-
-        return resolvedBudgets.map(budget => {
+        return budgets.map(budget => {
             const spent = currentMonthTransactions
                 .filter(t => {
-                    if (budget.type === 'expenseType') return t.expenseType === budget.categoryId;
-                    if (budget.type === 'category') return t.category?.id === budget.categoryId;
+                    if (budget.type === 'expenseType') return t.expenseType === budget.targetId;
+                    if (budget.type === 'category') return t.category?.id === budget.targetId;
                     return false;
                 })
                 .reduce((sum, t) => sum + t.amount, 0);
@@ -225,7 +214,7 @@ export default function DashboardPage() {
                 spentAmount: spent,
             };
         });
-    }, [currentMonthTransactions, allCategories]);
+    }, [currentMonthTransactions, budgets]);
 
     useBudgetAlerts(budgetData);
 

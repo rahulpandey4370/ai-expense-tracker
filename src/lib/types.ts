@@ -323,3 +323,19 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
 });
 export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
+
+
+// Budgeting Types
+export const BudgetInputSchema = z.object({
+  name: z.string().min(1, "Budget name is required."),
+  amount: z.number().gt(0, "Amount must be a positive number."),
+  type: z.enum(['category', 'expenseType']),
+  targetId: z.string().min(1, "A target (category or expense type) is required."),
+});
+export type BudgetInput = z.infer<typeof BudgetInputSchema>;
+
+export interface Budget extends BudgetInput {
+  id: string;
+  createdAt: string; // ISO String
+  updatedAt: string; // ISO String
+}

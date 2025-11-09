@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
-import { User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag } from "lucide-react";
+import { User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag, Target, Edit } from "lucide-react";
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/utils';
-import type { Category, PaymentMethod } from '@/lib/types';
+import type { Category, PaymentMethod, Budget } from '@/lib/types';
 import { getCategories, getPaymentMethods, addCategory, addPaymentMethod, deleteCategory, deletePaymentMethod } from '@/lib/actions/transactions';
+import { getBudgets, addBudget, updateBudget, deleteBudget } from '@/lib/actions/budgets';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 
 const pageVariants = {
@@ -60,6 +63,7 @@ export default function SettingsPage() {
   // State for categories and payment methods
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // State for new category/payment method forms
@@ -67,19 +71,32 @@ export default function SettingsPage() {
   const [newCategoryType, setNewCategoryType] = useState<'expense' | 'income'>('expense');
   const [newPaymentMethodName, setNewPaymentMethodName] = useState('');
   const [newPaymentMethodType, setNewPaymentMethodType] = useState('Credit Card');
+  
+  // State for budget forms
+  const [newBudgetName, setNewBudgetName] = useState('');
+  const [newBudgetAmount, setNewBudgetAmount] = useState('');
+  const [newBudgetType, setNewBudgetType] = useState<'category' | 'expenseType'>('category');
+  const [newBudgetTargetId, setNewBudgetTargetId] = useState('');
+
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [editBudgetAmount, setEditBudgetAmount] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
+  const expenseCategories = categories.filter(c => c.type === 'expense');
+
   const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-        const [fetchedCategories, fetchedPaymentMethods] = await Promise.all([
+        const [fetchedCategories, fetchedPaymentMethods, fetchedBudgets] = await Promise.all([
             getCategories(),
-            getPaymentMethods()
+            getPaymentMethods(),
+            getBudgets(),
         ]);
         setCategories(fetchedCategories);
         setPaymentMethods(fetchedPaymentMethods);
+        setBudgets(fetchedBudgets);
     } catch (error: any) {
         toast({ title: "Error loading data", description: error.message, variant: "destructive" });
     } finally {
@@ -124,7 +141,7 @@ export default function SettingsPage() {
       await deleteCategory(id);
       toast({ title: "Category Deleted!", description: "The category has been removed." });
       fetchData();
-    } catch (error: any) {
+    } catch (error: any) => {
       toast({ title: "Error deleting category", description: `${error.message}. It might be in use by some transactions.`, variant: "destructive" });
     } finally {
       setIsDeleting(null);
@@ -156,12 +173,91 @@ export default function SettingsPage() {
       await deletePaymentMethod(id);
       toast({ title: "Payment Method Deleted!", description: "The payment method has been removed." });
       fetchData();
-    } catch (error: any) {
+    } catch (error: any) => {
       toast({ title: "Error deleting payment method", description: `${error.message}. It might be in use by some transactions.`, variant: "destructive" });
     } finally {
       setIsDeleting(null);
     }
   };
+
+  const handleAddBudget = async () => {
+    const amount = parseFloat(newBudgetAmount);
+    if (!newBudgetTargetId || isNaN(amount) || amount <= 0) {
+        toast({ title: "Invalid Input", description: "Please select a target and enter a valid positive amount.", variant: "destructive" });
+        return;
+    }
+
+    // Use selected category/type name as budget name if not provided
+    let finalBudgetName = newBudgetName.trim();
+    if (!finalBudgetName) {
+        if (newBudgetType === 'category') {
+            const cat = expenseCategories.find(c => c.id === newBudgetTargetId);
+            finalBudgetName = cat?.name || "Unnamed Budget";
+        } else {
+            finalBudgetName = `${newBudgetTargetId.charAt(0).toUpperCase() + newBudgetTargetId.slice(1)} Budget`;
+        }
+    }
+
+
+    setIsSubmitting(true);
+    try {
+        await addBudget({
+            name: finalBudgetName,
+            amount: amount,
+            type: newBudgetType,
+            targetId: newBudgetTargetId,
+        });
+        toast({ title: "Budget Added!", description: `Budget for '${finalBudgetName}' has been set.` });
+        setNewBudgetName('');
+        setNewBudgetAmount('');
+        setNewBudgetTargetId('');
+        fetchData();
+    } catch (error: any) {
+        toast({ title: "Error Adding Budget", description: error.message, variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteBudget = async (id: string) => {
+      setIsDeleting(id);
+      try {
+          await deleteBudget(id);
+          toast({ title: "Budget Deleted" });
+          fetchData();
+      } catch (error: any) {
+          toast({ title: "Error Deleting Budget", description: error.message, variant: "destructive" });
+      } finally {
+          setIsDeleting(null);
+      }
+  };
+
+  const handleOpenEditDialog = (budget: Budget) => {
+    setEditingBudget(budget);
+    setEditBudgetAmount(budget.amount.toString());
+  };
+
+  const handleUpdateBudget = async () => {
+    if (!editingBudget) return;
+    const newAmount = parseFloat(editBudgetAmount);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      toast({ title: "Invalid Amount", description: "Budget amount must be a positive number.", variant: "destructive" });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+        await updateBudget(editingBudget.id, { amount: newAmount });
+        toast({ title: "Budget Updated!" });
+        setEditingBudget(null);
+        fetchData();
+    } catch (error: any) {
+        toast({ title: "Error Updating Budget", description: error.message, variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
@@ -192,7 +288,92 @@ export default function SettingsPage() {
               </motion.div>
             </motion.section>
 
-             <Separator className="my-6 border-primary/20" />
+            <Separator className="my-6 border-primary/20" />
+
+             {/* Manage Budgets Section */}
+            <motion.section variants={sectionVariants}>
+                <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Target className="text-accent"/>Manage Budgets</h3>
+                 <Card className="bg-background/50 border-primary/10">
+                    <CardHeader><CardTitle className="text-base text-primary">Add New Budget</CardTitle></CardHeader>
+                    <CardContent className="space-y-3">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <Label className="text-sm">Budget Type</Label>
+                                 <RadioGroup value={newBudgetType} onValueChange={(val) => { setNewBudgetType(val as 'category' | 'expenseType'); setNewBudgetTargetId(''); }} className="flex space-x-4 mt-2">
+                                    <div className="flex items-center space-x-2"><RadioGroupItem value="category" id="budget-cat"/><Label htmlFor="budget-cat">By Category</Label></div>
+                                    <div className="flex items-center space-x-2"><RadioGroupItem value="expenseType" id="budget-type"/><Label htmlFor="budget-type">By Expense Type</Label></div>
+                                </RadioGroup>
+                            </div>
+                            <div>
+                                <Label htmlFor="newBudgetTargetId" className="text-sm">Target</Label>
+                                <Select value={newBudgetTargetId} onValueChange={setNewBudgetTargetId}>
+                                    <SelectTrigger id="newBudgetTargetId" className="mt-1 w-full"><SelectValue placeholder="Select a target" /></SelectTrigger>
+                                    <SelectContent>
+                                        {newBudgetType === 'category' ? 
+                                            (expenseCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)) : 
+                                            (['need', 'want', 'investment'].map(type => <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>))
+                                        }
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="newBudgetName" className="text-sm">Budget Name (Optional)</Label>
+                                <Input id="newBudgetName" value={newBudgetName} onChange={(e) => setNewBudgetName(e.target.value)} placeholder="e.g., Monthly Food Budget" className="mt-1"/>
+                            </div>
+                            <div>
+                                <Label htmlFor="newBudgetAmount" className="text-sm">Amount (₹)</Label>
+                                <Input id="newBudgetAmount" type="number" value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} placeholder="e.g., 5000" className="mt-1"/>
+                            </div>
+                        </div>
+                        <Button onClick={handleAddBudget} disabled={isSubmitting} className="w-full sm:w-auto" withMotion>
+                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                          Add Budget
+                        </Button>
+                    </CardContent>
+                </Card>
+                 <Separator className="my-4"/>
+                <Card className="bg-background/50 border-primary/10">
+                    <CardHeader><CardTitle className="text-base text-primary">Existing Budgets</CardTitle></CardHeader>
+                    <CardContent>
+                        {isLoadingData ? <Loader2 className="animate-spin" /> : (
+                            <ul className="space-y-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {budgets.map(budget => (
+                                     <li key={budget.id} className="flex justify-between items-center text-sm p-2 rounded-md bg-background/50 border">
+                                        <div className="truncate pr-2">
+                                            <p className="font-semibold truncate">{budget.name}</p>
+                                            <p className="text-xs text-muted-foreground">₹{budget.amount.toLocaleString()} / month</p>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10" onClick={() => handleOpenEditDialog(budget)}>
+                                                <Edit className="h-4 w-4"/>
+                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" disabled={isDeleting === budget.id}>
+                                                        {isDeleting === budget.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4"/>}
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader><AlertDialogTitle>Delete Budget?</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete the '{budget.name}' budget?</AlertDialogDescription></AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteBudget(budget.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                     </li>
+                                ))}
+                            </ul>
+                        )}
+                    </CardContent>
+                </Card>
+            </motion.section>
+
+            <Separator className="my-6 border-primary/20" />
+
 
             {/* Manage Categories Section */}
             <motion.section variants={sectionVariants}>
@@ -333,6 +514,25 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+       <Dialog open={editingBudget !== null} onOpenChange={(isOpen) => !isOpen && setEditingBudget(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit Budget Amount</DialogTitle>
+                    <DialogDescription>Update the monthly amount for '{editingBudget?.name}'.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="edit-budget-amount">Amount (₹)</Label>
+                    <Input id="edit-budget-amount" type="number" value={editBudgetAmount} onChange={(e) => setEditBudgetAmount(e.target.value)} className="mt-1" />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setEditingBudget(null)}>Cancel</Button>
+                    <Button onClick={handleUpdateBudget} disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Update Budget
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </main>
   );
 }
