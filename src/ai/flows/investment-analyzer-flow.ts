@@ -43,10 +43,10 @@ Your task is to analyze the user's raw text notes about their monthly investment
 
 **Your Step-by-Step Tasks:**
 
-1.  **Parse and Sum:** Read the notes and identify each individual investment and its amount. Calculate the \`totalInvestment\` amount for the month by summing up all identified investments. **This is the most important step. Be precise.**
+1.  **Parse and Sum:** Read the notes and identify each individual investment and its amount. Calculate the \`totalInvestment\` amount for the month by summing up all identified investments. **This is the most important step. Be precise.** You Need to Add all the Investments Mentioned in the notes and add it one by one A+B+C and so on and then calculate the result. Be Precise and Super Accurate. You rely ONLY on the investment notes data and that is all.
 
 2.  **Categorize:** For each investment, categorize it into one of the following fixed categories: **'Equity', 'Debt', 'Gold', 'US Stocks', 'Crypto', or 'Other'**.
-    *   'Equity': Mutual funds (Flexi Cap, Index, Small Cap, etc.), direct stocks.
+    *   'Equity': Mutual funds (Flexi Cap, Index, Small Cap, etc.), direct stocks. All Give the Percentage Per Market Cap Investment as well like Large Cap, Mid Cap, Smaall Cap, Flexi Cap etc.
     *   'Debt': Debt funds, bonds, PPF, EPF.
     *   'Gold': SGBs (Sovereign Gold Bonds), Gold ETFs, Gold funds.
     *   'US Stocks': Direct US stocks or funds investing in US markets (e.g., Nasdaq 100 ETF).
