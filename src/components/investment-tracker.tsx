@@ -4,9 +4,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { useDateSelection } from "@/contexts/DateSelectionContext";
-import { getInvestmentSettings, getMonthlyInvestmentData, addFundEntry, deleteFundEntry, saveAISummary } from '@/lib/actions/investments';
+import { getInvestmentSettings, getMonthlyInvestmentData, addFundEntry, deleteFundEntry, saveAISummary, saveInvestmentSettings } from '@/lib/actions/investments';
 import { summarizeInvestments } from '@/ai/flows/investment-summary-flow';
-import type { InvestmentSettings, FundEntry, MonthlyInvestmentData, InvestmentTarget, FundEntryInput } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, MonthlyInvestmentData, FundEntryInput, InvestmentCategory } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,12 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, AlertTriangle, Copy } from "lucide-react";
+import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, AlertTriangle, Copy, Settings, CheckCircle } from "lucide-react";
 import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { Separator } from './ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+
 
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -30,7 +32,7 @@ const cardVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-const progressColors: { [key: string]: string } = {
+const progressColors: { [key in InvestmentCategory]: string } = {
   Equity: "bg-blue-500",
   Debt: "bg-green-500",
   "Gold/Silver": "bg-yellow-500",
@@ -50,16 +52,21 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
   const [settings, setSettings] = useState<InvestmentSettings | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyInvestmentData | null>(null);
 
+  // Component State
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
   const [isDeletingEntry, setIsDeletingEntry] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   
+  // Settings form state
+  const [editableSettings, setEditableSettings] = useState<Partial<InvestmentSettings>>({});
+
   // New entry form state
   const [newEntryFundName, setNewEntryFundName] = useState('');
   const [newEntryAmount, setNewEntryAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState<Date | undefined>(new Date());
-  const [newEntryTargetId, setNewEntryTargetId] = useState<string | undefined>();
+  const [newEntryCategory, setNewEntryCategory] = useState<InvestmentCategory>('Equity');
 
   const monthYearKey = useMemo(() => `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`, [selectedYear, selectedMonth]);
 
@@ -71,23 +78,48 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
         getMonthlyInvestmentData(monthYearKey),
       ]);
       setSettings(fetchedSettings);
+      setEditableSettings(fetchedSettings);
       setMonthlyData(fetchedMonthlyData);
-      if (fetchedSettings.targets.length > 0 && !newEntryTargetId) {
-        setNewEntryTargetId(fetchedSettings.targets[0].id);
-      }
     } catch (err: any) {
-      toast({ title: "Error Loading Data", description: err.message, variant: "destructive" });
+      toast({ title: "Error Loading Investment Data", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [monthYearKey, toast, newEntryTargetId]);
+  }, [monthYearKey, toast]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+  
+  const handleSettingsChange = (field: keyof InvestmentSettings, value: any) => {
+      setEditableSettings(prev => ({...prev, [field]: value}));
+  };
+  
+  const handleTargetChange = (index: number, value: string) => {
+      const newTargets = [...(editableSettings.targets || [])];
+      const amount = parseFloat(value) || 0;
+      if (newTargets[index]) {
+          newTargets[index] = {...newTargets[index], targetAmount: amount};
+          handleSettingsChange('targets', newTargets);
+      }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!editableSettings) return;
+    setIsSavingSettings(true);
+    try {
+        const updatedSettings = await saveInvestmentSettings(editableSettings);
+        setSettings(updatedSettings); // Update main settings state
+        toast({ title: "Settings Saved!", description: "Your investment targets have been updated." });
+    } catch(err: any) {
+        toast({ title: "Error Saving Settings", description: err.message, variant: "destructive" });
+    } finally {
+        setIsSavingSettings(false);
+    }
+  };
 
   const handleAddEntry = async () => {
-    if (!newEntryTargetId || !newEntryFundName.trim() || !newEntryAmount || !newEntryDate) {
+    if (!newEntryCategory || !newEntryFundName.trim() || !newEntryAmount || !newEntryDate) {
       toast({ title: "Missing Information", description: "Please fill all fields for the new entry.", variant: "destructive" });
       return;
     }
@@ -97,9 +129,16 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
       return;
     }
     
+    // Find the targetId based on the selected category name
+    const targetId = settings?.targets.find(t => t.category === newEntryCategory)?.id;
+    if (!targetId) {
+        toast({ title: "Invalid Category", description: `Could not find a target setting for the category "${newEntryCategory}". Please save your settings.`, variant: "destructive" });
+        return;
+    }
+
     const entryInput: FundEntryInput = {
         monthYear: monthYearKey,
-        targetId: newEntryTargetId,
+        targetId: targetId,
         fundName: newEntryFundName.trim(),
         amount: amountNum,
         date: newEntryDate,
@@ -197,10 +236,42 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
             <BarChart className="h-6 w-6 text-accent" /> Monthly Investment Tracker
           </CardTitle>
           <CardDescription>
-            Log your monthly investments against your targets. Go to Settings to configure your targets.
+            Log your monthly investments against your targets. Configure targets in the settings section below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+            
+            <Accordion type="single" collapsible>
+                <AccordionItem value="settings">
+                    <AccordionTrigger>
+                        <div className="flex items-center gap-2 font-semibold text-primary">
+                            <Settings className="h-5 w-5"/>
+                            Investment Settings
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-2 space-y-4">
+                        <div className="p-3 border rounded-lg bg-background/50 space-y-3">
+                            <div>
+                                <Label htmlFor="monthly-target-input">Overall Monthly Target (₹)</Label>
+                                <Input id="monthly-target-input" type="number" value={editableSettings.monthlyTarget || ''} onChange={e => handleSettingsChange('monthlyTarget', parseFloat(e.target.value) || 0)} className="h-9 text-sm mt-1" />
+                            </div>
+                            <Separator/>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {editableSettings.targets?.map((target, index) => (
+                                    <div key={target.id}>
+                                        <Label htmlFor={`target-input-${target.id}`}>{target.category} Target (₹)</Label>
+                                        <Input id={`target-input-${target.id}`} type="number" value={target.targetAmount} onChange={e => handleTargetChange(index, e.target.value)} className="h-9 text-sm mt-1" />
+                                    </div>
+                                ))}
+                            </div>
+                            <Button onClick={handleSaveSettings} disabled={isSavingSettings} size="sm" withMotion>
+                                {isSavingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Save Settings
+                            </Button>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
             
             {/* Overall Progress */}
             <div>
@@ -242,10 +313,10 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                         <Input id="fund-name" value={newEntryFundName} onChange={e => setNewEntryFundName(e.target.value)} placeholder="e.g., Parag Parikh Flexi" className="h-9 text-sm mt-1" />
                     </div>
                      <div>
-                        <Label htmlFor="fund-target" className="text-xs">Category</Label>
-                        <Select value={newEntryTargetId} onValueChange={setNewEntryTargetId}>
-                            <SelectTrigger id="fund-target" className="h-9 text-sm mt-1"><SelectValue placeholder="Select Target" /></SelectTrigger>
-                            <SelectContent>{settings.targets.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                        <Label htmlFor="fund-category" className="text-xs">Category</Label>
+                        <Select value={newEntryCategory} onValueChange={(val) => setNewEntryCategory(val as InvestmentCategory)}>
+                            <SelectTrigger id="fund-category" className="h-9 text-sm mt-1"><SelectValue placeholder="Select Category" /></SelectTrigger>
+                            <SelectContent>{settings.targets.map(t => <SelectItem key={t.id} value={t.category}>{t.category}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                      <div>
@@ -313,3 +384,5 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     </motion.div>
   );
 }
+
+    

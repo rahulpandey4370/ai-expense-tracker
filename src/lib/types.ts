@@ -351,21 +351,20 @@ export interface Budget extends BudgetInput {
 export const InvestmentCategoryEnum = z.enum(["Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto", "Other"]);
 export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
 
-export const InvestmentTargetInputSchema = z.object({
+export const InvestmentTargetSchema = z.object({
+    id: z.string(),
     name: z.string().min(1, "Target name is required."),
     category: InvestmentCategoryEnum,
     targetAmount: z.number().min(0, "Target amount cannot be negative."),
 });
-export type InvestmentTargetInput = z.infer<typeof InvestmentTargetInputSchema>;
+export type InvestmentTarget = z.infer<typeof InvestmentTargetSchema>;
 
-export interface InvestmentTarget extends InvestmentTargetInput {
-  id: string;
-}
 
-export interface InvestmentSettings {
-    monthlyTarget: number;
-    targets: InvestmentTarget[];
-}
+export const InvestmentSettingsSchema = z.object({
+    monthlyTarget: z.number().min(0, "Monthly target cannot be negative."),
+    targets: z.array(InvestmentTargetSchema),
+});
+export type InvestmentSettings = z.infer<typeof InvestmentSettingsSchema>;
 
 export const FundEntryInputSchema = z.object({
     monthYear: z.string().regex(/^\d{4}-\d{2}$/, "Month/Year format must be YYYY-MM"),
@@ -406,3 +405,5 @@ export const InvestmentSummaryInputSchema = z.object({
   })),
 });
 export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;
+
+    

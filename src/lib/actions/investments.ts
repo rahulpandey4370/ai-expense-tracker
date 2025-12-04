@@ -2,8 +2,8 @@
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
-import type { InvestmentSettings, InvestmentTargetInput, FundEntry, FundEntryInput, MonthlyInvestmentData } from '@/lib/types';
-import { InvestmentTargetInputSchema, FundEntryInputSchema } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, InvestmentTarget } from '@/lib/types';
+import { InvestmentSettingsSchema, FundEntryInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
@@ -12,7 +12,7 @@ const INVESTMENT_SETTINGS_BLOB_PATH = `${SETTINGS_DIR}investment_settings.json`;
 
 const MONTHLY_DATA_DIR = 'investment-data/';
 
-let blobContainerClientInstance: BlobContainerClient; 
+let blobContainerClientInstance: ContainerClient; 
 
 // --- Client and Helpers ---
 
@@ -45,7 +45,13 @@ async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
 export async function getInvestmentSettings(): Promise<InvestmentSettings> {
   const client = await getAzureBlobContainerClient();
   const blobClient = client.getBlobClient(INVESTMENT_SETTINGS_BLOB_PATH);
-  const defaultSettings: InvestmentSettings = { monthlyTarget: 0, targets: [] };
+  const defaultSettings: InvestmentSettings = { 
+    monthlyTarget: 20000, 
+    targets: [
+        { id: cuid(), name: 'Equity', category: 'Equity', targetAmount: 15000 },
+        { id: cuid(), name: 'Debt', category: 'Debt', targetAmount: 5000 },
+    ]
+  };
 
   try {
     const downloadResponse = await blobClient.download(0);
@@ -69,20 +75,28 @@ export async function getInvestmentSettings(): Promise<InvestmentSettings> {
 
 export async function saveInvestmentSettings(settings: Partial<InvestmentSettings>): Promise<InvestmentSettings> {
     const existingSettings = await getInvestmentSettings();
-    const updatedSettings: InvestmentSettings = {
+    
+    // Ensure targets have IDs if they are new
+    const updatedTargets = settings.targets?.map(t => t.id ? t : {...t, id: cuid()}) || existingSettings.targets;
+    
+    const validatedSettings: InvestmentSettings = {
         ...existingSettings,
-        ...settings,
-        targets: settings.targets ? settings.targets : existingSettings.targets,
+        monthlyTarget: settings.monthlyTarget ?? existingSettings.monthlyTarget,
+        targets: updatedTargets,
     };
+    
+    const validation = InvestmentSettingsSchema.safeParse(validatedSettings);
+    if(!validation.success){
+         throw new Error(`Invalid investment settings: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
+    }
 
     const client = await getAzureBlobContainerClient();
     const blockBlobClient = client.getBlockBlobClient(INVESTMENT_SETTINGS_BLOB_PATH);
-    const content = JSON.stringify(updatedSettings, null, 2);
+    const content = JSON.stringify(validation.data, null, 2);
     await blockBlobClient.upload(content, Buffer.byteLength(content));
 
-    revalidatePath('/settings');
     revalidatePath('/');
-    return updatedSettings;
+    return validation.data;
 }
 
 // --- Monthly Fund Entry Functions ---
@@ -185,3 +199,5 @@ export async function saveAISummary(monthYear: string, summary: string): Promise
     revalidatePath('/');
     return updatedData;
 }
+
+    
