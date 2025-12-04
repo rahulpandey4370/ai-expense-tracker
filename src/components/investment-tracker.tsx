@@ -244,7 +244,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
   
   // --- AI Summary Handlers ---
   const handleAnalyze = async () => {
-    if (!settings || !monthlyData || monthlyData.entries.length === 0) {
+    if (!settings || !monthlyData || !monthlyData.entries.length) {
         toast({ title: "No Data to Analyze", description: "Please add some investment entries for this month first.", variant: "default" });
         return;
     }
@@ -252,19 +252,30 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     try {
         const totalInvested = monthlyData.entries.reduce((sum, entry) => sum + entry.amount, 0);
 
-        const categoryMap = new Map<InvestmentCategory, { target: number, actual: number }>();
+        // This map now correctly includes ALL logged investments, grouped by category.
+        const categoryMap = new Map<InvestmentCategory, { target: number; actual: number }>();
+        
+        // Initialize with targets first
         settings.fundTargets.forEach(ft => {
-            const catData = categoryMap.get(ft.category) || { target: 0, actual: 0 };
+            if (!categoryMap.has(ft.category)) {
+                categoryMap.set(ft.category, { target: 0, actual: 0 });
+            }
+            const catData = categoryMap.get(ft.category)!;
             catData.target += ft.targetAmount;
-            categoryMap.set(ft.category, catData);
         });
+
+        // Add actual amounts from all logged entries
         monthlyData.entries.forEach(entry => {
             const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
             if (fundTarget) {
-                const catData = categoryMap.get(fundTarget.category);
-                if (catData) catData.actual += entry.amount;
+                if (!categoryMap.has(fundTarget.category)) {
+                    categoryMap.set(fundTarget.category, { target: 0, actual: 0 });
+                }
+                const catData = categoryMap.get(fundTarget.category)!;
+                catData.actual += entry.amount;
             }
         });
+
         const targetBreakdown = Array.from(categoryMap.entries()).map(([name, data]) => ({ name, targetAmount: data.target, actualAmount: data.actual }));
 
         const fundEntries = monthlyData.entries.map(entry => {
@@ -276,7 +287,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
             monthYear: monthYearKey,
             totalInvested,
             monthlyTarget: settings.monthlyTarget,
-            targetBreakdown,
+            categoryBreakdown: targetBreakdown,
             fundEntries,
         });
 
@@ -564,3 +575,5 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     </motion.div>
   );
 }
+
+    
