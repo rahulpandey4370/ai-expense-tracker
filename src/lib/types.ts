@@ -298,6 +298,8 @@ export const AITransactionForAnalysisSchema = z.object({
   amount: z.number(),
   date: z.string().describe("Date in ISO format string"),
   categoryName: z.string().nullish(),
+  paymentMethodName: z.string().nullish(),
+  expenseType: z.enum(['need', 'want', 'investment']).optional(),
 });
 export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSchema>;
 
@@ -314,6 +316,9 @@ const IdentifiedFixedExpenseSchema = z.object({
   estimatedAmount: z.number().describe("The estimated monthly amount for this fixed expense in INR."),
   confidence: z.enum(['High', 'Medium', 'Low']).describe("The AI's confidence that this is a true fixed/recurring expense."),
   reasoning: z.string().describe("A brief explanation for why this was identified as a fixed expense (e.g., 'Similar amount and description across months', 'Name indicates a subscription')."),
+  paymentMethodName: z.string().optional().describe("The payment method used."),
+  paymentMethodId: z.string().optional().describe("The ID of the payment method used."),
+  expenseType: z.enum(['need', 'want', 'investment']).optional().describe("The type of expense."),
 });
 export type IdentifiedFixedExpense = z.infer<typeof IdentifiedFixedExpenseSchema>;
 
@@ -341,32 +346,63 @@ export interface Budget extends BudgetInput {
 }
 
 
-// --- Investment Analysis Feature Types ---
+// --- Investment Tracker Types ---
 
-const InvestmentAllocationSchema = z.object({
-  name: z.string().describe("Name of the individual fund, stock, or asset (e.g., 'Parag Parikh Flexi Cap', 'Reliance Industries', 'SGB Gold Bond')."),
-  percentage: z.number().describe("Percentage allocation for this specific asset relative to the total monthly investment."),
-  amount: z.number().describe("The amount invested in this asset in INR."),
+export const InvestmentCategoryEnum = z.enum(["Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto", "Other"]);
+export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
+
+export const InvestmentTargetInputSchema = z.object({
+    name: z.string().min(1, "Target name is required."),
+    category: InvestmentCategoryEnum,
+    targetAmount: z.number().min(0, "Target amount cannot be negative."),
 });
+export type InvestmentTargetInput = z.infer<typeof InvestmentTargetInputSchema>;
 
-const InvestmentCategoryAllocationSchema = z.object({
-  category: z.enum(['Equity', 'Debt', 'Gold', 'US Stocks', 'Crypto', 'Other']).describe("The high-level investment category."),
-  percentage: z.number().describe("Total percentage allocation for this entire category."),
-  amount: z.number().describe("Total amount invested in this category in INR."),
-  allocations: z.array(InvestmentAllocationSchema).describe("A breakdown of individual assets within this category."),
-});
-
-export const InvestmentAnalysisOutputSchema = z.object({
-  totalInvestment: z.number().describe("Total investment amount for the month in INR."),
-  categoryAllocations: z.array(InvestmentCategoryAllocationSchema).describe("Breakdown of investments by major categories."),
-  rating: z.number().min(1).max(5).describe("An overall rating of the monthly investment strategy from 1 (poor/undiversified) to 5 (excellent/well-diversified)."),
-  justification: z.string().describe("A brief (2-3 sentences) justification for the rating, commenting on diversification, risk, and alignment with common investment principles."),
-});
-export type InvestmentAnalysisOutput = z.infer<typeof InvestmentAnalysisOutputSchema>;
-
-export interface MonthlyInvestmentAnalysis {
-  monthYear: string; // Format: "YYYY-MM"
-  investmentNotes: string;
-  aiAnalysis?: InvestmentAnalysisOutput;
-  updatedAt: string; // ISO string
+export interface InvestmentTarget extends InvestmentTargetInput {
+  id: string;
 }
+
+export interface InvestmentSettings {
+    monthlyTarget: number;
+    targets: InvestmentTarget[];
+}
+
+export const FundEntryInputSchema = z.object({
+    monthYear: z.string().regex(/^\d{4}-\d{2}$/, "Month/Year format must be YYYY-MM"),
+    targetId: z.string().min(1, "Target ID is required."),
+    fundName: z.string().min(1, "Fund name is required."),
+    amount: z.number().gt(0, "Amount must be a positive number."),
+    date: z.date(),
+});
+export type FundEntryInput = z.infer<typeof FundEntryInputSchema>;
+
+export interface FundEntry extends Omit<FundEntryInput, 'date'>{
+  id: string;
+  date: string; // Stored as ISO String
+  createdAt: string; // ISO String
+}
+
+export interface MonthlyInvestmentData {
+    monthYear: string; // Format: "YYYY-MM"
+    entries: FundEntry[];
+    aiSummary?: string;
+    updatedAt: string; // ISO String
+}
+
+export const InvestmentSummaryInputSchema = z.object({
+  monthYear: z.string(),
+  totalInvested: z.number(),
+  monthlyTarget: z.number(),
+  targetBreakdown: z.array(z.object({
+    name: z.string(),
+    category: z.string(),
+    targetAmount: z.number(),
+    actualAmount: z.number(),
+  })),
+  fundEntries: z.array(z.object({
+    fundName: z.string(),
+    amount: z.number(),
+    category: z.string(),
+  })),
+});
+export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;

@@ -26,7 +26,7 @@ import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
-import { InvestmentAnalysis } from '@/components/investment-analysis';
+import { InvestmentTracker } from '@/components/investment-tracker';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -57,7 +57,7 @@ const sectionVariants = {
 };
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
-const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
+const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit", "Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto"];
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
 export default function DashboardPage() {
@@ -107,14 +107,9 @@ export default function DashboardPage() {
     fetchAndSetData();
   }, [fetchAndSetData]);
 
-  const handleAddTransactionCallback = async () => {
-    try {
-        await fetchAndSetData();
-    } catch (error) {
-        console.error("Error after attempting to add/update transaction:", error);
-        toast({ title: "Data Sync Error", description: "Could not refresh data after the last operation.", variant: "destructive" });
-    }
-  };
+  const handleDataRefresh = useCallback(() => {
+    fetchAndSetData();
+  }, [fetchAndSetData]);
 
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
@@ -408,7 +403,7 @@ export default function DashboardPage() {
 
         <div ref={addTransactionRef} className="scroll-mt-20">
           <Card className={cn("p-0 sm:p-0 bg-card/80", glowClass)}>
-            <TransactionForm onTransactionAdded={handleAddTransactionCallback} />
+            <TransactionForm onTransactionAdded={handleDataRefresh} />
           </Card>
         </div>
 
@@ -440,7 +435,7 @@ export default function DashboardPage() {
         </motion.div>
 
         <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-          <InvestmentAnalysis />
+          <InvestmentTracker onDataChanged={handleDataRefresh} />
         </motion.div>
         
         <motion.div
