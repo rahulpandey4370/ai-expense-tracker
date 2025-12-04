@@ -244,52 +244,53 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
   
   // --- AI Summary Handlers ---
   const handleAnalyze = async () => {
-      if (!settings || !monthlyData || monthlyData.entries.length === 0) {
-          toast({ title: "No Data to Analyze", description: "Please add some investment entries for this month first.", variant: "default" });
-          return;
-      }
-      setIsAnalyzing(true);
-      try {
-          const totalInvested = monthlyData.entries.reduce((sum, entry) => sum + entry.amount, 0);
+    if (!settings || !monthlyData || monthlyData.entries.length === 0) {
+        toast({ title: "No Data to Analyze", description: "Please add some investment entries for this month first.", variant: "default" });
+        return;
+    }
+    setIsAnalyzing(true);
+    try {
+        const totalInvested = monthlyData.entries.reduce((sum, entry) => sum + entry.amount, 0);
 
-          const categoryMap = new Map<InvestmentCategory, { target: number, actual: number }>();
-          settings.fundTargets.forEach(ft => {
-              const catData = categoryMap.get(ft.category) || { target: 0, actual: 0 };
-              catData.target += ft.targetAmount;
-              categoryMap.set(ft.category, catData);
-          });
-          monthlyData.entries.forEach(entry => {
-              const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
-              if (fundTarget) {
-                  const catData = categoryMap.get(fundTarget.category);
-                  if (catData) catData.actual += entry.amount;
-              }
-          });
-          const targetBreakdown = Array.from(categoryMap.entries()).map(([name, data]) => ({ name, targetAmount: data.target, actualAmount: data.actual }));
+        const categoryMap = new Map<InvestmentCategory, { target: number, actual: number }>();
+        settings.fundTargets.forEach(ft => {
+            const catData = categoryMap.get(ft.category) || { target: 0, actual: 0 };
+            catData.target += ft.targetAmount;
+            categoryMap.set(ft.category, catData);
+        });
+        monthlyData.entries.forEach(entry => {
+            const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+            if (fundTarget) {
+                const catData = categoryMap.get(fundTarget.category);
+                if (catData) catData.actual += entry.amount;
+            }
+        });
+        const targetBreakdown = Array.from(categoryMap.entries()).map(([name, data]) => ({ name, targetAmount: data.target, actualAmount: data.actual }));
 
-          const fundEntries = monthlyData.entries.map(entry => {
-              const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
-              return { fundName: fundTarget?.name || 'Unknown Fund', amount: entry.amount, category: fundTarget?.category || 'Other' };
-          });
+        const fundEntries = monthlyData.entries.map(entry => {
+            const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+            return { fundName: fundTarget?.name || 'Unknown Fund', amount: entry.amount, category: fundTarget?.category || 'Other' };
+        });
 
-          const summary = await summarizeInvestments({
-              monthYear: monthYearKey,
-              totalInvested,
-              monthlyTarget: settings.monthlyTarget,
-              targetBreakdown,
-              fundEntries,
-          });
+        const summary = await summarizeInvestments({
+            monthYear: monthYearKey,
+            totalInvested,
+            monthlyTarget: settings.monthlyTarget,
+            targetBreakdown,
+            fundEntries,
+        });
 
-          await saveAISummary(monthYearKey, summary.summary);
-          setMonthlyData(prev => prev ? { ...prev, aiSummary: summary.summary } : null);
-          toast({ title: "AI Summary Generated" });
+        await saveAISummary(monthYearKey, summary.summary);
+        setMonthlyData(prev => prev ? { ...prev, aiSummary: summary.summary } : null);
+        toast({ title: "AI Summary Generated" });
 
-      } catch (err: any) {
-          toast({ title: "AI Analysis Failed", description: err.message, variant: "destructive" });
-      } finally {
-          setIsAnalyzing(false);
-      }
+    } catch (err: any) {
+        toast({ title: "AI Analysis Failed", description: err.message, variant: "destructive" });
+    } finally {
+        setIsAnalyzing(false);
+    }
   };
+
 
   const copySummary = () => {
     if (monthlyData?.aiSummary) {
