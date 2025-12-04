@@ -346,7 +346,7 @@ export interface Budget extends BudgetInput {
 }
 
 
-// --- Investment Tracker Types ---
+// --- Investment Tracker Types (New Simplified Structure) ---
 
 export const InvestmentCategoryEnum = z.enum(["Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto", "Other"]);
 export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
@@ -354,21 +354,14 @@ export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
 export const FundTargetSchema = z.object({
     id: z.string(),
     name: z.string().min(1, "Fund name is required."),
+    category: InvestmentCategoryEnum,
     targetAmount: z.number().min(0, "Target amount cannot be negative."),
 });
 export type FundTarget = z.infer<typeof FundTargetSchema>;
 
-export const CategoryTargetSchema = z.object({
-    id: z.string(),
-    category: InvestmentCategoryEnum,
-    // No targetAmount here, it's the sum of its funds' targets
-    funds: z.array(FundTargetSchema),
-});
-export type CategoryTarget = z.infer<typeof CategoryTargetSchema>;
-
 export const InvestmentSettingsSchema = z.object({
     monthlyTarget: z.number().min(0, "Monthly target cannot be negative."),
-    categoryTargets: z.array(CategoryTargetSchema),
+    fundTargets: z.array(FundTargetSchema),
 });
 export type InvestmentSettings = z.infer<typeof InvestmentSettingsSchema>;
 
@@ -380,12 +373,15 @@ export const FundEntryInputSchema = z.object({
 });
 export type FundEntryInput = z.infer<typeof FundEntryInputSchema>;
 
-export interface FundEntry extends Omit<FundEntryInput, 'date'>{
+export interface FundEntry {
   id: string;
+  fundTargetId: string;
+  amount: number;
   date: string; // Stored as ISO String
   createdAt: string; // ISO String
 }
 
+// This object represents the data for a single month, stored in one JSON file.
 export interface MonthlyInvestmentData {
     monthYear: string; // Format: "YYYY-MM"
     entries: FundEntry[];
@@ -397,7 +393,7 @@ export const InvestmentSummaryInputSchema = z.object({
   monthYear: z.string(),
   totalInvested: z.number(),
   monthlyTarget: z.number(),
-  targetBreakdown: z.array(z.object({
+  categoryBreakdown: z.array(z.object({
     name: z.string(), // Category Name like "Equity"
     targetAmount: z.number(),
     actualAmount: z.number(),

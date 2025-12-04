@@ -2,7 +2,7 @@
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
-import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, InvestmentCategory, CategoryTarget, FundTarget } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, FundTarget, InvestmentCategory } from '@/lib/types';
 import { InvestmentSettingsSchema, FundEntryInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
@@ -25,7 +25,7 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Bu
   });
 }
 
-async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
+async function getAzureBlobContainerClient(): Promise<ContainerClient> {
   if (blobContainerClientInstance) return blobContainerClientInstance;
   
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -46,50 +46,32 @@ export async function getInvestmentSettings(): Promise<InvestmentSettings> {
   const client = await getAzureBlobContainerClient();
   const blobClient = client.getBlobClient(INVESTMENT_SETTINGS_BLOB_PATH);
   
-  const defaultEquityFund: FundTarget = { id: cuid(), name: "Parag Parikh Flexi Cap", targetAmount: 5000 };
-  const defaultDebtFund: FundTarget = { id: cuid(), name: "HDFC Liquid Fund", targetAmount: 2000 };
-
   const defaultSettings: InvestmentSettings = { 
     monthlyTarget: 25000, 
-    categoryTargets: [
-        { id: cuid(), category: 'Equity', funds: [defaultEquityFund] },
-        { id: cuid(), category: 'Debt', funds: [defaultDebtFund] },
-        { id: cuid(), category: 'Gold/Silver', funds: [] },
-        { id: cuid(), category: 'US Stocks', funds: [] },
-        { id: cuid(), category: 'Crypto', funds: [] },
-        { id: cuid(), category: 'Other', funds: [] },
+    fundTargets: [
+        { id: cuid(), name: "Parag Parikh Flexi Cap", category: "Equity", targetAmount: 5000 },
+        { id: cuid(), name: "UTI Nifty 50 Index", category: "Equity", targetAmount: 3000 },
+        { id: cuid(), name: "HDFC Liquid Fund", category: "Debt", targetAmount: 2000 },
     ]
   };
 
   try {
     const downloadResponse = await blobClient.download(0);
-    if (!downloadResponse.readableStreamBody) return defaultSettings;
+    if (!downloadResponse.readableStreamBody) {
+        console.warn("Investment settings blob is empty. Returning default settings.");
+        return defaultSettings;
+    }
     const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
     const parsedSettings = JSON.parse(buffer.toString());
-    // Data migration/check: Ensure all categories exist
-    const existingCategories = new Set(parsedSettings.categoryTargets.map((ct: CategoryTarget) => ct.category));
-    let needsUpdate = false;
-    defaultSettings.categoryTargets.forEach(defaultTarget => {
-        if(!existingCategories.has(defaultTarget.category)) {
-            parsedSettings.categoryTargets.push(defaultTarget);
-            needsUpdate = true;
-        }
-    });
-
-    if (needsUpdate) {
-        console.log("Investment settings updated with new categories.");
-        return await saveInvestmentSettings(parsedSettings);
+    // Ensure fundTargets exists for backward compatibility
+    if (!parsedSettings.fundTargets) {
+        parsedSettings.fundTargets = [];
     }
-    
     return parsedSettings;
   } catch (error: any) {
     if (error instanceof RestError && error.statusCode === 404) {
       // File doesn't exist, create it with default content
-      const blockBlobClient = client.getBlockBlobClient(INVESTMENT_SETTINGS_BLOB_PATH);
-      const content = JSON.stringify(defaultSettings, null, 2);
-      await blockBlobClient.upload(content, Buffer.byteLength(content), {
-        blobHTTPHeaders: { blobContentType: 'application/json' }
-      });
+      await saveInvestmentSettings(defaultSettings);
       return defaultSettings;
     }
     console.error(`Failed to get investment settings:`, error);
@@ -100,12 +82,13 @@ export async function getInvestmentSettings(): Promise<InvestmentSettings> {
 export async function saveInvestmentSettings(settings: Partial<InvestmentSettings>): Promise<InvestmentSettings> {
     const existingSettings = await getInvestmentSettings();
     
-    const validatedSettings: InvestmentSettings = {
+    // Create a new object for validation, ensuring all required fields are present
+    const settingsToValidate: InvestmentSettings = {
         monthlyTarget: settings.monthlyTarget ?? existingSettings.monthlyTarget,
-        categoryTargets: settings.categoryTargets ?? existingSettings.categoryTargets,
+        fundTargets: settings.fundTargets ?? existingSettings.fundTargets,
     };
     
-    const validation = InvestmentSettingsSchema.safeParse(validatedSettings);
+    const validation = InvestmentSettingsSchema.safeParse(settingsToValidate);
     if(!validation.success){
          throw new Error(`Invalid investment settings: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
     }
@@ -151,9 +134,11 @@ export async function addFundEntry(data: FundEntryInput): Promise<FundEntry> {
 
     const { monthYear, ...rest } = validation.data;
     const monthlyData = await getMonthlyInvestmentData(monthYear);
+    
     const newEntry: FundEntry = {
         id: cuid(),
-        ...rest,
+        fundTargetId: rest.fundTargetId,
+        amount: rest.amount,
         date: rest.date.toISOString(),
         createdAt: new Date().toISOString(),
     };

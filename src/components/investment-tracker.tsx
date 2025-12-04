@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useDateSelection } from "@/contexts/DateSelectionContext";
 import { getInvestmentSettings, getMonthlyInvestmentData, addFundEntry, deleteFundEntry, saveAISummary, saveInvestmentSettings } from '@/lib/actions/investments';
 import { summarizeInvestments } from '@/ai/flows/investment-summary-flow';
-import type { InvestmentSettings, FundEntry, MonthlyInvestmentData, FundEntryInput, InvestmentCategory } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, MonthlyInvestmentData, FundEntryInput, FundTarget, InvestmentCategory } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +18,12 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, AlertTriangle, Copy, Settings, CheckCircle } from "lucide-react";
+import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, Copy, Settings, CheckCircle } from "lucide-react";
 import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { Separator } from './ui/separator';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import cuid from 'cuid';
 
 
 const cardVariants = {
@@ -51,22 +52,24 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
 
   const [settings, setSettings] = useState<InvestmentSettings | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyInvestmentData | null>(null);
-
-  // Component State
   const [isLoading, setIsLoading] = useState(true);
+
+  // New states for managing forms
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
   const [isDeletingEntry, setIsDeletingEntry] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  
-  // Settings form state
-  const [editableSettings, setEditableSettings] = useState<Partial<InvestmentSettings>>({});
+  const [isAddingFund, setIsAddingFund] = useState(false);
 
-  // New entry form state
-  const [newEntryFundName, setNewEntryFundName] = useState('');
+  // Form states
+  const [editableSettings, setEditableSettings] = useState<InvestmentSettings | null>(null);
+  const [newFundName, setNewFundName] = useState('');
+  const [newFundCategory, setNewFundCategory] = useState<InvestmentCategory>('Equity');
+  const [newFundTargetAmount, setNewFundTargetAmount] = useState('');
+  
+  const [newEntryFundTargetId, setNewEntryFundTargetId] = useState('');
   const [newEntryAmount, setNewEntryAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState<Date | undefined>(new Date());
-  const [newEntryCategory, setNewEntryCategory] = useState<InvestmentCategory>('Equity');
 
   const monthYearKey = useMemo(() => `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`, [selectedYear, selectedMonth]);
 
@@ -78,7 +81,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
         getMonthlyInvestmentData(monthYearKey),
       ]);
       setSettings(fetchedSettings);
-      setEditableSettings(fetchedSettings);
+      setEditableSettings(JSON.parse(JSON.stringify(fetchedSettings))); // Deep copy for editing
       setMonthlyData(fetchedMonthlyData);
     } catch (err: any) {
       toast({ title: "Error Loading Investment Data", description: err.message, variant: "destructive" });
@@ -90,27 +93,16 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-  
-  const handleSettingsChange = (field: keyof InvestmentSettings, value: any) => {
-      setEditableSettings(prev => ({...prev, [field]: value}));
-  };
-  
-  const handleTargetChange = (index: number, value: string) => {
-      const newTargets = [...(editableSettings.targets || [])];
-      const amount = parseFloat(value) || 0;
-      if (newTargets[index]) {
-          newTargets[index] = {...newTargets[index], targetAmount: amount};
-          handleSettingsChange('targets', newTargets);
-      }
-  };
 
+  // --- Settings Handlers ---
   const handleSaveSettings = async () => {
     if (!editableSettings) return;
     setIsSavingSettings(true);
     try {
-        const updatedSettings = await saveInvestmentSettings(editableSettings);
-        setSettings(updatedSettings); // Update main settings state
-        toast({ title: "Settings Saved!", description: "Your investment targets have been updated." });
+      const updatedSettings = await saveInvestmentSettings(editableSettings);
+      setSettings(updatedSettings);
+      setEditableSettings(JSON.parse(JSON.stringify(updatedSettings))); // Re-sync after save
+      toast({ title: "Settings Saved!", description: "Your investment targets have been updated." });
     } catch(err: any) {
         toast({ title: "Error Saving Settings", description: err.message, variant: "destructive" });
     } finally {
@@ -118,9 +110,47 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     }
   };
 
+  const handleAddFundTarget = () => {
+    if (!newFundName.trim() || !newFundTargetAmount) {
+        toast({ title: "Missing Details", description: "Please provide a fund name and target amount.", variant: "destructive" });
+        return;
+    }
+    const amount = parseFloat(newFundTargetAmount);
+    if(isNaN(amount) || amount <= 0) {
+        toast({ title: "Invalid Amount", description: "Target amount must be a positive number.", variant: "destructive" });
+        return;
+    }
+
+    const newFund: FundTarget = {
+        id: cuid(),
+        name: newFundName.trim(),
+        category: newFundCategory,
+        targetAmount: amount,
+    };
+
+    setEditableSettings(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            fundTargets: [...prev.fundTargets, newFund],
+        };
+    });
+
+    setNewFundName('');
+    setNewFundTargetAmount('');
+  };
+
+  const handleDeleteFundTarget = (fundId: string) => {
+      setEditableSettings(prev => {
+          if (!prev) return null;
+          return { ...prev, fundTargets: prev.fundTargets.filter(ft => ft.id !== fundId) };
+      });
+  };
+
+  // --- Entry Handlers ---
   const handleAddEntry = async () => {
-    if (!newEntryCategory || !newEntryFundName.trim() || !newEntryAmount || !newEntryDate) {
-      toast({ title: "Missing Information", description: "Please fill all fields for the new entry.", variant: "destructive" });
+    if (!newEntryFundTargetId || !newEntryAmount || !newEntryDate) {
+      toast({ title: "Missing Information", description: "Please select a fund and provide an amount and date.", variant: "destructive" });
       return;
     }
     const amountNum = parseFloat(newEntryAmount);
@@ -129,17 +159,9 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
       return;
     }
     
-    // Find the targetId based on the selected category name
-    const targetId = settings?.targets.find(t => t.category === newEntryCategory)?.id;
-    if (!targetId) {
-        toast({ title: "Invalid Category", description: `Could not find a target setting for the category "${newEntryCategory}". Please save your settings.`, variant: "destructive" });
-        return;
-    }
-
     const entryInput: FundEntryInput = {
         monthYear: monthYearKey,
-        targetId: targetId,
-        fundName: newEntryFundName.trim(),
+        fundTargetId: newEntryFundTargetId,
         amount: amountNum,
         date: newEntryDate,
     };
@@ -148,10 +170,10 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     try {
       await addFundEntry(entryInput);
       toast({ title: "Investment Logged" });
-      setNewEntryFundName('');
+      setNewEntryFundTargetId('');
       setNewEntryAmount('');
       fetchData(); // Refresh data
-      onDataChanged(); // Notify parent
+      onDataChanged(); // Notify parent dashboard page
     } catch (err: any) {
       toast({ title: "Error Adding Entry", description: err.message, variant: "destructive" });
     } finally {
@@ -173,6 +195,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     }
   };
   
+  // --- AI Summary Handlers ---
   const handleAnalyze = async () => {
       if (!settings || !monthlyData || monthlyData.entries.length === 0) {
           toast({ title: "No Data to Analyze", description: "Please add some investment entries for this month first.", variant: "default" });
@@ -181,15 +204,25 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
       setIsAnalyzing(true);
       try {
           const totalInvested = monthlyData.entries.reduce((sum, entry) => sum + entry.amount, 0);
-          const targetBreakdown = settings.targets.map(target => ({
-              ...target,
-              actualAmount: monthlyData.entries
-                  .filter(entry => entry.targetId === target.id)
-                  .reduce((sum, entry) => sum + entry.amount, 0),
-          }));
+
+          const categoryMap = new Map<InvestmentCategory, { target: number, actual: number }>();
+          settings.fundTargets.forEach(ft => {
+              const catData = categoryMap.get(ft.category) || { target: 0, actual: 0 };
+              catData.target += ft.targetAmount;
+              categoryMap.set(ft.category, catData);
+          });
+          monthlyData.entries.forEach(entry => {
+              const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+              if (fundTarget) {
+                  const catData = categoryMap.get(fundTarget.category);
+                  if (catData) catData.actual += entry.amount;
+              }
+          });
+          const targetBreakdown = Array.from(categoryMap.entries()).map(([name, data]) => ({ name, targetAmount: data.target, actualAmount: data.actual }));
+
           const fundEntries = monthlyData.entries.map(entry => {
-              const target = settings.targets.find(t => t.id === entry.targetId);
-              return { fundName: entry.fundName, amount: entry.amount, category: target?.category || 'Other' };
+              const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+              return { fundName: fundTarget?.name || 'Unknown Fund', amount: entry.amount, category: fundTarget?.category || 'Other' };
           });
 
           const summary = await summarizeInvestments({
@@ -220,14 +253,33 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
 
   const totalInvested = useMemo(() => monthlyData?.entries.reduce((sum, entry) => sum + entry.amount, 0) || 0, [monthlyData]);
 
-  if (isLoading) {
-    return <Card className={cn("shadow-lg", glowClass)}><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card>;
+  const categoryProgress = useMemo(() => {
+    const progressMap = new Map<InvestmentCategory, { target: number; actual: number }>();
+    if (!settings) return [];
+    
+    settings.fundTargets.forEach(ft => {
+        const catData = progressMap.get(ft.category) || { target: 0, actual: 0 };
+        catData.target += ft.targetAmount;
+        progressMap.set(ft.category, catData);
+    });
+
+    monthlyData?.entries.forEach(entry => {
+        const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+        if (fundTarget) {
+            const catData = progressMap.get(fundTarget.category);
+            if (catData) catData.actual += entry.amount;
+        }
+    });
+
+    return Array.from(progressMap.entries())
+        .map(([category, data]) => ({ category, ...data }))
+        .filter(item => item.target > 0 || item.actual > 0);
+  }, [settings, monthlyData]);
+
+  if (isLoading || !editableSettings) {
+    return <Card className={cn("shadow-lg", glowClass)}><CardContent><Skeleton className="h-96 w-full" /></CardContent></Card>;
   }
   
-  if (!settings) {
-    return <Card className={cn("shadow-lg", glowClass)}><CardContent><p className="text-muted-foreground p-4 text-center">Could not load investment settings.</p></CardContent></Card>;
-  }
-
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
       <Card className={cn("shadow-lg", glowClass)}>
@@ -236,7 +288,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
             <BarChart className="h-6 w-6 text-accent" /> Monthly Investment Tracker
           </CardTitle>
           <CardDescription>
-            Log your monthly investments against your targets. Configure targets in the settings section below.
+            Log your monthly investments against your targets.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -246,85 +298,106 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                     <AccordionTrigger>
                         <div className="flex items-center gap-2 font-semibold text-primary">
                             <Settings className="h-5 w-5"/>
-                            Investment Settings
+                            Investment Settings & Targets
                         </div>
                     </AccordionTrigger>
                     <AccordionContent className="pt-2 space-y-4">
-                        <div className="p-3 border rounded-lg bg-background/50 space-y-3">
+                        <div className="p-3 border rounded-lg bg-background/50 space-y-4">
                             <div>
-                                <Label htmlFor="monthly-target-input">Overall Monthly Target (₹)</Label>
-                                <Input id="monthly-target-input" type="number" value={editableSettings.monthlyTarget || ''} onChange={e => handleSettingsChange('monthlyTarget', parseFloat(e.target.value) || 0)} className="h-9 text-sm mt-1" />
+                                <Label htmlFor="monthly-target-input">Overall Monthly SIP Target (₹)</Label>
+                                <Input id="monthly-target-input" type="number" value={editableSettings.monthlyTarget || ''} onChange={e => setEditableSettings({...editableSettings, monthlyTarget: parseFloat(e.target.value) || 0})} className="h-9 text-sm mt-1" />
                             </div>
                             <Separator/>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {editableSettings.targets?.map((target, index) => (
-                                    <div key={target.id}>
-                                        <Label htmlFor={`target-input-${target.id}`}>{target.category} Target (₹)</Label>
-                                        <Input id={`target-input-${target.id}`} type="number" value={target.targetAmount} onChange={e => handleTargetChange(index, e.target.value)} className="h-9 text-sm mt-1" />
+                            
+                            <h4 className="font-medium text-foreground">Fund Targets</h4>
+                            <div className="space-y-2">
+                                {editableSettings.fundTargets.map((target, index) => (
+                                    <div key={target.id} className="flex items-center gap-2 p-1.5 rounded-md border bg-background/50">
+                                        <div className="flex-1 grid grid-cols-3 gap-2 text-xs">
+                                           <span>{target.name}</span>
+                                           <span>{target.category}</span>
+                                           <span>₹{target.targetAmount.toLocaleString()}</span>
+                                        </div>
+                                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleDeleteFundTarget(target.id)}>
+                                            <Trash2 className="h-3 w-3 text-destructive"/>
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
-                            <Button onClick={handleSaveSettings} disabled={isSavingSettings} size="sm" withMotion>
+                             <Accordion type="single" collapsible onValueChange={(val) => setIsAddingFund(!!val)}>
+                                <AccordionItem value="add-fund">
+                                    <AccordionTrigger className="text-sm font-medium text-accent">
+                                        <PlusCircle className="mr-2 h-4 w-4"/>
+                                        {isAddingFund ? "Close Form" : "Add New Fund Target"}
+                                    </AccordionTrigger>
+                                    <AccordionContent className="space-y-3 pt-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div><Label htmlFor="new-fund-name" className="text-xs">Fund Name</Label><Input id="new-fund-name" value={newFundName} onChange={e => setNewFundName(e.target.value)} className="h-8 mt-1 text-sm"/></div>
+                                            <div><Label htmlFor="new-fund-category" className="text-xs">Category</Label>
+                                                <Select value={newFundCategory} onValueChange={(v) => setNewFundCategory(v as InvestmentCategory)}>
+                                                    <SelectTrigger id="new-fund-category" className="h-8 mt-1 text-sm"><SelectValue/></SelectTrigger>
+                                                    <SelectContent>{Object.values(progressColors).map((_, i) => <SelectItem key={Object.keys(progressColors)[i]} value={Object.keys(progressColors)[i]}>{Object.keys(progressColors)[i]}</SelectItem>)}</SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div><Label htmlFor="new-fund-target" className="text-xs">Monthly Target (₹)</Label><Input id="new-fund-target" type="number" value={newFundTargetAmount} onChange={e => setNewFundTargetAmount(e.target.value)} className="h-8 mt-1 text-sm"/></div>
+                                        </div>
+                                        <Button size="sm" onClick={handleAddFundTarget} withMotion>Add Fund</Button>
+                                    </AccordionContent>
+                                </AccordionItem>
+                             </Accordion>
+
+                            <Button onClick={handleSaveSettings} disabled={isSavingSettings} size="sm" className="mt-4" withMotion>
                                 {isSavingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Save Settings
+                                Save All Settings
                             </Button>
                         </div>
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>
             
-            {/* Overall Progress */}
-            <div>
-                <div className="flex justify-between items-baseline mb-1">
-                    <p className="font-semibold text-primary">Overall Monthly Progress</p>
-                    <p className="text-sm font-bold text-primary">₹{totalInvested.toLocaleString()} / <span className="text-muted-foreground">₹{settings.monthlyTarget.toLocaleString()}</span></p>
+            {/* --- Progress Display --- */}
+            <div className="space-y-4">
+                <div>
+                    <div className="flex justify-between items-baseline mb-1">
+                        <p className="font-semibold text-primary">Overall Monthly Progress</p>
+                        <p className="text-sm font-bold text-primary">₹{totalInvested.toLocaleString()} / <span className="text-muted-foreground">₹{settings.monthlyTarget.toLocaleString()}</span></p>
+                    </div>
+                    <Progress value={settings.monthlyTarget > 0 ? (totalInvested / settings.monthlyTarget) * 100 : 0} />
                 </div>
-                <Progress value={settings.monthlyTarget > 0 ? (totalInvested / settings.monthlyTarget) * 100 : 0} />
-            </div>
 
-            {/* Targets Breakdown */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {settings.targets.map(target => {
-                    const investedInTarget = monthlyData?.entries
-                        .filter(e => e.targetId === target.id)
-                        .reduce((sum, e) => sum + e.amount, 0) || 0;
-                    const progress = target.targetAmount > 0 ? (investedInTarget / target.targetAmount) * 100 : 0;
-                    return (
-                        <div key={target.id} className="p-3 rounded-lg border bg-background/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {categoryProgress.map(({ category, target, actual }) => (
+                        <div key={category} className="p-3 rounded-lg border bg-background/50">
                              <div className="flex justify-between items-baseline text-sm mb-1">
-                                <span className="font-semibold text-foreground truncate" title={target.name}>{target.name}</span>
-                                <span className="text-xs text-muted-foreground">{progress.toFixed(0)}%</span>
+                                <span className="font-semibold text-foreground truncate">{category}</span>
+                                <span className="text-xs text-muted-foreground">{(target > 0 ? (actual/target) * 100 : 0).toFixed(0)}%</span>
                             </div>
-                            <Progress value={progress} indicatorClassName={cn(progressColors[target.category] || "bg-gray-500")} className="h-2" />
-                            <p className="text-right font-semibold text-xs text-primary mt-1">₹{investedInTarget.toLocaleString()} / <span className="text-muted-foreground">₹{target.targetAmount.toLocaleString()}</span></p>
+                            <Progress value={target > 0 ? (actual / target) * 100 : 0} indicatorClassName={cn(progressColors[category] || "bg-gray-500")} className="h-2" />
+                            <p className="text-right font-semibold text-xs text-primary mt-1">₹{actual.toLocaleString()} / <span className="text-muted-foreground">₹{target.toLocaleString()}</span></p>
                         </div>
-                    );
-                })}
+                    ))}
+                </div>
             </div>
 
             <Separator />
 
-            {/* New Entry Form */}
+            {/* --- New Entry Form --- */}
             <div className="space-y-3 p-3 border rounded-lg bg-background/50">
                 <h4 className="font-semibold text-primary">Log New Investment</h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                        <Label htmlFor="fund-name" className="text-xs">Fund Name</Label>
-                        <Input id="fund-name" value={newEntryFundName} onChange={e => setNewEntryFundName(e.target.value)} placeholder="e.g., Parag Parikh Flexi" className="h-9 text-sm mt-1" />
-                    </div>
-                     <div>
-                        <Label htmlFor="fund-category" className="text-xs">Category</Label>
-                        <Select value={newEntryCategory} onValueChange={(val) => setNewEntryCategory(val as InvestmentCategory)}>
-                            <SelectTrigger id="fund-category" className="h-9 text-sm mt-1"><SelectValue placeholder="Select Category" /></SelectTrigger>
-                            <SelectContent>{settings.targets.map(t => <SelectItem key={t.id} value={t.category}>{t.category}</SelectItem>)}</SelectContent>
+                        <Label htmlFor="fund-entry-target" className="text-xs">Fund</Label>
+                        <Select value={newEntryFundTargetId} onValueChange={setNewEntryFundTargetId}>
+                            <SelectTrigger id="fund-entry-target" className="h-9 mt-1 text-sm"><SelectValue placeholder="Select Fund"/></SelectTrigger>
+                            <SelectContent>{(settings.fundTargets || []).map(ft => <SelectItem key={ft.id} value={ft.id}>{ft.name}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                      <div>
-                        <Label htmlFor="fund-amount" className="text-xs">Amount (₹)</Label>
-                        <Input id="fund-amount" type="number" value={newEntryAmount} onChange={e => setNewEntryAmount(e.target.value)} placeholder="0.00" className="h-9 text-sm mt-1" />
+                        <Label htmlFor="fund-entry-amount" className="text-xs">Amount (₹)</Label>
+                        <Input id="fund-entry-amount" type="number" value={newEntryAmount} onChange={e => setNewEntryAmount(e.target.value)} placeholder="0.00" className="h-9 text-sm mt-1" />
                     </div>
                     <div>
-                        <Label htmlFor="fund-date" className="text-xs">Date</Label>
+                        <Label htmlFor="fund-entry-date" className="text-xs">Date</Label>
                         <Popover>
                             <PopoverTrigger asChild><Button variant="outline" size="sm" className="w-full h-9 text-sm mt-1 justify-start font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{newEntryDate ? format(newEntryDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newEntryDate} onSelect={setNewEntryDate} initialFocus /></PopoverContent>
@@ -336,17 +409,19 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                 </Button>
             </div>
 
-            {/* Logged Entries & AI Summary */}
+            {/* --- Logged Entries & AI Summary --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                      <h4 className="font-semibold text-primary mb-2">Logged Entries for {monthYearKey}</h4>
                      {monthlyData && monthlyData.entries.length > 0 ? (
                         <ScrollArea className="h-48 border rounded-md p-2 bg-background/50">
                            <ul className="space-y-2">
-                                {monthlyData.entries.map(entry => (
+                                {monthlyData.entries.map(entry => {
+                                   const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
+                                   return (
                                    <li key={entry.id} className="flex justify-between items-center text-sm p-1.5 rounded hover:bg-accent/5">
                                        <div>
-                                           <p className="font-medium">{entry.fundName}</p>
+                                           <p className="font-medium">{fundTarget?.name || 'Unknown Fund'}</p>
                                            <p className="text-xs text-muted-foreground">{format(new Date(entry.date), "dd MMM, yyyy")}</p>
                                        </div>
                                        <div className="flex items-center gap-2">
@@ -356,7 +431,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                                            </Button>
                                        </div>
                                    </li> 
-                                ))}
+                                )})}
                            </ul>
                         </ScrollArea>
                      ) : <p className="text-sm text-muted-foreground text-center p-4 border rounded-md bg-background/50">No investments logged for this month.</p>}
@@ -384,5 +459,3 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
     </motion.div>
   );
 }
-
-    
