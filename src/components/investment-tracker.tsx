@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -20,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, AlertTriangle, Copy } from "lucide-react";
 import { ScrollArea } from './ui/scroll-area';
+import { Skeleton } from './ui/skeleton';
 
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
