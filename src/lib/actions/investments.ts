@@ -2,7 +2,7 @@
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
-import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, FundTarget, InvestmentCategory } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData } from '@/lib/types';
 import { InvestmentSettingsSchema, FundEntryInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
@@ -158,6 +158,38 @@ export async function addFundEntry(data: FundEntryInput): Promise<FundEntry> {
     revalidatePath('/');
     return newEntry;
 }
+
+export async function editFundEntry(monthYear: string, entryId: string, newAmount: number, newDate: Date): Promise<{ success: boolean }> {
+  if (!/^\d{4}-\d{2}$/.test(monthYear)) throw new Error("Invalid monthYear format.");
+
+  const monthlyData = await getMonthlyInvestmentData(monthYear);
+  const entryIndex = monthlyData.entries.findIndex(entry => entry.id === entryId);
+
+  if (entryIndex === -1) {
+    throw new Error("Fund entry not found.");
+  }
+  
+  monthlyData.entries[entryIndex] = {
+      ...monthlyData.entries[entryIndex],
+      amount: newAmount,
+      date: newDate.toISOString(),
+  };
+
+  const updatedData: MonthlyInvestmentData = {
+    ...monthlyData,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const client = await getAzureBlobContainerClient();
+  const blobName = `${MONTHLY_DATA_DIR}${monthYear}.json`;
+  const blockBlobClient = client.getBlockBlobClient(blobName);
+  const content = JSON.stringify(updatedData, null, 2);
+  await blockBlobClient.upload(content, Buffer.byteLength(content));
+
+  revalidatePath('/');
+  return { success: true };
+}
+
 
 export async function deleteFundEntry(monthYear: string, entryId: string): Promise<{ success: boolean }> {
     if (!/^\d{4}-\d{2}$/.test(monthYear)) throw new Error("Invalid monthYear format.");

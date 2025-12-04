@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { useDateSelection } from "@/contexts/DateSelectionContext";
-import { getInvestmentSettings, getMonthlyInvestmentData, addFundEntry, deleteFundEntry, saveAISummary, saveInvestmentSettings } from '@/lib/actions/investments';
+import { getInvestmentSettings, getMonthlyInvestmentData, addFundEntry, deleteFundEntry, saveAISummary, saveInvestmentSettings, editFundEntry } from '@/lib/actions/investments';
 import { summarizeInvestments } from '@/ai/flows/investment-summary-flow';
 import type { InvestmentSettings, FundEntry, MonthlyInvestmentData, FundEntryInput, FundTarget, InvestmentCategory } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,12 +18,13 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, Copy, Settings, CheckCircle } from "lucide-react";
+import { BarChart, BrainCircuit, Save, Loader2, Wand2, PlusCircle, Trash2, CalendarIcon, Copy, Settings, Edit } from "lucide-react";
 import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { Separator } from './ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import cuid from 'cuid';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
 
 const cardVariants = {
@@ -41,6 +42,12 @@ const progressColors: { [key in InvestmentCategory]: string } = {
   Crypto: "bg-purple-500",
   Other: "bg-gray-500",
 };
+
+const fundProgressColors = [
+  "bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5",
+  "bg-teal-500", "bg-fuchsia-500", "bg-sky-500", "bg-rose-500", "bg-lime-500"
+];
+
 
 interface InvestmentTrackerProps {
     onDataChanged: () => void;
@@ -70,6 +77,12 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
   const [newEntryFundTargetId, setNewEntryFundTargetId] = useState('');
   const [newEntryAmount, setNewEntryAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState<Date | undefined>(new Date());
+  
+  const [editingEntry, setEditingEntry] = useState<{ entry: FundEntry, fundName: string } | null>(null);
+  const [editEntryAmount, setEditEntryAmount] = useState<string>('');
+  const [editEntryDate, setEditEntryDate] = useState<Date | undefined>();
+  const [isUpdatingEntry, setIsUpdatingEntry] = useState(false);
+
 
   const monthYearKey = useMemo(() => `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`, [selectedYear, selectedMonth]);
 
@@ -180,6 +193,40 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
       setIsSubmittingEntry(false);
     }
   };
+  
+    const handleOpenEditDialog = (entry: FundEntry, fundName: string) => {
+        setEditingEntry({ entry, fundName });
+        setEditEntryAmount(entry.amount.toString());
+        setEditEntryDate(new Date(entry.date));
+    };
+    
+    const handleUpdateEntry = async () => {
+        if (!editingEntry) return;
+
+        const newAmount = parseFloat(editEntryAmount);
+        if (isNaN(newAmount) || newAmount <= 0) {
+            toast({ title: "Invalid Amount", description: "Amount must be a positive number.", variant: "destructive" });
+            return;
+        }
+        if (!editEntryDate) {
+            toast({ title: "Invalid Date", description: "Please select a valid date.", variant: "destructive" });
+            return;
+        }
+
+        setIsUpdatingEntry(true);
+        try {
+            await editFundEntry(monthYearKey, editingEntry.entry.id, newAmount, editEntryDate);
+            toast({ title: "Entry Updated!" });
+            setEditingEntry(null);
+            fetchData();
+            onDataChanged();
+        } catch (error: any) {
+            toast({ title: "Update Error", description: error.message, variant: "destructive" });
+        } finally {
+            setIsUpdatingEntry(false);
+        }
+    };
+
 
   const handleDeleteEntry = async (entryId: string) => {
     setIsDeletingEntry(entryId);
@@ -276,8 +323,12 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
         .filter(item => item.target > 0 || item.actual > 0);
   }, [settings, monthlyData]);
 
-  if (isLoading || !editableSettings) {
+  if (isLoading) {
     return <Card className={cn("shadow-lg", glowClass)}><CardContent><Skeleton className="h-96 w-full" /></CardContent></Card>;
+  }
+
+  if (!settings || !editableSettings) {
+    return <Card className={cn("shadow-lg", glowClass)}><CardContent><p className="text-muted-foreground p-4 text-center">Could not load investment settings.</p></CardContent></Card>;
   }
   
   return (
@@ -311,11 +362,11 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                             
                             <h4 className="font-medium text-foreground">Fund Targets</h4>
                             <div className="space-y-2">
-                                {editableSettings.fundTargets.map((target, index) => (
+                                {editableSettings.fundTargets.map((target) => (
                                     <div key={target.id} className="flex items-center gap-2 p-1.5 rounded-md border bg-background/50">
                                         <div className="flex-1 grid grid-cols-3 gap-2 text-xs">
                                            <span>{target.name}</span>
-                                           <span>{target.category}</span>
+                                           <span className="capitalize">{target.category}</span>
                                            <span>₹{target.targetAmount.toLocaleString()}</span>
                                         </div>
                                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleDeleteFundTarget(target.id)}>
@@ -336,7 +387,7 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                                             <div><Label htmlFor="new-fund-category" className="text-xs">Category</Label>
                                                 <Select value={newFundCategory} onValueChange={(v) => setNewFundCategory(v as InvestmentCategory)}>
                                                     <SelectTrigger id="new-fund-category" className="h-8 mt-1 text-sm"><SelectValue/></SelectTrigger>
-                                                    <SelectContent>{Object.values(progressColors).map((_, i) => <SelectItem key={Object.keys(progressColors)[i]} value={Object.keys(progressColors)[i]}>{Object.keys(progressColors)[i]}</SelectItem>)}</SelectContent>
+                                                    <SelectContent>{Object.keys(progressColors).map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
                                                 </Select>
                                             </div>
                                             <div><Label htmlFor="new-fund-target" className="text-xs">Monthly Target (₹)</Label><Input id="new-fund-target" type="number" value={newFundTargetAmount} onChange={e => setNewFundTargetAmount(e.target.value)} className="h-8 mt-1 text-sm"/></div>
@@ -409,53 +460,106 @@ export function InvestmentTracker({ onDataChanged }: InvestmentTrackerProps) {
                 </Button>
             </div>
 
-            {/* --- Logged Entries & AI Summary --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                     <h4 className="font-semibold text-primary mb-2">Logged Entries for {monthYearKey}</h4>
-                     {monthlyData && monthlyData.entries.length > 0 ? (
-                        <ScrollArea className="h-48 border rounded-md p-2 bg-background/50">
-                           <ul className="space-y-2">
-                                {monthlyData.entries.map(entry => {
-                                   const fundTarget = settings.fundTargets.find(ft => ft.id === entry.fundTargetId);
-                                   return (
-                                   <li key={entry.id} className="flex justify-between items-center text-sm p-1.5 rounded hover:bg-accent/5">
-                                       <div>
-                                           <p className="font-medium">{fundTarget?.name || 'Unknown Fund'}</p>
-                                           <p className="text-xs text-muted-foreground">{format(new Date(entry.date), "dd MMM, yyyy")}</p>
-                                       </div>
-                                       <div className="flex items-center gap-2">
-                                           <span className="font-semibold">₹{entry.amount.toLocaleString()}</span>
-                                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/70" onClick={() => handleDeleteEntry(entry.id)} disabled={isDeletingEntry === entry.id}>
-                                                {isDeletingEntry === entry.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                                           </Button>
-                                       </div>
-                                   </li> 
-                                )})}
-                           </ul>
+            {/* --- Logged Entries Progress Bars --- */}
+            <div className="space-y-4">
+                 <h4 className="font-semibold text-primary mb-2">Logged Entries for {monthYearKey}</h4>
+                {(monthlyData && monthlyData.entries.length > 0) ? (
+                    settings.fundTargets.map((fund, index) => {
+                        const entriesForFund = monthlyData.entries.filter(e => e.fundTargetId === fund.id);
+                        if (entriesForFund.length === 0) return null;
+
+                        const investedAmount = entriesForFund.reduce((sum, e) => sum + e.amount, 0);
+                        const progress = fund.targetAmount > 0 ? (investedAmount / fund.targetAmount) * 100 : 0;
+                        const colorClass = fundProgressColors[index % fundProgressColors.length];
+
+                        return (
+                            <Popover key={fund.id}>
+                                <PopoverTrigger asChild>
+                                <div className="space-y-1.5 p-2 rounded-lg hover:bg-accent/5 cursor-pointer">
+                                    <div className="flex justify-between items-baseline text-sm">
+                                        <p className="font-medium text-foreground">{fund.name}</p>
+                                        <p className="font-semibold text-primary">₹{investedAmount.toLocaleString()} / <span className="text-muted-foreground text-xs">₹{fund.targetAmount.toLocaleString()}</span></p>
+                                    </div>
+                                    <Progress value={progress} indicatorClassName={colorClass} />
+                                </div>
+                                </PopoverTrigger>
+                                <PopoverContent>
+                                    <p className="font-bold text-sm mb-2 pb-1 border-b">Entries for {fund.name}</p>
+                                    <ul className="space-y-2">
+                                        {entriesForFund.map(entry => (
+                                            <li key={entry.id} className="flex justify-between items-center text-xs">
+                                                <span>{format(new Date(entry.date), "dd MMM, yyyy")}</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-semibold">₹{entry.amount.toLocaleString()}</span>
+                                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleOpenEditDialog(entry, fund.name)}>
+                                                        <Edit className="h-3 w-3 text-primary/80" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleDeleteEntry(entry.id)} disabled={isDeletingEntry === entry.id}>
+                                                        {isDeletingEntry === entry.id ? <Loader2 className="h-3 w-3 animate-spin"/> : <Trash2 className="h-3 w-3 text-destructive/80"/>}
+                                                    </Button>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </PopoverContent>
+                            </Popover>
+                        )
+                    })
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center p-4 border rounded-md bg-background/50">No investments logged for this month.</p>
+                )}
+            </div>
+
+            {/* --- AI Summary --- */}
+            <div className="space-y-2">
+                 <h4 className="font-semibold text-primary mb-2 flex items-center gap-2"><BrainCircuit className="text-accent" /> AI Summary</h4>
+                 <div className="p-3 border rounded-md bg-accent/5 h-48 relative">
+                    {isAnalyzing ? <p className="text-sm text-muted-foreground">AI is generating your summary...</p> : monthlyData?.aiSummary ? (
+                       <>
+                        <ScrollArea className="h-full text-sm text-foreground/90 pr-8">
+                            <p className="whitespace-pre-wrap">{monthlyData.aiSummary}</p>
                         </ScrollArea>
-                     ) : <p className="text-sm text-muted-foreground text-center p-4 border rounded-md bg-background/50">No investments logged for this month.</p>}
-                </div>
-                <div className="space-y-2">
-                     <h4 className="font-semibold text-primary mb-2 flex items-center gap-2"><BrainCircuit className="text-accent" /> AI Summary</h4>
-                     <div className="p-3 border rounded-md bg-accent/5 h-48 relative">
-                        {isAnalyzing ? <p className="text-sm text-muted-foreground">AI is generating your summary...</p> : monthlyData?.aiSummary ? (
-                           <>
-                            <ScrollArea className="h-full text-sm text-foreground/90 pr-8">
-                                <p className="whitespace-pre-wrap">{monthlyData.aiSummary}</p>
-                            </ScrollArea>
-                            <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7 text-muted-foreground" onClick={copySummary}><Copy className="h-4 w-4"/></Button>
-                           </>
-                        ) : <p className="text-sm text-muted-foreground">Click the button to generate a copiable AI summary of this month's investments.</p>}
-                     </div>
-                      <Button onClick={handleAnalyze} disabled={isAnalyzing || !monthlyData || monthlyData.entries.length === 0} className="w-full bg-accent text-accent-foreground" withMotion>
-                        {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />} Generate AI Summary
-                    </Button>
-                </div>
+                        <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7 text-muted-foreground" onClick={copySummary}><Copy className="h-4 w-4"/></Button>
+                       </>
+                    ) : <p className="text-sm text-muted-foreground">Click the button to generate a copiable AI summary of this month's investments.</p>}
+                 </div>
+                  <Button onClick={handleAnalyze} disabled={isAnalyzing || !monthlyData || monthlyData.entries.length === 0} className="w-full bg-accent text-accent-foreground" withMotion>
+                    {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />} Generate AI Summary
+                </Button>
             </div>
 
         </CardContent>
       </Card>
+
+      {/* Edit Entry Dialog */}
+      <Dialog open={editingEntry !== null} onOpenChange={(isOpen) => !isOpen && setEditingEntry(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Edit Investment Entry</DialogTitle>
+                <DialogDescription>Update details for your investment in {editingEntry?.fundName}.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                 <div>
+                    <Label htmlFor="edit-entry-amount">Amount (₹)</Label>
+                    <Input id="edit-entry-amount" type="number" value={editEntryAmount} onChange={e => setEditEntryAmount(e.target.value)} className="mt-1" />
+                </div>
+                 <div>
+                    <Label htmlFor="edit-entry-date">Date</Label>
+                    <Popover>
+                        <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal mt-1"><CalendarIcon className="mr-2 h-4 w-4" />{editEntryDate ? format(editEntryDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
+                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={editEntryDate} onSelect={setEditEntryDate} initialFocus /></PopoverContent>
+                    </Popover>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingEntry(null)}>Cancel</Button>
+                <Button onClick={handleUpdateEntry} disabled={isUpdatingEntry}>
+                    {isUpdatingEntry && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Update Entry
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </motion.div>
   );
 }
