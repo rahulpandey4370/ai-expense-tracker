@@ -2,7 +2,7 @@
 'use server';
 
 import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
-import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, InvestmentTarget } from '@/lib/types';
+import type { InvestmentSettings, FundEntry, FundEntryInput, MonthlyInvestmentData, InvestmentCategory, CategoryTarget, FundTarget } from '@/lib/types';
 import { InvestmentSettingsSchema, FundEntryInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
@@ -45,11 +45,19 @@ async function getAzureBlobContainerClient(): Promise<BlobContainerClient> {
 export async function getInvestmentSettings(): Promise<InvestmentSettings> {
   const client = await getAzureBlobContainerClient();
   const blobClient = client.getBlobClient(INVESTMENT_SETTINGS_BLOB_PATH);
+  
+  const defaultEquityFund: FundTarget = { id: cuid(), name: "Parag Parikh Flexi Cap", targetAmount: 5000 };
+  const defaultDebtFund: FundTarget = { id: cuid(), name: "HDFC Liquid Fund", targetAmount: 2000 };
+
   const defaultSettings: InvestmentSettings = { 
-    monthlyTarget: 20000, 
-    targets: [
-        { id: cuid(), name: 'Equity', category: 'Equity', targetAmount: 15000 },
-        { id: cuid(), name: 'Debt', category: 'Debt', targetAmount: 5000 },
+    monthlyTarget: 25000, 
+    categoryTargets: [
+        { id: cuid(), category: 'Equity', funds: [defaultEquityFund] },
+        { id: cuid(), category: 'Debt', funds: [defaultDebtFund] },
+        { id: cuid(), category: 'Gold/Silver', funds: [] },
+        { id: cuid(), category: 'US Stocks', funds: [] },
+        { id: cuid(), category: 'Crypto', funds: [] },
+        { id: cuid(), category: 'Other', funds: [] },
     ]
   };
 
@@ -57,7 +65,23 @@ export async function getInvestmentSettings(): Promise<InvestmentSettings> {
     const downloadResponse = await blobClient.download(0);
     if (!downloadResponse.readableStreamBody) return defaultSettings;
     const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
-    return JSON.parse(buffer.toString());
+    const parsedSettings = JSON.parse(buffer.toString());
+    // Data migration/check: Ensure all categories exist
+    const existingCategories = new Set(parsedSettings.categoryTargets.map((ct: CategoryTarget) => ct.category));
+    let needsUpdate = false;
+    defaultSettings.categoryTargets.forEach(defaultTarget => {
+        if(!existingCategories.has(defaultTarget.category)) {
+            parsedSettings.categoryTargets.push(defaultTarget);
+            needsUpdate = true;
+        }
+    });
+
+    if (needsUpdate) {
+        console.log("Investment settings updated with new categories.");
+        return await saveInvestmentSettings(parsedSettings);
+    }
+    
+    return parsedSettings;
   } catch (error: any) {
     if (error instanceof RestError && error.statusCode === 404) {
       // File doesn't exist, create it with default content
@@ -76,13 +100,9 @@ export async function getInvestmentSettings(): Promise<InvestmentSettings> {
 export async function saveInvestmentSettings(settings: Partial<InvestmentSettings>): Promise<InvestmentSettings> {
     const existingSettings = await getInvestmentSettings();
     
-    // Ensure targets have IDs if they are new
-    const updatedTargets = settings.targets?.map(t => t.id ? t : {...t, id: cuid()}) || existingSettings.targets;
-    
     const validatedSettings: InvestmentSettings = {
-        ...existingSettings,
         monthlyTarget: settings.monthlyTarget ?? existingSettings.monthlyTarget,
-        targets: updatedTargets,
+        categoryTargets: settings.categoryTargets ?? existingSettings.categoryTargets,
     };
     
     const validation = InvestmentSettingsSchema.safeParse(validatedSettings);
@@ -199,5 +219,3 @@ export async function saveAISummary(monthYear: string, summary: string): Promise
     revalidatePath('/');
     return updatedData;
 }
-
-    

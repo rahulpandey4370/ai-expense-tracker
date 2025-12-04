@@ -232,7 +232,7 @@ export default function DashboardPage() {
           variants={sectionVariants} 
           initial="hidden" 
           animate="visible" 
-          className="mb-6"
+          className="mb-6 space-y-4"
         >
             <IncomeAllocationBar 
                 income={monthlyMetrics.income}
@@ -240,14 +240,13 @@ export default function DashboardPage() {
                 wants={monthlyMetrics.wantsExpenses}
                 investments={monthlyMetrics.totalInvestments}
             />
+             <div className="flex justify-end">
+                <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
+                    {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
+                </Button>
+            </div>
         </motion.div>
-        
-        <div className="flex justify-end mb-4">
-            <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
-                {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
-            </Button>
-        </div>
         
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
@@ -484,5 +483,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    

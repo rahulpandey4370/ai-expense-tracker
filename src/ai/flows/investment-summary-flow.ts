@@ -35,7 +35,7 @@ const investmentSummaryPrompt = ai.definePrompt({
 - **Monthly Target:** ₹{{monthlyTarget}}
 - **Category Breakdown:**
 {{#each targetBreakdown}}
-  - {{this.name}} ({{this.category}}): Target ₹{{this.targetAmount}}, Actual ₹{{this.actualAmount}}
+  - {{this.name}}: Target ₹{{this.targetAmount}}, Actual ₹{{this.actualAmount}}
 {{/each}}
 - **Individual Investments:**
 {{#each fundEntries}}

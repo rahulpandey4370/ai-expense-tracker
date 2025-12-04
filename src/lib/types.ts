@@ -196,7 +196,7 @@ export const FinancialHealthCheckInputSchema = z.object({
   periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
   currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
   currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
-  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
+  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries: ₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
 });
@@ -351,25 +351,30 @@ export interface Budget extends BudgetInput {
 export const InvestmentCategoryEnum = z.enum(["Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto", "Other"]);
 export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
 
-export const InvestmentTargetSchema = z.object({
+export const FundTargetSchema = z.object({
     id: z.string(),
-    name: z.string().min(1, "Target name is required."),
-    category: InvestmentCategoryEnum,
+    name: z.string().min(1, "Fund name is required."),
     targetAmount: z.number().min(0, "Target amount cannot be negative."),
 });
-export type InvestmentTarget = z.infer<typeof InvestmentTargetSchema>;
+export type FundTarget = z.infer<typeof FundTargetSchema>;
 
+export const CategoryTargetSchema = z.object({
+    id: z.string(),
+    category: InvestmentCategoryEnum,
+    // No targetAmount here, it's the sum of its funds' targets
+    funds: z.array(FundTargetSchema),
+});
+export type CategoryTarget = z.infer<typeof CategoryTargetSchema>;
 
 export const InvestmentSettingsSchema = z.object({
     monthlyTarget: z.number().min(0, "Monthly target cannot be negative."),
-    targets: z.array(InvestmentTargetSchema),
+    categoryTargets: z.array(CategoryTargetSchema),
 });
 export type InvestmentSettings = z.infer<typeof InvestmentSettingsSchema>;
 
 export const FundEntryInputSchema = z.object({
     monthYear: z.string().regex(/^\d{4}-\d{2}$/, "Month/Year format must be YYYY-MM"),
-    targetId: z.string().min(1, "Target ID is required."),
-    fundName: z.string().min(1, "Fund name is required."),
+    fundTargetId: z.string().min(1, "Fund Target ID is required."),
     amount: z.number().gt(0, "Amount must be a positive number."),
     date: z.date(),
 });
@@ -393,8 +398,7 @@ export const InvestmentSummaryInputSchema = z.object({
   totalInvested: z.number(),
   monthlyTarget: z.number(),
   targetBreakdown: z.array(z.object({
-    name: z.string(),
-    category: z.string(),
+    name: z.string(), // Category Name like "Equity"
     targetAmount: z.number(),
     actualAmount: z.number(),
   })),
@@ -405,5 +409,3 @@ export const InvestmentSummaryInputSchema = z.object({
   })),
 });
 export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;
-
-    
