@@ -27,7 +27,7 @@ const SpendingInsightsInputSchema = z.object({
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
 
 const SpendingInsightsOutputSchema = z.object({
-  insights: z.string().describe('AI-powered insights about spending habits, formatted as a numbered list.'),
+  insights: z.string().describe('AI-powered insights about spending habits, formatted as a single string containing a numbered list (1., 2., 3., etc.).'),
 });
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
@@ -38,33 +38,35 @@ const personas = {
   growth_investor: `You are a growth-focused financial advisor. Your goal is to help the user maximize their savings and investment potential. You analyze core spending (Needs & Wants) to find money that could be re-allocated to investments. You are motivating and frame all suggestions in the context of building long-term wealth. You celebrate investment spending.`
 };
 
-
-export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
-  return spendingInsightsFlow(input);
-}
-
-
-const spendingInsightsFlow = ai.defineFlow(
-  {
-    name: 'spendingInsightsFlow',
-    inputSchema: SpendingInsightsInputSchema,
-    outputSchema: SpendingInsightsOutputSchema,
+const spendingInsightsPrompt = ai.definePrompt({
+  name: 'spendingInsightsPrompt',
+  input: {
+    schema: z.object({
+        persona: z.string(),
+        analysisPeriod: z.string(),
+        jsonInput: z.string(), // Pass the stringified JSON here
+    })
   },
-  async (input) => {
-    
-    const selectedPersona = personas[input.insightType || 'default'];
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
-
-    // Combine system and user prompts into a single string
-    const fullPrompt = `## PERSONALITY
-${selectedPersona}
+  output: { schema: SpendingInsightsOutputSchema },
+  config: {
+    model: 'googleai/gemini-2.5-flash',
+    temperature: 0.6,
+    maxOutputTokens: 900,
+    safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+    ],
+  },
+  prompt: `## PERSONALITY
+{{{persona}}}
 
 ## ROLE
 You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance. Your analysis must strictly differentiate between core expenses (Needs & Wants) and Investments.
 
 ## TASK
-Analyze the user's financial data for ${analysisPeriod}. Based on the data provided, generate 4-6 insightful, time-aware, and actionable points.
+Analyze the user's financial data for {{{analysisPeriod}}}. Based on the data provided, generate 4-6 insightful, time-aware, and actionable points.
 
 ## RESPONSE GUIDELINES
 - Your entire response MUST be a single string containing a numbered list (1., 2., 3., etc.).
@@ -74,40 +76,35 @@ Analyze the user's financial data for ${analysisPeriod}. Based on the data provi
 - Base your analysis strictly on the JSON data provided.
 
 ## USER FINANCIAL DATA
-Here is the financial data for analysis. Please provide the insights based on this.
 \`\`\`json
-${JSON.stringify(input, null, 2)}
+{{{jsonInput}}}
 \`\`\`
-`;
+`
+});
 
-    try {
-      const llmResponse = await retryableAIGeneration(() => ai.generate({
-        model: 'googleai/gemini-2.5-flash',
-        prompt: fullPrompt, // Use the combined prompt
-        config: {
-            temperature: 0.6,
-            maxOutputTokens: 900,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-        },
-      }));
 
-      const responseText = llmResponse.text;
-      if (!responseText) {
-        console.error("AI model returned no text for spending insights. Full response object:", JSON.stringify(llmResponse, null, 2));
-        return { insights: "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty response." };
-      }
-      
-      return { insights: responseText };
+export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
+  const selectedPersona = personas[input.insightType || 'default'];
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-    } catch (error: any) {
-        console.error("Error in spendingInsightsFlow during AI generation:", error);
-        // This makes sure the error message from the AI (like the system role error) is passed to the frontend.
-        return { insights: `I'm sorry, an unexpected error occurred while generating insights: ${error.message || 'Unknown error'}` };
+  try {
+    const promptInput = {
+        persona: selectedPersona,
+        analysisPeriod: analysisPeriod,
+        jsonInput: JSON.stringify(input, null, 2),
+    };
+    const { output } = await retryableAIGeneration(() => spendingInsightsPrompt(promptInput));
+
+    if (!output?.insights) {
+      console.error("AI model returned no or invalid insights. Full output:", JSON.stringify(output, null, 2));
+      return { insights: "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty or invalid response." };
     }
+    
+    return output;
+  } catch (error: any) {
+      console.error("Error in spendingInsightsFlow during AI generation:", error);
+      // This makes sure a more descriptive error message from the AI (like API key issues) is passed to the frontend.
+      return { insights: `I'm sorry, an unexpected error occurred while generating insights: ${error.message || 'Unknown error'}` };
   }
-);
+}
