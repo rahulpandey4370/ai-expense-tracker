@@ -76,7 +76,7 @@ export function SpendingInsights({
       currentMonthInvestmentSpending: currentMonthInvestmentSpending,
       lastMonthCoreSpending: lastMonthCoreSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
-      lastMonthSpendingByCategory: lastMonthSpendingByCategory,
+      lastMonthSpendingByCategory: lastMonthSpendingByCategory || {}, // Ensure this is always an object
       insightType: insightType,
       selectedMonth: selectedMonth,
       selectedYear: selectedYear,
@@ -84,7 +84,12 @@ export function SpendingInsights({
 
     try {
       const result = await getSpendingInsights(input);
-      setInsights(result.insights);
+       if (result.insights.includes("The AI returned an empty response") || result.insights.includes("error occurred")) {
+        setError(result.insights);
+        setInsights(null);
+      } else {
+        setInsights(result.insights);
+      }
     } catch (err) {
       console.error("Error generating insights:", err);
       setError("Failed to generate insights. Please try again.");

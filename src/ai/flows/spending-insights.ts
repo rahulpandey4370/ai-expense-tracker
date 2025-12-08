@@ -73,23 +73,19 @@ Analyze the user's financial data for ${analysisPeriod}. Based on the data provi
 - Base your analysis strictly on the JSON data provided.
 `;
 
-    // Construct a clear prompt with all data embedded
-    const finalPrompt = `
-System Prompt:
-${systemPrompt}
-
-User Financial Data (JSON):
+    // Construct a clear user prompt with all data embedded in a JSON block
+    const userPrompt = `
+Here is my financial data. Please provide the analysis.
 \`\`\`json
 ${JSON.stringify(input, null, 2)}
 \`\`\`
-
-Based on the system prompt and the user's financial data, generate the insights now.
 `;
 
     try {
       const llmResponse = await retryableAIGeneration(() => ai.generate({
         model: 'googleai/gemini-2.5-flash',
-        prompt: finalPrompt,
+        prompt: userPrompt,
+        system: systemPrompt,
         config: {
             temperature: 0.6,
             maxOutputTokens: 900,
@@ -104,7 +100,7 @@ Based on the system prompt and the user's financial data, generate the insights 
 
       const responseText = llmResponse.text;
       if (!responseText) {
-        console.error("AI model returned no text for spending insights");
+        console.error("AI model returned no text for spending insights. Full response object:", JSON.stringify(llmResponse, null, 2));
         return { insights: "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty response." };
       }
       
