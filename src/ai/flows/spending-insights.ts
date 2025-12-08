@@ -58,8 +58,8 @@ const spendingInsightsPrompt = ai.definePrompt({
   },
   model: 'googleai/gemini-2.5-flash',
   config: {
-    temperature: 0.6,
-    maxOutputTokens: 1000,
+    temperature: 0.8,
+    maxOutputTokens: 1500,
     safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
