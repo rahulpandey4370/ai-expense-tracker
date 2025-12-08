@@ -24,17 +24,18 @@ const SpendingInsightsInputSchema = z.object({
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
 
 // --- Output Schema ---
+// We keep the description simple so the model knows exactly what to put in the string.
 const SpendingInsightsOutputSchema = z.object({
-  insights: z.string().describe('The final analysis text containing a numbered list of insights.'),
+  insights: z.string().describe('A single string containing a numbered list (1., 2., 3.) of financial insights, separated by newline characters (\\n).'),
 });
 
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
 // --- Personas ---
 const personas = {
-  default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore and understands the city's cost dynamics. You give hard truths, call out wasteful spending, and provide actionable insights. You're supportive but won't sugarcoat financial mistakes. You understand that rent, transport, and food are expensive in Bangalore, but you also know when someone is overspending on wants vs needs. Investments are NOT expenses.`,
-  cost_cutter: `You are an aggressive cost-cutting financial analyst. Your single goal is to find every possible way for the user to reduce their core spending (Needs & Wants). You are ruthless in identifying non-essential expenses. You must treat investments as separate from spending and a positive outcome.`,
-  growth_investor: `You are a growth-focused financial advisor. Your goal is to help the user maximize their savings and investment potential. You analyze core spending (Needs & Wants) to find money that could be re-allocated to investments. You are motivating and frame all suggestions in the context of building long-term wealth. You celebrate investment spending.`
+  default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore. You give hard truths, call out wasteful spending, and provide actionable insights. You understand that rent, transport, and food are expensive in Bangalore, but you also know when someone is overspending on wants vs needs.`,
+  cost_cutter: `You are an aggressive cost-cutting financial analyst. Your single goal is to find every possible way for the user to reduce their core spending (Needs & Wants). You are ruthless in identifying non-essential expenses.`,
+  growth_investor: `You are a growth-focused financial advisor. Your goal is to help the user maximize their savings and investment potential. You analyze core spending to find money that could be re-allocated to investments.`
 };
 
 // --- Prompt Definition ---
@@ -44,17 +45,19 @@ const spendingInsightsPrompt = ai.definePrompt({
     schema: z.object({
         persona: z.string(),
         analysisPeriod: z.string(),
-        currentDate: z.string(), // Added Schema field
+        currentDate: z.string(),
         jsonInput: z.string(), 
     })
   },
   output: { 
-    schema: SpendingInsightsOutputSchema, 
+    schema: SpendingInsightsOutputSchema,
+    format: 'json', // CRITICAL FIX: Explicitly enforce JSON mode
   },
   model: 'googleai/gemini-2.5-flash',
   config: {
-    temperature: 0.6,
+    temperature: 0.5, // Lower temperature slightly to ensure formatting stability
     maxOutputTokens: 2000,
+    // Note: safetySettings are standard, keeping them ensures the model doesn't block valid financial critique
     safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -62,32 +65,21 @@ const spendingInsightsPrompt = ai.definePrompt({
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
     ],
   },
-  prompt: `## PERSONALITY
+  prompt: `## SYSTEM ROLE
+You are an expert financial AI. You must output valid JSON only.
+
+## PERSONALITY
 {{persona}}
 
-## ROLE
-You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance.
-
-## TASK
-Analyze the user's financial data. Generate 4-6 insightful, time-aware, and actionable points.
-
 ## CONTEXT
-- Today's Date: {{currentDate}} -> Use this date as context about what day of the month it is and practically give insights based on that. Yes major spends happen at the beginning of the month that doesn't mean that will continue and so on. So maintain that practicality in your analysis and insights.
-- Analysis Period: {{analysisPeriod}}
+- **Today's Date:** {{currentDate}} (Use this to provide time-aware, practical advice regarding the time of the month).
+- **Analysis Period:** {{analysisPeriod}}
 
-## OUTPUT FORMAT INSTRUCTIONS
-You must output a valid JSON object matching this structure:
-{
-  "insights": "1. [Insight One]\\n2. [Insight Two]\\n..."
-}
+## INSTRUCTIONS
+Analyze the provided JSON financial data. Generate 4-6 insightful, actionable points formatted as a numbered list.
+Use the Rupee symbol (₹) for amounts.
 
-Rules for the 'insights' string:
-- It must be a single string.
-- Use \\n for new lines between numbered items.
-- Use the Rupee symbol (₹).
-- Do NOT include markdown code blocks (like \`\`\`json) in the output, just the raw JSON object.
-
-## USER FINANCIAL DATA
+## DATA
 \`\`\`json
 {{jsonInput}}
 \`\`\`
@@ -107,21 +99,24 @@ const spendingInsightsFlow = ai.defineFlow(
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
     
-    // Added Date generation
-    const currentDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    // Date Logic
+    const currentDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
     const promptInput = {
         persona: selectedPersona,
         analysisPeriod: analysisPeriod,
-        currentDate: currentDate, // Added to prompt input
+        currentDate: currentDate,
         jsonInput: JSON.stringify(input, null, 2),
     };
 
+    // We use retryable generation to handle transient model glitches
     const { output } = await retryableAIGeneration(() => spendingInsightsPrompt(promptInput));
     
-    if (!output || !output.insights) {
-      console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));
-      throw new Error("The AI returned a response, but it was missing the insights field.");
+    // Strict validation
+    if (!output || typeof output !== 'object' || !output.insights) {
+      // If we are here, Genkit failed to parse JSON or model returned empty
+      console.error("AI Model Output Failure. Raw Output:", output);
+      throw new Error("The AI model failed to generate a valid JSON response containing insights.");
     }
     
     return output;
@@ -134,15 +129,17 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     const validatedInput = SpendingInsightsInputSchema.parse(input);
     return await spendingInsightsFlow(validatedInput);
   } catch (error: any) {
+    // Detailed error logging
     if (error instanceof z.ZodError) {
-      console.error("Input Zod validation error:", error.flatten());
-      return { insights: `Validation Error: ${error.message}` };
+      console.error("Input Zod Validation Error:", error.flatten());
+      return { insights: `Input Error: ${error.message}` };
     }
     
-    console.error("Error in getSpendingInsights:", error);
+    console.error("Critical Error in getSpendingInsights:", error);
     
+    // Friendly fallback
     return { 
-      insights: `I encountered an issue generating your insights using Gemini 2.5 Flash. Please try again. (Error: ${error.message})` 
+      insights: `I'm sorry, I couldn't analyze your spending at this moment. (System Error: ${error.message})` 
     };
   }
 }
