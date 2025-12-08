@@ -12,7 +12,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { getDaysInMonth, isPast } from 'date-fns';
 
 const SpendingInsightsInputSchema = z.object({
   currentMonthIncome: z.number().describe('The total income for the current month in INR.'),
@@ -31,18 +30,6 @@ const SpendingInsightsOutputSchema = z.object({
   insights: z.string().describe('AI-powered insights about spending habits, formatted as a numbered list.'),
 });
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
-
-// Define a tool for the AI to get financial context.
-const getFinancialContextTool = ai.defineTool(
-    {
-        name: 'getFinancialContext',
-        description: 'Retrieves the user\'s financial data for a specific period to analyze spending habits.',
-        inputSchema: SpendingInsightsInputSchema,
-        outputSchema: z.any(), // The AI will just use the input data it's given
-    },
-    async (input) => input // The tool simply returns the data it's given.
-);
-
 
 // Define personas for different insight types.
 const personas = {
@@ -76,21 +63,33 @@ ${selectedPersona}
 You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance. Your analysis must strictly differentiate between core expenses (Needs & Wants) and Investments.
 
 ## TASK
-Analyze the user's financial data for a given period by using the \`getFinancialContext\` tool. Based on the data you receive, provide 4-6 insightful, time-aware, and actionable points.
+Analyze the user's financial data for ${analysisPeriod}. Based on the data provided, generate 4-6 insightful, time-aware, and actionable points.
 
 ## RESPONSE GUIDELINES
 - Your entire response MUST be a single string containing a numbered list (1., 2., 3., etc.).
 - Use the Rupee symbol (₹) for all currency amounts.
 - Be direct, honest, and provide specific, actionable advice based on your persona.
 - Do NOT use markdown formatting.
+- Base your analysis strictly on the JSON data provided.
+`;
+
+    // Construct a clear prompt with all data embedded
+    const finalPrompt = `
+System Prompt:
+${systemPrompt}
+
+User Financial Data (JSON):
+\`\`\`json
+${JSON.stringify(input, null, 2)}
+\`\`\`
+
+Based on the system prompt and the user's financial data, generate the insights now.
 `;
 
     try {
       const llmResponse = await retryableAIGeneration(() => ai.generate({
         model: 'googleai/gemini-2.5-flash',
-        tools: [getFinancialContextTool],
-        prompt: `Generate financial insights for the user for the period: ${analysisPeriod}`,
-        system: systemPrompt,
+        prompt: finalPrompt,
         config: {
             temperature: 0.6,
             maxOutputTokens: 900,
@@ -101,12 +100,6 @@ Analyze the user's financial data for a given period by using the \`getFinancial
               { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
             ],
         },
-        toolRequest: {
-          tools: [{
-            tool: 'getFinancialContext',
-            input: input,
-          }]
-        }
       }));
 
       const responseText = llmResponse.text;
