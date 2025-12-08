@@ -31,7 +31,7 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
   expenseCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
-  paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
+  paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
 });
 // Type exported for the wrapper function
@@ -93,6 +93,7 @@ const parseTransactionsPrompt = ai.definePrompt({
   name: 'parseTransactionsPrompt',
   input: { schema: ParseTransactionTextInputSchemaInternal },
   output: { schema: ParseTransactionTextOutputSchemaInternal },
+  model: 'googleai/gemini-2.5-flash',
   // Model configuration for potentially faster responses
   config: {
     temperature: 0.2, 

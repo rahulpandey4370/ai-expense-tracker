@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview Provides comparative analysis of expenses between different months using Gemini-2.0-flash.
+ * @fileOverview Provides comparative analysis of expenses between different months using Gemini.
  *
  * - comparativeExpenseAnalysis - A function that handles the comparative expense analysis process.
  * - ComparativeExpenseAnalysisInput - The input type for the comparativeExpenseAnalysis function.
@@ -38,6 +38,7 @@ const prompt = ai.definePrompt({
   name: 'comparativeExpenseAnalysisPrompt',
   input: {schema: ComparativeExpenseAnalysisInputSchema},
   output: {schema: ComparativeExpenseAnalysisOutputSchema},
+  model: 'googleai/gemini-2.5-flash',
   prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
 
 Current Period: {{currentMonth}}

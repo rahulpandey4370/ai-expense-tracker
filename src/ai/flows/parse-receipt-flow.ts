@@ -76,6 +76,7 @@ const parseReceiptImagePrompt = ai.definePrompt({
   name: 'parseReceiptImagePrompt',
   input: { schema: ParseReceiptImageInputSchemaInternal },
   output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }) }, // Ensure output schema matches expected
+  model: 'googleai/gemini-2.5-flash',
   prompt: `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
 Your task is to extract transaction details from the provided receipt image. Assume receipts are for expenses.
 The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative.
