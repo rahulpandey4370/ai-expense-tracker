@@ -56,7 +56,8 @@ const spendingInsightsFlow = ai.defineFlow(
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-    const systemPrompt = `## PERSONALITY
+    // Combine system and user prompts into a single string
+    const fullPrompt = `## PERSONALITY
 ${selectedPersona}
 
 ## ROLE
@@ -71,11 +72,9 @@ Analyze the user's financial data for ${analysisPeriod}. Based on the data provi
 - Be direct, honest, and provide specific, actionable advice based on your persona.
 - Do NOT use markdown formatting.
 - Base your analysis strictly on the JSON data provided.
-`;
 
-    // Construct a clear user prompt with all data embedded in a JSON block
-    const userPrompt = `
-Here is my financial data. Please provide the analysis.
+## USER FINANCIAL DATA
+Here is the financial data for analysis. Please provide the insights based on this.
 \`\`\`json
 ${JSON.stringify(input, null, 2)}
 \`\`\`
@@ -84,8 +83,7 @@ ${JSON.stringify(input, null, 2)}
     try {
       const llmResponse = await retryableAIGeneration(() => ai.generate({
         model: 'googleai/gemini-2.5-flash',
-        prompt: userPrompt,
-        system: systemPrompt,
+        prompt: fullPrompt, // Use the combined prompt
         config: {
             temperature: 0.6,
             maxOutputTokens: 900,
@@ -108,6 +106,7 @@ ${JSON.stringify(input, null, 2)}
 
     } catch (error: any) {
         console.error("Error in spendingInsightsFlow during AI generation:", error);
+        // This makes sure the error message from the AI (like the system role error) is passed to the frontend.
         return { insights: `I'm sorry, an unexpected error occurred while generating insights: ${error.message || 'Unknown error'}` };
     }
   }
