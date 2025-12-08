@@ -48,8 +48,8 @@ const spendingInsightsPrompt = ai.definePrompt({
     })
   },
   output: { schema: SpendingInsightsOutputSchema },
+  model: 'googleai/gemini-2.5-flash',
   config: {
-    model: 'googleai/gemini-2.5-flash',
     temperature: 0.6,
     maxOutputTokens: 900,
     safetySettings: [
@@ -82,29 +82,47 @@ Analyze the user's financial data for {{{analysisPeriod}}}. Based on the data pr
 `
 });
 
+const spendingInsightsFlow = ai.defineFlow(
+  {
+    name: 'spendingInsightsFlow',
+    inputSchema: SpendingInsightsInputSchema,
+    outputSchema: SpendingInsightsOutputSchema,
+  },
+  async (input) => {
+    const selectedPersona = personas[input.insightType || 'default'];
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
-  const selectedPersona = personas[input.insightType || 'default'];
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
-
-  try {
     const promptInput = {
         persona: selectedPersona,
         analysisPeriod: analysisPeriod,
         jsonInput: JSON.stringify(input, null, 2),
     };
-    const { output } = await retryableAIGeneration(() => spendingInsightsPrompt(promptInput));
 
+    const { output } = await retryableAIGeneration(() => spendingInsightsPrompt(promptInput));
+    
     if (!output?.insights) {
       console.error("AI model returned no or invalid insights. Full output:", JSON.stringify(output, null, 2));
-      return { insights: "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty or invalid response." };
+      throw new Error("The AI returned an empty or invalid response.");
     }
     
     return output;
+  }
+);
+
+
+export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
+  try {
+    // Validate input against Zod schema before calling the flow
+    const validatedInput = SpendingInsightsInputSchema.parse(input);
+    return await spendingInsightsFlow(validatedInput);
   } catch (error: any) {
-      console.error("Error in spendingInsightsFlow during AI generation:", error);
-      // This makes sure a more descriptive error message from the AI (like API key issues) is passed to the frontend.
-      return { insights: `I'm sorry, an unexpected error occurred while generating insights: ${error.message || 'Unknown error'}` };
+    if (error instanceof z.ZodError) {
+      console.error("Zod validation error in getSpendingInsights:", error.flatten());
+      return { insights: `There was a validation error with the input data: ${error.message}` };
+    }
+    console.error("Error in getSpendingInsights wrapper during AI generation:", error);
+    // This makes sure a more descriptive error message from the AI is passed to the frontend.
+    return { insights: `I'm sorry, an unexpected error occurred while generating insights: ${error.message || 'Unknown error'}` };
   }
 }
