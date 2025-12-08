@@ -145,7 +145,7 @@ Generate exactly 4-6 numbered insights based on this financial model for **${mon
 
     const llmResponse = await retryableAIGeneration(() => ai.generate({
       prompt: systemPrompt,
-      model: 'googleai/gemini-2.0-flash',
+      model: 'googleai/gemini-2.5-flash',
       config: {
         temperature: 0.6,
         maxOutputTokens: 900, 

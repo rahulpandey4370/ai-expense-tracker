@@ -255,7 +255,7 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     const llmResponse = await retryableAIGeneration(() => ai.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-      model: 'googleai/gemini-2.0-flash',
+      model: 'googleai/gemini-2.5-flash',
       config: {
         temperature: 0.1, // Lower temperature for more consistent and accurate responses
         maxOutputTokens: 800, // Increased token limit for detailed responses
