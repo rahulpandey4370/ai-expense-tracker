@@ -94,17 +94,11 @@ export function SpendingInsights({
   }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, lastMonthSpendingByCategory, selectedMonth, selectedYear]);
   
   useEffect(() => {
-    // Automatically generate insights if there's spending data for the selected month
-    if (currentMonthTransactions.length > 0 && currentMonthCoreSpending > 0) {
-      generateInsights(currentInsightType);
-    } else {
-      // Clear insights if there's no data
-      setInsights(null);
-      setError(null);
-      setIsLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthCoreSpending, selectedMonth, selectedYear]); // Re-run when spending or selected period changes
+    // Clear insights when the month/year changes to prompt user to regenerate
+    setInsights(null);
+    setError(null);
+    setIsLoading(false);
+  }, [selectedMonth, selectedYear]);
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -131,8 +125,13 @@ export function SpendingInsights({
                 <p className="text-foreground">{insights}</p>
               </div>
             )}
-            {!insights && !isLoading && !error && (currentMonthTransactions.length === 0 || currentMonthCoreSpending === 0) && (
-              <p className="text-sm text-muted-foreground p-3 text-center">No core spending data for {selectedMonthName} {selectedYear} to generate insights.</p>
+            {!insights && !isLoading && !error && (
+              <p className="text-sm text-muted-foreground p-3 text-center">
+                {currentMonthCoreSpending > 0 
+                  ? "Select an analysis type below to generate insights." 
+                  : `No core spending data for ${selectedMonthName} ${selectedYear} to generate insights.`
+                }
+              </p>
             )}
           </ScrollArea>
           <div className="flex flex-wrap gap-2 pt-2">
