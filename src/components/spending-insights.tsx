@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lightbulb, Zap, LineChart, Target, Handshake } from "lucide-react";
+import { Lightbulb, Zap, LineChart, Target, Handshake, CheckCheck, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
 import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spending-insights";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +31,28 @@ const cardVariants = {
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+
+const InsightPoint = ({ text }: { text: string }) => {
+  const getIcon = () => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('warning') || lowerText.includes('risk of')) return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+    if (lowerText.includes('investment') || lowerText.includes('investing')) return <TrendingUp className="h-5 w-5 text-blue-500" />;
+    if (lowerText.includes('shopping')) return <ShoppingCart className="h-5 w-5 text-purple-500" />;
+    if (lowerText.includes('discretionary') || lowerText.includes('decent start')) return <CheckCheck className="h-5 w-5 text-green-500" />;
+    return <Lightbulb className="h-5 w-5 text-accent" />;
+  };
+
+  // Remove the leading number and period (e.g., "1. ")
+  const formattedText = text.replace(/^\d+\.\s*/, '');
+
+  return (
+    <li className="flex items-start gap-3">
+      <div className="flex-shrink-0 mt-1">{getIcon()}</div>
+      <p className="flex-1 text-foreground/90">{formattedText}</p>
+    </li>
+  );
+};
+
 
 export function SpendingInsights({
   currentMonthTransactions,
@@ -84,19 +106,27 @@ export function SpendingInsights({
 
     try {
       const result = await getSpendingInsights(input);
-       if (result.insights.includes("The AI returned an empty response") || result.insights.includes("error occurred")) {
-        setError(result.insights);
+       if (result.insights.includes("The AI returned an empty response") || result.insights.includes("error occurred") || result.insights.trim() === '') {
+        const errorMessage = result.insights.includes("The AI returned an empty response") 
+            ? "I'm sorry, I couldn't generate insights for the current data. The AI returned an empty response."
+            : `I'm sorry, an unexpected error occurred while generating insights: ${result.insights}`;
+        setError(errorMessage);
         setInsights(null);
       } else {
         setInsights(result.insights);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error generating insights:", err);
-      setError("Failed to generate insights. Please try again.");
+      setError(`Failed to generate insights. ${err.message || 'Please try again.'}`);
     } finally {
       setIsLoading(false);
     }
   }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, lastMonthSpendingByCategory, selectedMonth, selectedYear]);
+  
+  const parsedInsights = useMemo(() => {
+    if (!insights) return [];
+    return insights.split('\n').map(line => line.trim()).filter(line => line.length > 0 && /^\d+\./.test(line));
+  }, [insights]);
   
   useEffect(() => {
     // Clear insights when the month/year changes to prompt user to regenerate
@@ -125,12 +155,14 @@ export function SpendingInsights({
               </div>
             )}
             {error && <p className="text-sm text-destructive">{error}</p>}
-            {insights && !isLoading && (
-              <div className="text-sm space-y-2 p-3 bg-accent/10 border border-accent/30 rounded-md whitespace-pre-wrap">
-                <p className="text-foreground">{insights}</p>
-              </div>
+            {parsedInsights.length > 0 && !isLoading && (
+              <ul className="text-sm space-y-4 p-3 bg-accent/5 border border-accent/20 rounded-md">
+                {parsedInsights.map((insight, index) => (
+                  <InsightPoint key={index} text={insight} />
+                ))}
+              </ul>
             )}
-            {!insights && !isLoading && !error && (
+            {parsedInsights.length === 0 && !isLoading && !error && (
               <p className="text-sm text-muted-foreground p-3 text-center">
                 {currentMonthCoreSpending > 0 
                   ? "Select an analysis type below to generate insights." 
