@@ -41,8 +41,7 @@ interface SpendingInsightsProps {
 
 type InsightType = "default" | "cost_cutter" | "growth_investor";
 
-interface FormattedInsight {
-  type: "positive" | "improvement" | "takeaway";
+interface ParsedInsight {
   text: string;
 }
 
@@ -68,6 +67,36 @@ const carouselVariants = {
 
 const glowClass =
   "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
+
+/**
+ * Parse the numbered insights string:
+ * "1. Foo\n2. Bar\n3. Baz"
+ *  → ["Foo", "Bar", "Baz"]
+ */
+function parseInsightsString(raw: string | undefined | null): ParsedInsight[] {
+  if (!raw) return [];
+
+  const text = raw.trim();
+  if (!text) return [];
+
+  const results: ParsedInsight[] = [];
+  const regex = /\d+\.\s+([\s\S]*?)(?=(?:\n\d+\.\s)|$)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const insightText = match[1].trim();
+    if (insightText) {
+      results.push({ text: insightText });
+    }
+  }
+
+  // Fallback: if regex failed (no numbering), treat whole thing as one insight
+  if (results.length === 0) {
+    results.push({ text });
+  }
+
+  return results;
+}
 
 export function SpendingInsights({
   currentMonthTransactions,
@@ -134,14 +163,7 @@ export function SpendingInsights({
       try {
         const result = await getSpendingInsights(input);
 
-        const hasAnyInsights =
-          (result.positiveObservations &&
-            result.positiveObservations.length > 0) ||
-          (result.areasForImprovement &&
-            result.areasForImprovement.length > 0) ||
-          !!result.keyTakeaway;
-
-        if (!hasAnyInsights) {
+        if (!result.insights || result.insights.trim().length === 0) {
           const errorMessage =
             "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty response.";
           setError(errorMessage);
@@ -171,40 +193,10 @@ export function SpendingInsights({
     ]
   );
 
-  const allInsights: FormattedInsight[] = useMemo(() => {
-    if (!insights) return [];
-    const combined: FormattedInsight[] = [];
-
-    if (insights.positiveObservations && insights.positiveObservations.length) {
-      combined.push(
-        ...insights.positiveObservations.map((text) => ({
-          type: "positive" as const,
-          text,
-        }))
-      );
-    }
-
-    if (
-      insights.areasForImprovement &&
-      insights.areasForImprovement.length
-    ) {
-      combined.push(
-        ...insights.areasForImprovement.map((text) => ({
-          type: "improvement" as const,
-          text,
-        }))
-      );
-    }
-
-    if (insights.keyTakeaway && insights.keyTakeaway.trim().length > 0) {
-      combined.push({
-        type: "takeaway" as const,
-        text: insights.keyTakeaway,
-      });
-    }
-
-    return combined;
-  }, [insights]);
+  const allInsights: ParsedInsight[] = useMemo(
+    () => parseInsightsString(insights?.insights),
+    [insights]
+  );
 
   const paginate = (newDirection: number) => {
     if (!allInsights.length) return;
@@ -225,44 +217,15 @@ export function SpendingInsights({
     setIsLoading(false);
   }, [selectedMonth, selectedYear]);
 
-  const getBadgeLabel = (type: FormattedInsight["type"]) => {
-    if (type === "positive") return "What's Going Well";
-    if (type === "improvement") return "What to Improve";
-    return "Key Takeaway";
-  };
+  // Single-style badge / colors (no positive/improvement distinction now)
+  const badgeClasses =
+    "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
 
-  const getBadgeClasses = (type: FormattedInsight["type"]) =>
-    cn(
-      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-      type === "positive" &&
-        "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-      type === "improvement" &&
-        "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-      type === "takeaway" &&
-        "bg-primary/10 text-primary-foreground/90 dark:bg-primary/20"
-    );
+  const accentBarClasses =
+    "w-1 rounded-full h-full bg-primary shadow-[0_0_12px_rgba(59,130,246,0.6)]";
 
-  const getAccentBarClasses = (type: FormattedInsight["type"]) =>
-    cn(
-      "w-1 rounded-full h-full",
-      type === "positive" &&
-        "bg-emerald-500/80 dark:bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.5)]",
-      type === "improvement" &&
-        "bg-amber-500/80 dark:bg-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]",
-      type === "takeaway" &&
-        "bg-primary shadow-[0_0_12px_rgba(59,130,246,0.6)]"
-    );
-
-  const getBackgroundTintClasses = (type: FormattedInsight["type"]) =>
-    cn(
-      "rounded-xl border px-4 py-3 text-left",
-      type === "positive" &&
-        "bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-100/60 dark:border-emerald-800/60",
-      type === "improvement" &&
-        "bg-amber-50/70 dark:bg-amber-950/40 border-amber-100/60 dark:border-amber-800/60",
-      type === "takeaway" &&
-        "bg-primary/5 dark:bg-primary/15 border-primary/20"
-    );
+  const backgroundTintClasses =
+    "rounded-xl border px-4 py-3 text-left bg-primary/5 dark:bg-primary/15 border-primary/20";
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
@@ -322,31 +285,17 @@ export function SpendingInsights({
                       <div className="w-full max-w-xl space-y-3">
                         {/* Label chip */}
                         <div className="flex justify-center">
-                          <span
-                            className={getBadgeClasses(
-                              currentFormattedInsight.type
-                            )}
-                          >
-                            {getBadgeLabel(currentFormattedInsight.type)}
-                          </span>
+                          <span className={badgeClasses}>Insight</span>
                         </div>
 
                         {/* Colored block + text */}
                         <div className="flex gap-3 items-stretch">
                           {/* Vertical color block */}
-                          <div
-                            className={getAccentBarClasses(
-                              currentFormattedInsight.type
-                            )}
-                          />
+                          <div className={accentBarClasses} />
 
                           {/* Content inside tinted card */}
-                          <div
-                            className={getBackgroundTintClasses(
-                              currentFormattedInsight.type
-                            )}
-                          >
-                            <p className="text-sm text-foreground/90 leading-relaxed">
+                          <div className={backgroundTintClasses}>
+                            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
                               {currentFormattedInsight.text}
                             </p>
                           </div>
