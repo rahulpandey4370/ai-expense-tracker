@@ -26,9 +26,9 @@ export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
 
 // --- Output Schema ---
 const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month."),
+  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month. Can be an empty array."),
+  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk. Can be an empty array."),
+  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month. Can be an empty string."),
 });
 
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
@@ -80,7 +80,7 @@ You are an Expert Personal Finance Analyst for FinWise AI, specializing in India
 Analyze the user's financial data for {{analysisPeriod}}. Generate a structured analysis with 2-3 positive points, 2-3 areas for improvement, and one key takeaway. Be specific and use the Rupee symbol (₹).
 
 ## OUTPUT FORMAT INSTRUCTIONS
-You must output a valid JSON object matching this structure:
+You must output a valid JSON object matching this structure. If you have no insights for a specific section, you MUST return an empty array (for 'positiveObservations' or 'areasForImprovement') or an empty string (for 'keyTakeaway').
 {
   "positiveObservations": ["Observation 1 text...", "Observation 2 text..."],
   "areasForImprovement": ["Improvement 1 text...", "Improvement 2 text..."],
@@ -148,8 +148,6 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     if (error instanceof z.ZodError) {
       console.error("Input Zod validation error:", error.flatten());
       return { 
-          positiveObservations: [], 
-          areasForImprovement: [],
           keyTakeaway: `Validation Error: ${error.message}` 
         };
     }
@@ -157,8 +155,6 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     console.error("Error in getSpendingInsights:", error);
     
     return { 
-        positiveObservations: [],
-        areasForImprovement: [],
         keyTakeaway: `I'm sorry, an unexpected error occurred while generating insights: ${error.message}` 
     };
   }

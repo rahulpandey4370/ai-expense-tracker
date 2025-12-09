@@ -5,13 +5,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lightbulb, Zap, LineChart, Target, Handshake, AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { Lightbulb, TrendingDown, TrendingUp, Handshake, AlertTriangle } from "lucide-react";
 import { getSpendingInsights, type SpendingInsightsInput, type SpendingInsightsOutput } from "@/ai/flows/spending-insights";
 import type { AppTransaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
-import { Separator } from './ui/separator';
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
@@ -101,8 +100,8 @@ export function SpendingInsights({
 
     try {
       const result = await getSpendingInsights(input);
-       if (!result.keyTakeaway && result.positiveObservations.length === 0 && result.areasForImprovement.length === 0) {
-        const errorMessage = "I'm sorry, I couldn't generate insights for the current data. The AI returned an empty response.";
+       if (!result.keyTakeaway && (!result.positiveObservations || result.positiveObservations.length === 0) && (!result.areasForImprovement || result.areasForImprovement.length === 0)) {
+        const errorMessage = "I'm sorry, I encountered an issue generating spending insights. The AI returned an empty response.";
         setError(errorMessage);
         setInsights(null);
       } else {
@@ -137,16 +136,23 @@ export function SpendingInsights({
               <div className="space-y-4">
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-full" />
-                <Separator />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-4/5" />
+                 <div className="pt-4 space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
               </div>
             )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && !isLoading && (
+              <div className="text-sm text-destructive flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5" />
+                <p>{error}</p>
+              </div>
+            )}
             
-            {insights && !isLoading && (
+            {insights && !isLoading && !error && (
               <div className="text-sm space-y-4">
-                {insights.positiveObservations.length > 0 && (
+                {insights.positiveObservations && insights.positiveObservations.length > 0 && (
                   <div>
                     <h3 className="font-semibold text-green-600 dark:text-green-400 mb-2">What's Going Well</h3>
                     <ul className="space-y-2">
@@ -154,7 +160,7 @@ export function SpendingInsights({
                     </ul>
                   </div>
                 )}
-                {insights.areasForImprovement.length > 0 && (
+                {insights.areasForImprovement && insights.areasForImprovement.length > 0 && (
                   <div>
                     <h3 className="font-semibold text-yellow-600 dark:text-yellow-400 mb-2">What to Improve</h3>
                     <ul className="space-y-2">
