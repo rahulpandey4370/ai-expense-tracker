@@ -42,10 +42,11 @@ const spendingInsightsPrompt = ai.definePrompt({
   name: 'spendingInsightsPrompt',
   input: {
     schema: z.object({
-        persona: z.string(),
-        analysisPeriod: z.string(),
-        jsonInput: z.string(), 
-    })
+      persona: z.string(),
+      analysisPeriod: z.string(),
+      currentDate: z.string(),  // 👈 NEW: dynamically passed in
+      jsonInput: z.string(),
+    }),
   },
   output: { 
     schema: SpendingInsightsOutputSchema, 
@@ -56,10 +57,10 @@ const spendingInsightsPrompt = ai.definePrompt({
     temperature: 0.6,
     maxOutputTokens: 2000, // Increased slightly as 2.5 supports larger context
     safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
     ],
   },
   prompt: `## PERSONALITY
@@ -68,8 +69,21 @@ const spendingInsightsPrompt = ai.definePrompt({
 ## ROLE
 You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance.
 
+## CONTEXT
+- **Analysis Period:** {{analysisPeriod}}
+- **Today's Date:** {{currentDate}} (Use this to provide time-aware, practical advice regarding the time of the month).
+
+Use {{currentDate}} to understand *where* in the month the user currently is, and adapt your tone and suggestions accordingly. For example:
+- If it is early in the month and some big fixed expenses like rent or EMIs have *already* gone out, do **not** assume that the current pace of spending will continue linearly for the whole month.
+- Some expenses (like rent, EMIs, insurance premiums, school fees) typically occur just once, often at the start of the month. Do **not** project these one-time amounts as if they will repeat every week or for the rest of the month.
+- Avoid naive projections like "at this pace you will spend ₹X by month-end" when the pattern of expenses is clearly skewed toward the start of the month.
+
 ## TASK
-Analyze the user's financial data for {{analysisPeriod}}. Generate 4-6 insightful, time-aware, and actionable points.
+Analyze the user's financial data for {{analysisPeriod}}. Generate 4–6 insightful, time-aware, and actionable points.
+Your insights should:
+- Be consistent with today's date: {{currentDate}}.
+- Be realistic about how monthly expenses actually occur (e.g., big fixed costs at the start, variable expenses spread through the month).
+- Focus on Indian urban personal finance and practical next steps.
 
 ## OUTPUT FORMAT INSTRUCTIONS
 You must output a valid JSON object matching this structure:
@@ -98,18 +112,33 @@ const spendingInsightsFlow = ai.defineFlow(
     outputSchema: SpendingInsightsOutputSchema,
   },
   async (input) => {
-    const selectedPersona = personas[input.insightType || 'default'] || personas['default'];
+    const selectedPersona =
+      personas[input.insightType || 'default'] || personas['default'];
     
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
+    // Dynamically compute today's date in India time (Bangalore)
+    const currentDate = new Intl.DateTimeFormat('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date());
+
     const promptInput = {
-        persona: selectedPersona,
-        analysisPeriod: analysisPeriod,
-        jsonInput: JSON.stringify(input, null, 2),
+      persona: selectedPersona,
+      analysisPeriod,
+      currentDate, // 👈 pass to prompt
+      jsonInput: JSON.stringify(input, null, 2),
     };
 
-    const { output } = await retryableAIGeneration(() => spendingInsightsPrompt(promptInput));
+    const { output } = await retryableAIGeneration(() =>
+      spendingInsightsPrompt(promptInput)
+    );
     
     if (!output || !output.insights) {
       console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));
