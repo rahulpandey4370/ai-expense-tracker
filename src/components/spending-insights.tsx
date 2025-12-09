@@ -334,9 +334,11 @@ export function SpendingInsights({
                         {/* Colored block + text */}
                         <div className="flex gap-3 items-stretch">
                           {/* Vertical color block */}
-                          <div className={getAccentBarClasses(
-                            currentFormattedInsight.type
-                          )} />
+                          <div
+                            className={getAccentBarClasses(
+                              currentFormattedInsight.type
+                            )}
+                          />
 
                           {/* Content inside tinted card */}
                           <div
@@ -353,27 +355,25 @@ export function SpendingInsights({
                     </motion.div>
                   </AnimatePresence>
 
-                  {/* Carousel controls */}
-                  {allInsights.length > 1 && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute left-0 top-1/2 -translate-y-1/2"
-                        onClick={() => paginate(-1)}
-                      >
-                        <ChevronLeft className="h-6 w-6" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-1/2 -translate-y-1/2"
-                        onClick={() => paginate(1)}
-                      >
-                        <ChevronRight className="h-6 w-6" />
-                      </Button>
-                    </>
-                  )}
+                  {/* Carousel controls – always visible, disabled if only one */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-0 top-1/2 -translate-y-1/2"
+                    onClick={() => paginate(-1)}
+                    disabled={allInsights.length <= 1}
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-1/2 -translate-y-1/2"
+                    onClick={() => paginate(1)}
+                    disabled={allInsights.length <= 1}
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </Button>
                 </>
               )}
 
@@ -390,9 +390,11 @@ export function SpendingInsights({
           </div>
 
           {/* Carousel counter */}
-          {allInsights.length > 1 && (
+          {allInsights.length > 0 && (
             <div className="text-center text-xs text-muted-foreground pt-2">
-              {currentInsightIndex + 1} of {allInsights.length}
+              {allInsights.length > 1
+                ? `${currentInsightIndex + 1} of ${allInsights.length}`
+                : "1 of 1 insight"}
             </div>
           )}
 

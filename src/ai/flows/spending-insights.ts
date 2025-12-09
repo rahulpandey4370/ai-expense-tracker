@@ -113,27 +113,24 @@ Analyze the user's financial data for {{analysisPeriod}}. Generate a structured 
 - **2–3 Areas for Improvement** (specific, actionable changes or risks),
 - **1 Key Takeaway** (the single most important insight the user should remember).
 
+You MUST:
+- Return **at least 2 items** in "positiveObservations" when there is any core spending data.
+- Return **at least 2 items** in "areasForImprovement" when there is any core spending data.
+- If you feel there is "nothing to say", give practical, generalized but relevant advice based on the patterns you see (do NOT omit items or leave the arrays with fewer than 2 elements when spending exists).
+
 Be concrete and use the Rupee symbol (₹). Focus on insights that are genuinely useful and sometimes non-obvious (things the user might not notice on their own).
 
 ## OUTPUT FORMAT INSTRUCTIONS
 You must output a valid JSON object matching this structure.  
-If you have no insights for a specific section, you MUST still include the key for that section and:
+If you have no insights for a specific section (only if there is truly no data), you MUST still include the key for that section and:
 - Use an empty array for "positiveObservations" or "areasForImprovement": []
 - Use an empty string for "keyTakeaway": ""
 
-Example valid structures:
+Example valid structure:
 {
   "positiveObservations": ["Observation 1 text...", "Observation 2 text..."],
   "areasForImprovement": ["Improvement 1 text...", "Improvement 2 text..."],
   "keyTakeaway": "The single most important takeaway for the user."
-}
-
-or, if you truly have nothing meaningful for a section:
-
-{
-  "positiveObservations": [],
-  "areasForImprovement": ["Improvement 1 text..."],
-  "keyTakeaway": ""
 }
 
 Never omit these three keys.
@@ -193,7 +190,12 @@ const spendingInsightsFlow = ai.defineFlow(
       throw new Error('The AI returned a response, but it was empty or malformed.');
     }
 
-    return result.output;
+    // Normalize: always return arrays/strings so the UI can safely consume
+    return {
+      positiveObservations: result.output.positiveObservations ?? [],
+      areasForImprovement: result.output.areasForImprovement ?? [],
+      keyTakeaway: result.output.keyTakeaway ?? '',
+    };
   }
 );
 
@@ -206,6 +208,8 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     if (error instanceof z.ZodError) {
       console.error('Input Zod validation error:', error.flatten());
       return {
+        positiveObservations: [],
+        areasForImprovement: [],
         keyTakeaway: `Validation Error: ${error.message}`,
       };
     }
@@ -213,6 +217,8 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     console.error('Error in getSpendingInsights:', error);
 
     return {
+      positiveObservations: [],
+      areasForImprovement: [],
       keyTakeaway: `I'm sorry, an unexpected error occurred while generating insights: ${error.message}`,
     };
   }
