@@ -12,7 +12,9 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 const SpendingInsightsInputSchema = z.object({
   currentMonthIncome: z.number().describe('The total income for the current month in INR.'),
   currentMonthCoreSpending: z.number().describe('The total core spending (Needs + Wants) for the current month in INR.'),
-  currentMonthInvestmentSpending: z.number().describe('The total amount actively invested this month (e.g., stocks, mutual funds) in INR.'),
+  currentMonthInvestmentSpending: z
+    .number()
+    .describe('The total amount actively invested this month (e.g., stocks, mutual funds) in INR.'),
   lastMonthCoreSpending: z.number().describe('The total core spending for the last month in INR.'),
   spendingByCategory: z
     .record(z.number())
@@ -39,11 +41,11 @@ const SpendingInsightsOutputSchema = z.object({
   positiveObservations: z
     .array(z.string())
     .optional()
-    .describe('2–4 positive spending habits or trends observed this month.'),
+    .describe('3 positive spending habits or trends observed this month.'),
   areasForImprovement: z
     .array(z.string())
     .optional()
-    .describe('2–4 specific, actionable areas where spending could be optimized or is a potential risk.'),
+    .describe('3 specific, actionable areas where spending could be optimized or is a potential risk.'),
   keyTakeaway: z
     .string()
     .optional()
@@ -78,7 +80,7 @@ const spendingInsightsPrompt = ai.definePrompt({
   model: 'googleai/gemini-2.5-flash',
   config: {
     temperature: 0.6,
-    maxOutputTokens: 2500, // ⬅️ increased
+    maxOutputTokens: 2500, // bumped up
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -95,31 +97,43 @@ You are an Expert Personal Finance Analyst for FinWise AI, specializing in India
 ## CONTEXT
 - **Analysis Period:** {{analysisPeriod}}
 - **Today's Date:** {{currentDate}} (Use this to provide time-aware, practical advice regarding the time of the month).
-- Many big fixed expenses (like rent, home loan EMIs, personal loan EMIs, insurance premiums, school fees, etc.) typically occur **once a month**, often at the **start of the month**.
+- Many big fixed expenses (rent, home loan EMIs, personal loan EMIs, insurance, school fees, etc.) typically occur **once a month**, often at the **start of the month**.
 - **Do NOT** naively project the current spending rate linearly for the whole month, especially if:
   - It is early in the month and major fixed expenses have already gone out, or
   - The pattern clearly shows front-loaded or one-time expenses.
 - Instead, reason about *how* and *when* expenses usually occur during a month, and factor that into your insights.
-- The full user data is provided in "jsonInput" as a JSON object. Example keys you can use:
-  - currentMonthCoreSpending
-  - lastMonthCoreSpending
-  - spendingByCategory
-  - lastMonthSpendingByCategory
-  - currentMonthInvestmentSpending
-  - currentMonthIncome
+
+The full user data is in **jsonInput** as a JSON object. Important keys:
+- \`currentMonthCoreSpending\` (number)
+- \`lastMonthCoreSpending\` (number)
+- \`spendingByCategory\` (object: category -> current month spend)
+- \`lastMonthSpendingByCategory\` (object: category -> last month spend)
+- \`currentMonthIncome\` (number)
+- \`currentMonthInvestmentSpending\` (number)
+
+## HARD CONSTRAINTS ON FACTS
+When you talk about numbers or comparisons:
+
+1. **You must only use values that actually exist in jsonInput**, or basic arithmetic directly on them
+   (e.g., difference or percentage between two known values).
+2. **Never invent**:
+   - Day ranges (e.g., "first 9 days of the month").
+   - Extra amounts not present in jsonInput.
+   - Extra dates, periods, or counts of transactions.
+3. If you are unsure of an exact number, speak **qualitatively**, e.g.:
+   - "lower than last month"
+   - "a meaningful share of your income"
+   rather than inventing a Rupee amount.
 
 ## TASK
 1. Parse **jsonInput** and understand the user's situation.
-2. If \`currentMonthCoreSpending > 0\` OR \`lastMonthCoreSpending > 0\` (from jsonInput):
+2. If \`currentMonthCoreSpending > 0\` OR \`lastMonthCoreSpending > 0\`:
    - You **MUST** return:
-     - **positiveObservations**: an array with **2 to 4** items.
-     - **areasForImprovement**: an array with **2 to 4** items.
+     - **positiveObservations**: an array with **exactly 3** items.
+     - **areasForImprovement**: an array with **exactly 3** items.
      - **keyTakeaway**: a **non-empty string**.
-   - Each item in the arrays is **one complete insight**, written as a sentence or two. No numbering, no bullet prefixes.
-   - If the data is limited, you still MUST produce 2–4 insights in each array by combining:
-     - What you can infer from the actual numbers, and
-     - Concrete, best-practice advice clearly tied back to the data pattern.
-   - **Never** return empty arrays or an empty keyTakeaway in this case.
+   - Each item in the arrays is **one complete insight**, written as 1–3 sentences. No numbering or bullet prefixes.
+   - Insights should be specific, refer to categories/amounts from the data where useful, and feel like something a human advisor would actually say.
 3. Only if \`currentMonthCoreSpending === 0\` AND \`lastMonthCoreSpending === 0\`:
    - You may return:
      - "positiveObservations": []
@@ -128,10 +142,10 @@ You are an Expert Personal Finance Analyst for FinWise AI, specializing in India
    - This is the **only** case where arrays can be empty and the takeaway can be empty.
 
 Focus on:
-- Hidden trends (e.g., lifestyle creep, category drift, "silent" categories growing over time).
-- Risky patterns (e.g., EMI-heavy profile, low savings/investment rate, recurring small leaks).
-- Time-of-month nuances (early big expenses already done vs upcoming predictable spikes).
-- Specific, Rupee-denominated (₹) suggestions and thresholds.
+- Hidden trends (lifestyle creep, category drift, "silent" categories growing).
+- Risks (heavy EMIs vs income, low savings/investment, recurring small leaks).
+- Time-of-month nuance (early big expenses vs upcoming predictable spikes).
+- Concrete, Rupee-aware (₹) suggestions tied back to the data.
 
 ## OUTPUT FORMAT (STRICT)
 You must output **only** a valid JSON object with exactly these three top-level keys:
@@ -139,25 +153,27 @@ You must output **only** a valid JSON object with exactly these three top-level 
 - "areasForImprovement": string[]
 - "keyTakeaway": string
 
-Example shape (values are just examples):
+Example shape (values are examples, do NOT copy them literally):
 
 {
   "positiveObservations": [
-    "Your core spending for {{analysisPeriod}} is ₹X lower than last month, showing better control over discretionary expenses.",
-    "You have consistently kept essential categories like rent and utilities stable, avoiding lifestyle creep."
+    "Your core spending for {{analysisPeriod}} is lower than last month, indicating improved discipline around discretionary categories.",
+    "Spending on essential categories like rent and utilities appears stable, which helps prevent lifestyle creep.",
+    "Your current month investments show that you are prioritising future goals over short-term consumption."
   ],
   "areasForImprovement": [
-    "Spending on 'Food Delivery' is higher than last month; consider setting a weekly cap and shifting some orders to home-cooked meals.",
-    "Shopping-related expenses have spiked early in the month; plan remaining festive/holiday expenses to avoid end-of-month cash stress."
+    "Spending on 'Food Delivery' is elevated; consider a weekly budget cap and shifting some meals to home-cooked options.",
+    "Shopping-related expenses are front-loaded; plan remaining purchases to avoid end-of-month cash stress.",
+    "If your surplus after core spending is healthy, consider increasing SIPs or other investments by at least a small fixed amount."
   ],
-  "keyTakeaway": "You are moving in the right direction on core spending, but tightening just 1–2 discretionary categories and slightly increasing investments could significantly improve your financial position this month."
+  "keyTakeaway": "You are broadly on the right track, but tightening 1–2 discretionary categories and slightly increasing investments could significantly improve your financial position this month."
 }
 
 Rules:
 - **No markdown**, no explanation, no commentary before or after.
 - Do **not** wrap the JSON in backticks.
 - Do **not** include any extra keys or fields.
-- Do **not** number the insights inside the strings (no "1.", "2." etc.).`,
+- Do **not** number the insights inside the strings (no "1.", "2.", etc.).`,
 });
 
 // --- Flow Definition ---
@@ -208,7 +224,7 @@ const spendingInsightsFlow = ai.defineFlow(
       throw new Error('The AI returned a response, but it was empty or malformed.');
     }
 
-    // Normalize so UI always gets arrays/string
+    // Normalise so UI always gets arrays/string
     return {
       positiveObservations: result.output.positiveObservations ?? [],
       areasForImprovement: result.output.areasForImprovement ?? [],
@@ -218,7 +234,9 @@ const spendingInsightsFlow = ai.defineFlow(
 );
 
 // --- Main Export Function ---
-export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
+export async function getSpendingInsights(
+  input: SpendingInsightsInput
+): Promise<SpendingInsightsOutput> {
   try {
     const validatedInput = SpendingInsightsInputSchema.parse(input);
     return await spendingInsightsFlow(validatedInput);
