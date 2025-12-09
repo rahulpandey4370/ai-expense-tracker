@@ -5,12 +5,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lightbulb, Zap, LineChart, Target, Handshake, CheckCheck, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
-import { getSpendingInsights, type SpendingInsightsInput } from "@/ai/flows/spending-insights";
-import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
+import { Lightbulb, Zap, LineChart, Target, Handshake, AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { getSpendingInsights, type SpendingInsightsInput, type SpendingInsightsOutput } from "@/ai/flows/spending-insights";
+import type { AppTransaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
+import { Separator } from './ui/separator';
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
@@ -32,23 +33,17 @@ const cardVariants = {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
-const InsightPoint = ({ text }: { text: string }) => {
-  const getIcon = () => {
-    const lowerText = text.toLowerCase();
-    if (lowerText.includes('warning') || lowerText.includes('risk of')) return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-    if (lowerText.includes('investment') || lowerText.includes('investing')) return <TrendingUp className="h-5 w-5 text-blue-500" />;
-    if (lowerText.includes('shopping')) return <ShoppingCart className="h-5 w-5 text-purple-500" />;
-    if (lowerText.includes('discretionary') || lowerText.includes('decent start')) return <CheckCheck className="h-5 w-5 text-green-500" />;
-    return <Lightbulb className="h-5 w-5 text-accent" />;
-  };
-
-  // Remove the leading number and period (e.g., "1. ")
-  const formattedText = text.replace(/^\d+\.\s*/, '');
+const InsightPoint = ({ text, type }: { text: string; type: 'positive' | 'improvement' | 'takeaway' }) => {
+  const colorClass = {
+    positive: 'bg-green-500',
+    improvement: 'bg-yellow-500',
+    takeaway: 'bg-primary',
+  }[type];
 
   return (
     <li className="flex items-start gap-3">
-      <div className="flex-shrink-0 mt-1">{getIcon()}</div>
-      <p className="flex-1 text-foreground/90">{formattedText}</p>
+      <div className={cn("mt-1.5 h-2 w-2 rounded-full flex-shrink-0", colorClass)} />
+      <p className="flex-1 text-foreground/90">{text}</p>
     </li>
   );
 };
@@ -64,7 +59,7 @@ export function SpendingInsights({
   selectedMonth,
   selectedYear,
 }: SpendingInsightsProps) {
-  const [insights, setInsights] = useState<string | null>(null);
+  const [insights, setInsights] = useState<SpendingInsightsOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [currentInsightType, setCurrentInsightType] = useState<InsightType>('default');
@@ -98,7 +93,7 @@ export function SpendingInsights({
       currentMonthInvestmentSpending: currentMonthInvestmentSpending,
       lastMonthCoreSpending: lastMonthCoreSpending,
       spendingByCategory: monthlyMetrics.spendingByCategory,
-      lastMonthSpendingByCategory: lastMonthSpendingByCategory || {}, // Ensure this is always an object
+      lastMonthSpendingByCategory: lastMonthSpendingByCategory || {},
       insightType: insightType,
       selectedMonth: selectedMonth,
       selectedYear: selectedYear,
@@ -106,14 +101,12 @@ export function SpendingInsights({
 
     try {
       const result = await getSpendingInsights(input);
-       if (result.insights.includes("The AI returned an empty response") || result.insights.includes("error occurred") || result.insights.trim() === '') {
-        const errorMessage = result.insights.includes("The AI returned an empty response") 
-            ? "I'm sorry, I couldn't generate insights for the current data. The AI returned an empty response."
-            : `I'm sorry, an unexpected error occurred while generating insights: ${result.insights}`;
+       if (!result.keyTakeaway && result.positiveObservations.length === 0 && result.areasForImprovement.length === 0) {
+        const errorMessage = "I'm sorry, I couldn't generate insights for the current data. The AI returned an empty response.";
         setError(errorMessage);
         setInsights(null);
       } else {
-        setInsights(result.insights);
+        setInsights(result);
       }
     } catch (err: any) {
       console.error("Error generating insights:", err);
@@ -123,13 +116,7 @@ export function SpendingInsights({
     }
   }, [monthlyMetrics, currentMonthCoreSpending, currentMonthInvestmentSpending, lastMonthCoreSpending, lastMonthSpendingByCategory, selectedMonth, selectedYear]);
   
-  const parsedInsights = useMemo(() => {
-    if (!insights) return [];
-    return insights.split('\n').map(line => line.trim()).filter(line => line.length > 0 && /^\d+\./.test(line));
-  }, [insights]);
-  
   useEffect(() => {
-    // Clear insights when the month/year changes to prompt user to regenerate
     setInsights(null);
     setError(null);
     setIsLoading(false);
@@ -147,28 +134,52 @@ export function SpendingInsights({
         <CardContent className="space-y-4 flex-1 flex flex-col justify-between overflow-hidden">
           <ScrollArea className="flex-grow pr-4">
             {isLoading && (
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
+                <Separator />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-5/6" />
               </div>
             )}
             {error && <p className="text-sm text-destructive">{error}</p>}
-            {parsedInsights.length > 0 && !isLoading && (
-              <ul className="text-sm space-y-4 p-3 bg-accent/5 border border-accent/20 rounded-md">
-                {parsedInsights.map((insight, index) => (
-                  <InsightPoint key={index} text={insight} />
-                ))}
-              </ul>
+            
+            {insights && !isLoading && (
+              <div className="text-sm space-y-4">
+                {insights.positiveObservations.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-green-600 dark:text-green-400 mb-2">What's Going Well</h3>
+                    <ul className="space-y-2">
+                      {insights.positiveObservations.map((obs, i) => <InsightPoint key={`pos-${i}`} text={obs} type="positive" />)}
+                    </ul>
+                  </div>
+                )}
+                {insights.areasForImprovement.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-yellow-600 dark:text-yellow-400 mb-2">What to Improve</h3>
+                    <ul className="space-y-2">
+                      {insights.areasForImprovement.map((imp, i) => <InsightPoint key={`imp-${i}`} text={imp} type="improvement" />)}
+                    </ul>
+                  </div>
+                )}
+                {insights.keyTakeaway && (
+                  <div>
+                    <h3 className="font-semibold text-primary mb-2">Bottom Line</h3>
+                    <InsightPoint text={insights.keyTakeaway} type="takeaway" />
+                  </div>
+                )}
+              </div>
             )}
-            {parsedInsights.length === 0 && !isLoading && !error && (
-              <p className="text-sm text-muted-foreground p-3 text-center">
-                {currentMonthCoreSpending > 0 
-                  ? "Select an analysis type below to generate insights." 
-                  : `No core spending data for ${selectedMonthName} ${selectedYear} to generate insights.`
-                }
-              </p>
+
+            {!insights && !isLoading && !error && (
+              <div className="h-full flex items-center justify-center">
+                 <p className="text-sm text-muted-foreground text-center">
+                    {currentMonthCoreSpending > 0 
+                    ? "Select an analysis type below to generate insights." 
+                    : `No core spending data for ${selectedMonthName} ${selectedYear} to generate insights.`
+                    }
+                </p>
+              </div>
             )}
           </ScrollArea>
           <div className="flex flex-wrap gap-2 pt-2">
@@ -176,10 +187,10 @@ export function SpendingInsights({
               <Handshake className="mr-2 h-4 w-4" /> Default
             </Button>
              <Button onClick={() => generateInsights('cost_cutter')} disabled={isLoading || currentMonthCoreSpending === 0} className={cn("flex-1", currentInsightType === 'cost_cutter' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
-              <Target className="mr-2 h-4 w-4" /> Cost Cutter
+              <TrendingDown className="mr-2 h-4 w-4" /> Cost Cutter
             </Button>
              <Button onClick={() => generateInsights('growth_investor')} disabled={isLoading || currentMonthCoreSpending === 0} className={cn("flex-1", currentInsightType === 'growth_investor' && !isLoading ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80')} withMotion>
-              <LineChart className="mr-2 h-4 w-4" /> Growth Advisor
+              <TrendingUp className="mr-2 h-4 w-4" /> Growth Advisor
             </Button>
           </div>
         </CardContent>
