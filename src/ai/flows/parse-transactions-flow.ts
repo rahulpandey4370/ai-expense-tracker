@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedAITransactionSchema, type ParsedAITransaction } from '@/lib/types'; // Import from lib/types
+import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -33,6 +33,7 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
+  model: z.string().optional().describe("The AI model to use."),
 });
 // Type exported for the wrapper function
 export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
@@ -50,6 +51,7 @@ export async function parseTransactionsFromText(
     naturalLanguageText: string;
     categories: {id: string; name: string; type: 'income' | 'expense'}[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
+    model?: AIModel;
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
@@ -71,7 +73,8 @@ export async function parseTransactionsFromText(
         expenseCategories: expenseCategoriesForAI,
         incomeCategories: incomeCategoriesForAI,
         paymentMethods: input.paymentMethods,
-        currentDate
+        currentDate,
+        model: input.model
     });
   } catch (error: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", error);
@@ -89,12 +92,10 @@ export async function parseTransactionsFromText(
   }
 }
 
-const parseTransactionsPrompt = ai.definePrompt({
+const parseTransactionsPrompt = ai().definePrompt({
   name: 'parseTransactionsPrompt',
-  input: { schema: ParseTransactionTextInputSchemaInternal },
+  input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) }, // model is not part of the prompt itself
   output: { schema: ParseTransactionTextOutputSchemaInternal },
-  model: 'googleai/gemini-2.5-flash',
-  // Model configuration for potentially faster responses
   config: {
     temperature: 0.2, 
     maxOutputTokens: 1500, 
@@ -147,7 +148,7 @@ Provide a very concise \`summaryMessage\` only if necessary (e.g., general parsi
 `,
 });
 
-const parseTransactionsFlow = ai.defineFlow(
+const parseTransactionsFlow = ai().defineFlow(
   {
     name: 'parseTransactionsFlow',
     inputSchema: ParseTransactionTextInputSchemaInternal,
@@ -160,7 +161,9 @@ const parseTransactionsFlow = ai.defineFlow(
 
     let output;
     try {
-      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input), 3, 1500);
+      const llm = ai(input.model as AIModel);
+      const configuredPrompt = llm.definePrompt(parseTransactionsPrompt.getDefinition());
+      const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 1500);
       output = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);

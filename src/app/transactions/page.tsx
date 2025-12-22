@@ -37,6 +37,7 @@ import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
+import { useAIModel } from '@/contexts/AIModelContext';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -88,6 +89,7 @@ export default function TransactionsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('selected_month');
   const searchParams = useSearchParams();
   const hasAppliedInitialParams = useRef(false);
+  const { selectedModel } = useAIModel();
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);

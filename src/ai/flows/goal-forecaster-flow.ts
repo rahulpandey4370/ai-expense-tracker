@@ -11,21 +11,23 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput } from '@/lib/types'; // Import types and schemas
+import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
 
 // Internal Zod schemas - not exported from this 'use server' file
 // These will now be based on the imported schemas to ensure alignment
-const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema;
+const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
+    model: z.string().optional(),
+});
 
 const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
 
 
 export async function forecastFinancialGoal(
-  input: GoalForecasterInput
+  input: GoalForecasterInput & { model?: AIModel }
 ): Promise<GoalForecasterOutput> {
   try {
     // Validate input against the main schema before passing to AI
-    const validatedInput = GoalForecasterInputSchema.parse(input);
+    const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
     return await financialGoalForecasterFlow(validatedInput);
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
@@ -52,9 +54,9 @@ export async function forecastFinancialGoal(
   }
 }
 
-const financialGoalPrompt = ai.definePrompt({
+const financialGoalPrompt = ai().definePrompt({
   name: 'financialGoalPrompt',
-  input: { schema: GoalForecasterInputSchemaInternal },
+  input: { schema: GoalForecasterInputSchemaInternal.omit({ model: true }) },
   output: { schema: GoalForecasterOutputSchemaInternal },
   config: {
     temperature: 0.5, // Allow for some creative yet grounded advice
@@ -86,7 +88,7 @@ Your Task:
 2.  **Calculate Feasibility**: Based on the 'estimatedOrProvidedGoalAmount', determine if the goal is 'Highly Feasible', 'Challenging but Possible', or 'Likely Unfeasible without changes' within the {{goalDurationMonths}} months.
     - Calculate required monthly savings for this goal: ('estimatedOrProvidedGoalAmount' / {{goalDurationMonths}}). Ensure this is positive.
     - Compare this to their current average monthly net savings ({{averageMonthlyIncome}} - {{averageMonthlyExpenses}}).
-3.  **Projected Timeline (if applicable)**: If the goal seems feasible or challenging with their *current* average net savings, estimate how many months it would take them to reach 'estimatedOrProvidedGoalAmount'. If unfeasible with current habits, omit this. Ensure this is a positive integer if provided.
+3.  **Projected Timeline (if applicable)**: If the goal seems feasible or challenging with their *current* average net savings, estimate how many months it would take them to reach 'estimatedOrProvidedGoalAmount'. If unfeasible, omit this. Ensure this is a positive integer if provided.
 4.  **Required Monthly Savings**: Clearly state the amount (in INR) they need to save *specifically for this goal* each month to meet it in {{goalDurationMonths}} months, using the 'estimatedOrProvidedGoalAmount'. This should be a positive number.
 5.  **Actionable Suggestions (2-4 points)**: Provide specific, practical suggestions based on the 'estimatedOrProvidedGoalAmount'.
     - If current savings are insufficient, suggest how much *additional* monthly savings are needed.
@@ -100,7 +102,7 @@ If goalAmount *was* provided but income is ₹0, calculate required monthly savi
 `,
 });
 
-const financialGoalForecasterFlow = ai.defineFlow(
+const financialGoalForecasterFlow = ai().defineFlow(
   {
     name: 'financialGoalForecasterFlow',
     inputSchema: GoalForecasterInputSchemaInternal,
@@ -127,7 +129,9 @@ const financialGoalForecasterFlow = ai.defineFlow(
             motivationalMessage: "Update your transaction history for a more accurate forecast."
         };
     }
-    const result = await retryableAIGeneration(() => financialGoalPrompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
+    const result = await retryableAIGeneration(() => configuredPrompt(input));
     return result.output!;
   }
 );

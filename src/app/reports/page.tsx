@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { AppTransaction, ExpenseType } from '@/lib/types';
+import type { AppTransaction, ExpenseType, AIModel } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers } from 'lucide-react';
@@ -27,6 +27,7 @@ import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAIModel } from '@/contexts/AIModelContext';
 
 
 const pageVariants = {
@@ -65,6 +66,7 @@ export default function ReportsPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   
   const [categoryExpenseTypeFilter, setCategoryExpenseTypeFilter] = useState<'all' | ExpenseType>('all');
+  const { selectedModel } = useAIModel();
 
 
   const { toast } = useToast();
@@ -206,9 +208,10 @@ export default function ReportsPage() {
       currentMonth: currentPeriodName,
       previousMonth: previousPeriodName,
       currentMonthExpenses: currentPeriodExpensesTotal,
-      previousMonthExpenses: previousMonthExpensesTotal,
+      previousMonthExpenses: previousPeriodExpensesTotal,
       expenseCategoriesCurrent: formatExpenseCategoriesForAI(filteredTransactionsForPeriod),
       expenseCategoriesPrevious: formatExpenseCategoriesForAI(previousPeriodTransactions),
+      model: selectedModel,
     };
 
     try {

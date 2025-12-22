@@ -11,16 +11,17 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { FinancialHealthCheckInput, FinancialHealthCheckOutput } from '@/lib/types';
+import type { FinancialHealthCheckInput, FinancialHealthCheckOutput, AIModel } from '@/lib/types';
 
 // Internal Zod schemas - not exported from this 'use server' file
 const FinancialHealthCheckInputSchemaInternal = z.object({
   periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
   currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
   currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
-  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries (₹4000).' Ensure INR currency symbol is used."),
+  currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries: ₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
+  model: z.string().optional(),
 });
 
 const FinancialHealthCheckOutputSchemaInternal = z.object({
@@ -28,7 +29,7 @@ const FinancialHealthCheckOutputSchemaInternal = z.object({
 });
 
 export async function getFinancialHealthCheck(
-  input: FinancialHealthCheckInput
+  input: FinancialHealthCheckInput & { model?: AIModel }
 ): Promise<FinancialHealthCheckOutput> {
   try {
     const validatedInput = FinancialHealthCheckInputSchemaInternal.parse(input);
@@ -47,9 +48,9 @@ export async function getFinancialHealthCheck(
   }
 }
 
-const healthCheckPrompt = ai.definePrompt({
+const healthCheckPrompt = ai().definePrompt({
   name: 'financialHealthCheckPrompt',
-  input: { schema: FinancialHealthCheckInputSchemaInternal },
+  input: { schema: FinancialHealthCheckInputSchemaInternal.omit({ model: true }) },
   output: { schema: FinancialHealthCheckOutputSchemaInternal },
   config: {
     temperature: 0.4,
@@ -86,14 +87,16 @@ Your Task:
 `,
 });
 
-const financialHealthCheckFlow = ai.defineFlow(
+const financialHealthCheckFlow = ai().defineFlow(
   {
     name: 'financialHealthCheckFlow',
     inputSchema: FinancialHealthCheckInputSchemaInternal,
     outputSchema: FinancialHealthCheckOutputSchemaInternal,
   },
   async (input) => {
-    const result = await retryableAIGeneration(() => healthCheckPrompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(healthCheckPrompt.getDefinition());
+    const result = await retryableAIGeneration(() => configuredPrompt(input));
     return result.output!;
   }
 );

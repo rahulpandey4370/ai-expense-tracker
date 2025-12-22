@@ -9,9 +9,10 @@
  * - ComparativeExpenseAnalysisOutput - The return type for the comparativeExpenseAnalysis function.
  */
 
-import {ai}from '@/ai/genkit';
+import {ai} from '@/ai/genkit';
 import {z}from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+import type { AIModel } from '@/lib/types';
 
 const ComparativeExpenseAnalysisInputSchema = z.object({
   currentMonth: z.string().describe('The current month for expense analysis (e.g., "January").'),
@@ -20,6 +21,7 @@ const ComparativeExpenseAnalysisInputSchema = z.object({
   previousMonthExpenses: z.number().describe('Total expenses for the previous month in INR.'),
   expenseCategoriesCurrent: z.string().describe('A string representation of expense categories and amounts for the current month, e.g., "Food: ₹5000, Transport: ₹3000".'),
   expenseCategoriesPrevious: z.string().describe('A string representation of expense categories and amounts for the previous month, e.g., "Food: ₹4000, Transport: ₹2500".'),
+  model: z.string().optional(),
 });
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 
@@ -34,11 +36,10 @@ export async function comparativeExpenseAnalysis(
   return comparativeExpenseAnalysisFlow(input);
 }
 
-const prompt = ai.definePrompt({
+const prompt = ai().definePrompt({
   name: 'comparativeExpenseAnalysisPrompt',
-  input: {schema: ComparativeExpenseAnalysisInputSchema},
+  input: {schema: ComparativeExpenseAnalysisInputSchema.omit({ model: true })},
   output: {schema: ComparativeExpenseAnalysisOutputSchema},
-  model: 'googleai/gemini-2.5-flash',
   prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
 
 Current Period: {{currentMonth}}
@@ -52,14 +53,16 @@ Provide a detailed comparative analysis. Focus on identifying specific categorie
 `,
 });
 
-const comparativeExpenseAnalysisFlow = ai.defineFlow(
+const comparativeExpenseAnalysisFlow = ai().defineFlow(
   {
     name: 'comparativeExpenseAnalysisFlow',
     inputSchema: ComparativeExpenseAnalysisInputSchema,
     outputSchema: ComparativeExpenseAnalysisOutputSchema,
   },
   async input => {
-    const {output} = await retryableAIGeneration(() => prompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(prompt.getDefinition());
+    const {output} = await retryableAIGeneration(() => configuredPrompt(input));
     return output!;
   }
 );

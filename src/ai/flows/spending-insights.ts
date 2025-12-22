@@ -1,12 +1,13 @@
+
 'use server';
 
 /**
- * @fileOverview AI-powered insights about spending habits using Gemini 2.5 Flash.
+ * @fileOverview AI-powered insights about spending habits using Gemini.
  */
-
-import { ai } from '@/ai/genkit'; 
+import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+import type { AIModel } from '@/contexts/AIModelContext';
 
 // --- Input Schema ---
 const SpendingInsightsInputSchema = z.object({
@@ -19,43 +20,45 @@ const SpendingInsightsInputSchema = z.object({
   insightType: z.enum(['default', 'cost_cutter', 'growth_investor']).optional().default('default'),
   selectedMonth: z.number().min(0).max(11).describe("The selected month for analysis (0=Jan, 11=Dec)."),
   selectedYear: z.number().describe("The selected year for analysis."),
+  model: z.string().optional().describe("The AI model to use for generation."),
 });
 
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
 
+
 // --- Output Schema ---
 const SpendingInsightsOutputSchema = z.object({
-  insights: z.string().describe('The final analysis text containing a numbered list of insights.'),
+  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
+  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
+  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
 });
 
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
 // --- Personas ---
 const personas = {
-  default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore... (rest of persona)`,
-  cost_cutter: `You are an aggressive cost-cutting financial analyst... (rest of persona)`,
-  growth_investor: `You are a growth-focused financial advisor... (rest of persona)`
+  default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore. You give practical, actionable advice with a bit of local flavor. You are direct and don't sugarcoat things, but you are ultimately trying to help the user improve their financial health. You value common sense over complex financial jargon.`,
+  cost_cutter: `You are an aggressive cost-cutting financial analyst. Your primary goal is to find every single opportunity to save money. You are meticulous, data-driven, and believe that every rupee saved is a rupee earned. You see wasteful spending everywhere and are not afraid to point it out.`,
+  growth_investor: `You are a growth-focused financial advisor. You believe in spending money to make money and optimizing for long-term wealth creation. You are less concerned with small expenses and more focused on whether the user is investing enough and in the right places. You encourage smart risks and strategic spending.`
 };
 
 // --- Prompt Definition ---
-const spendingInsightsPrompt = ai.definePrompt({
+const spendingInsightsPrompt = ai().definePrompt({
   name: 'spendingInsightsPrompt',
   input: {
     schema: z.object({
       persona: z.string(),
       analysisPeriod: z.string(),
-      currentDate: z.string(),  // 👈 NEW: dynamically passed in
+      currentDate: z.string(),
       jsonInput: z.string(),
     }),
   },
   output: { 
     schema: SpendingInsightsOutputSchema, 
   },
-  // UPDATED: Using Gemini 2.5 Flash
-  model: 'googleai/gemini-2.5-flash', 
   config: {
     temperature: 0.8,
-    maxOutputTokens: 3000, // Increased slightly as 2.5 supports larger context
+    maxOutputTokens: 1200,
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -67,7 +70,7 @@ const spendingInsightsPrompt = ai.definePrompt({
 {{persona}}
 
 ## ROLE
-You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance.
+You are an Expert Personal Finance Analyst for FinWise AI, specializing in Indian urban personal finance. Your task is to provide deep, actionable insights based on the user's financial data. Go beyond the obvious numbers.
 
 ## CONTEXT
 - **Analysis Period:** {{analysisPeriod}}
@@ -75,25 +78,22 @@ You are an Expert Personal Finance Analyst for FinWise AI, specializing in India
 
 Use {{currentDate}} to understand *where* in the month the user currently is, and adapt your tone and suggestions accordingly. For example:
 - If it is early in the month and some big fixed expenses like rent or EMIs have *already* gone out, do **not** assume that the current pace of spending will continue linearly for the whole month.
-- Some expenses (like rent, EMIs, insurance premiums, school fees) typically occur just once, often at the start of the month. Do **not** project these one-time amounts as if they will repeat every week or for the rest of the month.
-- Avoid naive projections like "at this pace you will spend ₹X by month-end" when the pattern of expenses is clearly skewed toward the start of the month.
+- Some expenses (like rent, EMIs, insurance premiums) typically occur just once. Do **not** project these one-time amounts as if they will repeat.
+- Identify spending anti-patterns, like high discretionary spending right after a salary credit, or a sudden spike in a specific category compared to the previous month.
 
 ## TASK
-Analyze the user's financial data for {{analysisPeriod}}. Generate 4–6 insightful, time-aware, and actionable points.
-Your insights should:
-- Be consistent with today's date: {{currentDate}}.
-- Be realistic about how monthly expenses actually occur (e.g., big fixed costs at the start, variable expenses spread through the month).
-- Focus on Indian urban personal finance and practical next steps.
+Analyze the user's financial data for {{analysisPeriod}}. Generate a structured response with 2-3 points for each section. Your insights should be time-aware, realistic, and focused on practical next steps for an urban Indian user.
 
 ## OUTPUT FORMAT INSTRUCTIONS
-You must output a valid JSON object matching this structure:
+You MUST output a valid JSON object matching this structure. If you have no insights for a particular section, return an empty array [] for it.
 {
-  "insights": "1. [Insight One]\\n2. [Insight Two]\\n..."
+  "positiveObservations": ["..."],
+  "areasForImprovement": ["..."],
+  "keyTakeaway": "..."
 }
 
-Rules for the 'insights' string:
-- It must be a single string.
-- Use \\n for new lines between numbered items.
+Rules for the output:
+- It must be a single, valid JSON object.
 - Use the Rupee symbol (₹).
 - Do NOT include markdown code blocks (like \`\`\`json) in the output, just the raw JSON object.
 
@@ -105,7 +105,7 @@ Rules for the 'insights' string:
 });
 
 // --- Flow Definition ---
-const spendingInsightsFlow = ai.defineFlow(
+const spendingInsightsFlow = ai().defineFlow(
   {
     name: 'spendingInsightsFlow',
     inputSchema: SpendingInsightsInputSchema,
@@ -121,7 +121,6 @@ const spendingInsightsFlow = ai.defineFlow(
     ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-    // Dynamically compute today's date in India time (Bangalore)
     const currentDate = new Intl.DateTimeFormat('en-IN', {
       day: 'numeric',
       month: 'long',
@@ -132,20 +131,27 @@ const spendingInsightsFlow = ai.defineFlow(
     const promptInput = {
       persona: selectedPersona,
       analysisPeriod,
-      currentDate, // 👈 pass to prompt
+      currentDate,
       jsonInput: JSON.stringify(input, null, 2),
     };
+    
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
     const { output } = await retryableAIGeneration(() =>
-      spendingInsightsPrompt(promptInput)
+      configuredPrompt(promptInput)
     );
     
-    if (!output || !output.insights) {
+    if (!output) {
       console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));
-      throw new Error("The AI returned a response, but it was missing the insights field.");
+      throw new Error("The AI returned a response, but it was empty or malformed.");
     }
     
-    return output;
+    return {
+      positiveObservations: output.positiveObservations || [],
+      areasForImprovement: output.areasForImprovement || [],
+      keyTakeaway: output.keyTakeaway || "",
+    };
   }
 );
 
@@ -157,13 +163,13 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       console.error("Input Zod validation error:", error.flatten());
-      return { insights: `Validation Error: ${error.message}` };
+      return { 
+          keyTakeaway: `Validation Error: ${error.message}` 
+      };
     }
-    
     console.error("Error in getSpendingInsights:", error);
-    
     return { 
-      insights: `I encountered an issue generating your insights using Gemini 2.5 Flash. Please try again. (Error: ${error.message})` 
+      keyTakeaway: `I'm sorry, an unexpected error occurred while generating insights: ${error.message}` 
     };
   }
 }

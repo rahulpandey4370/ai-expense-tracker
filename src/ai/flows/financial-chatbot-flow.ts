@@ -8,9 +8,9 @@
  * - ChatMessage - Type for chat history messages.
  */
 
-import {ai}from '@/ai/genkit';
-import {z}from 'genkit';
-import type { AppTransaction } from '@/lib/types';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 
@@ -38,7 +38,8 @@ const FinancialChatbotInputSchemaInternal = z.object({
   query: z.string().describe("The user's current financial question or request."),
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
-  dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'.")
+  dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'."),
+  model: z.string().optional().describe("The AI model to use."),
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -72,6 +73,7 @@ export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];
   chatHistory?: ChatMessage[];
+  model?: AIModel; // Add model parameter
 }): Promise<FinancialChatbotOutput> {
 
   const queryYear = getYearFromQuery(input.query);
@@ -147,22 +149,23 @@ export async function askFinancialBot(input: {
     query: input.query,
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
-    dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : '')
+    dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : ''),
+    model: input.model,
   });
 }
 
 
-const financialChatbotFlow = ai.defineFlow(
+const financialChatbotFlow = ai().defineFlow(
   {
     name: 'financialChatbotFlow',
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema,
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage }) => {
+  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
-    let systemPrompt = `## PERSONALITY
+    const systemPrompt = `## PERSONALITY
 You are a professional, knowledgeable, and helpful AI Financial Assistant who communicates in a friendly yet authoritative manner. You are patient, detail-oriented, and always prioritize accuracy in financial calculations and analysis.
 
 ## ROLE
@@ -253,12 +256,13 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     }
     messages.push({ role: 'user', content: query });
 
-    const llmResponse = await retryableAIGeneration(() => ai.generate({
+    const llm = ai(model as AIModel); // Use the selected model
+
+    const llmResponse = await retryableAIGeneration(() => llm.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-      model: 'googleai/gemini-2.5-flash',
       config: {
-        temperature: 0.1, // Lower temperature for more consistent and accurate responses
-        maxOutputTokens: 800, // Increased token limit for detailed responses
+        temperature: 0.1,
+        maxOutputTokens: 800,
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },

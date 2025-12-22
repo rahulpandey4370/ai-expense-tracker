@@ -1,6 +1,9 @@
 
 import { z } from 'zod';
 
+// For model selection context
+export type AIModel = 'gemini-2.5-flash' | 'gemini-3-flash' | 'gemini-2.5-flash-lite' | 'gemma-3-27b';
+
 // Base types for data stored in Blob / used by app
 export interface Category {
   id: string;
@@ -25,7 +28,7 @@ export interface RawTransaction {
   categoryId?: string;
   paymentMethodId?: string;
   source?: string;
-  expenseType?: 'need' | 'want' | 'investment';
+  expenseType?: 'need' | 'want' | 'investment_expense'; // Corrected type
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // For cosmos DB
@@ -38,12 +41,13 @@ export interface RawTransaction {
 
 // This is the "hydrated" transaction type used by the frontend,
 // where category and paymentMethod are populated objects.
-export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'paymentMethodId' | 'date' | 'createdAt' | 'updatedAt'> {
+export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'paymentMethodId' | 'date' | 'createdAt' | 'updatedAt' | 'expenseType'> {
   date: Date;
   createdAt: Date;
   updatedAt: Date;
   category?: Category;
   paymentMethod?: PaymentMethod;
+  expenseType?: 'need' | 'want' | 'investment'; // Simplified for frontend
 }
 
 // Zod schema for validating transaction input for Server Actions
@@ -298,8 +302,6 @@ export const AITransactionForAnalysisSchema = z.object({
   amount: z.number(),
   date: z.string().describe("Date in ISO format string"),
   categoryName: z.string().nullish(),
-  paymentMethodName: z.string().nullish(),
-  expenseType: z.enum(['need', 'want', 'investment']).optional(),
 });
 export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSchema>;
 

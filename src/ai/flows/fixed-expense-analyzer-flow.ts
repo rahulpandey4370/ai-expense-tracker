@@ -15,14 +15,19 @@ import {
     FixedExpenseAnalyzerInputSchema, 
     FixedExpenseAnalyzerOutputSchema, 
     type FixedExpenseAnalyzerInput, 
-    type FixedExpenseAnalyzerOutput 
+    type FixedExpenseAnalyzerOutput,
+    type AIModel
 } from '@/lib/types';
 
+const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.extend({
+    model: z.string().optional(),
+});
+
 export async function analyzeFixedExpenses(
-  input: FixedExpenseAnalyzerInput
+  input: FixedExpenseAnalyzerInput & { model?: AIModel }
 ): Promise<FixedExpenseAnalyzerOutput> {
   try {
-    const validatedInput = FixedExpenseAnalyzerInputSchema.parse(input);
+    const validatedInput = FixedExpenseAnalyzerInputSchemaInternal.parse(input);
     if (validatedInput.transactions.length === 0) {
       return {
         identifiedExpenses: [],
@@ -49,9 +54,9 @@ export async function analyzeFixedExpenses(
   }
 }
 
-const fixedExpensePrompt = ai.definePrompt({
+const fixedExpensePrompt = ai().definePrompt({
   name: 'fixedExpenseAnalyzerPrompt',
-  input: { schema: FixedExpenseAnalyzerInputSchema },
+  input: { schema: FixedExpenseAnalyzerInputSchemaInternal.omit({ model: true }) },
   output: { schema: FixedExpenseAnalyzerOutputSchema },
   config: {
     temperature: 0.2, // Low temperature for factual analysis
@@ -99,14 +104,16 @@ IMPORTANT:
 `,
 });
 
-const fixedExpenseAnalyzerFlow = ai.defineFlow(
+const fixedExpenseAnalyzerFlow = ai().defineFlow(
   {
     name: 'fixedExpenseAnalyzerFlow',
-    inputSchema: FixedExpenseAnalyzerInputSchema,
+    inputSchema: FixedExpenseAnalyzerInputSchemaInternal,
     outputSchema: FixedExpenseAnalyzerOutputSchema,
   },
   async (input) => {
-    const result = await retryableAIGeneration(() => fixedExpensePrompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(fixedExpensePrompt.getDefinition());
+    const result = await retryableAIGeneration(() => configuredPrompt(input));
     return result.output!;
   }
 );

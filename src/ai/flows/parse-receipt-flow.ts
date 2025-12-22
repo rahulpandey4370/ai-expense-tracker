@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction } from '@/lib/types'; // Import from lib/types
+import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel } from '@/lib/types'; // Import from lib/types
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -34,6 +34,7 @@ const ParseReceiptImageInputSchemaInternal = z.object({
   categories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates if any are ambiguously parsed from the receipt."),
+  model: z.string().optional().describe("The AI model to use."),
 });
 // Type exported for the wrapper function
 export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchemaInternal>;
@@ -49,6 +50,7 @@ export async function parseReceiptImage(
     receiptImageUri: string;
     categories: {id: string; name: string; type: 'income' | 'expense'}[];
     paymentMethods: {id: string; name: string;}[];
+    model?: AIModel;
   }
 ): Promise<ParseReceiptImageOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
@@ -60,7 +62,8 @@ export async function parseReceiptImage(
         receiptImageUri: input.receiptImageUri,
         categories: expenseCategoriesForAI, // Only pass expense categories
         paymentMethods: input.paymentMethods,
-        currentDate 
+        currentDate,
+        model: input.model
     });
   } catch (flowError: any) {
     console.error("Error executing parseReceiptImageFlow:", flowError);
@@ -72,11 +75,10 @@ export async function parseReceiptImage(
   }
 }
 
-const parseReceiptImagePrompt = ai.definePrompt({
+const parseReceiptImagePrompt = ai().definePrompt({
   name: 'parseReceiptImagePrompt',
-  input: { schema: ParseReceiptImageInputSchemaInternal },
+  input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true }) },
   output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }) }, // Ensure output schema matches expected
-  model: 'googleai/gemini-2.5-flash',
   prompt: `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
 Your task is to extract transaction details from the provided receipt image. Assume receipts are for expenses.
 The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative.
@@ -113,7 +115,7 @@ Prioritize extracting the total amount paid. If items are listed, use the overal
 `,
 });
 
-const parseReceiptImageFlow = ai.defineFlow(
+const parseReceiptImageFlow = ai().defineFlow(
   {
     name: 'parseReceiptImageFlow',
     inputSchema: ParseReceiptImageInputSchemaInternal,
@@ -129,7 +131,9 @@ const parseReceiptImageFlow = ai.defineFlow(
 
     let outputFromAI;
     try {
-      const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input), 3, 2000);
+      const llm = ai(input.model as AIModel);
+      const configuredPrompt = llm.definePrompt(parseReceiptImagePrompt.getDefinition());
+      const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 2000);
       outputFromAI = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);

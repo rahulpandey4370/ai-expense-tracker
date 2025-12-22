@@ -4,7 +4,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { InvestmentSummaryInputSchema } from '@/lib/types';
+import { InvestmentSummaryInputSchema, type AIModel } from '@/lib/types';
 
 const InvestmentSummaryOutputSchema = z.object({
   summary: z.string().describe("A concise, bulleted summary of the user's monthly investments, suitable for copying. Start with the total amount vs target, then breakdown by category, then list key individual investments."),
@@ -12,17 +12,21 @@ const InvestmentSummaryOutputSchema = z.object({
 
 export type InvestmentSummaryOutput = z.infer<typeof InvestmentSummaryOutputSchema>;
 
-export async function summarizeInvestments(input: z.infer<typeof InvestmentSummaryInputSchema>): Promise<InvestmentSummaryOutput> {
-  const validation = InvestmentSummaryInputSchema.safeParse(input);
+const InvestmentSummaryInputSchemaInternal = InvestmentSummaryInputSchema.extend({
+    model: z.string().optional(),
+});
+
+export async function summarizeInvestments(input: z.infer<typeof InvestmentSummaryInputSchema> & { model?: AIModel }): Promise<InvestmentSummaryOutput> {
+  const validation = InvestmentSummaryInputSchemaInternal.safeParse(input);
   if (!validation.success) {
     throw new Error(`Invalid input for AI summary: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
   return await investmentSummaryFlow(validation.data);
 }
 
-const investmentSummaryPrompt = ai.definePrompt({
+const investmentSummaryPrompt = ai().definePrompt({
   name: 'investmentSummaryPrompt',
-  input: { schema: InvestmentSummaryInputSchema },
+  input: { schema: InvestmentSummaryInputSchemaInternal.omit({ model: true }) },
   output: { schema: InvestmentSummaryOutputSchema },
   config: {
     temperature: 0.2,
@@ -63,14 +67,16 @@ Investment Summary for 2024-07
 `,
 });
 
-const investmentSummaryFlow = ai.defineFlow(
+const investmentSummaryFlow = ai().defineFlow(
   {
     name: 'investmentSummaryFlow',
-    inputSchema: InvestmentSummaryInputSchema,
+    inputSchema: InvestmentSummaryInputSchemaInternal,
     outputSchema: InvestmentSummaryOutputSchema,
   },
   async (input) => {
-    const result = await retryableAIGeneration(() => investmentSummaryPrompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(investmentSummaryPrompt.getDefinition());
+    const result = await retryableAIGeneration(() => configuredPrompt(input));
     if (!result.output) {
         throw new Error("AI failed to generate a valid summary structure.");
     }

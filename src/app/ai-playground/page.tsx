@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { getTransactions } from '@/lib/actions/transactions';
 import { addGoal, getGoals, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, editAllocation, type Goal, type FundAllocation } from '@/lib/actions/goals';
-import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense } from '@/lib/types';
+import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense, AIModel } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
 import { getFinancialHealthCheck } from '@/ai/flows/financial-health-check-flow';
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useAIModel } from '@/contexts/AIModelContext';
 
 
 const pageVariants = {
@@ -57,6 +58,7 @@ export default function AIPlaygroundPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const { years: contextYears, monthNamesList } = useDateSelection();
+  const { selectedModel } = useAIModel();
 
   // Goal Planner State
   const [goalDescription, setGoalDescription] = useState<string>('');
@@ -152,10 +154,11 @@ export default function AIPlaygroundPage() {
       categoryName: t.category?.name,
     }));
 
-    const input: FixedExpenseAnalyzerInput = {
+    const input: FixedExpenseAnalyzerInput & { model?: AIModel } = {
       transactions: aiTransactions,
       monthName: monthNamesList[fixedExpenseMonth],
       year: fixedExpenseYear,
+      model: selectedModel,
     };
 
     try {
@@ -249,13 +252,14 @@ export default function AIPlaygroundPage() {
       return;
     }
 
-    const input: GoalForecasterInput = {
+    const input: GoalForecasterInput & { model?: AIModel } = {
       goalDescription,
       goalAmount: amountNum, // Can be undefined
       goalDurationMonths: durationNum,
       averageMonthlyIncome: averages.averageMonthlyIncome || 0.01, // Send a tiny amount if zero to avoid AI issues, flow handles 0 better
       averageMonthlyExpenses: averages.averageMonthlyExpenses || 0,
       currentSavingsRate: Math.max(0, Math.min(100, averages.currentSavingsRate || 0)),
+      model: selectedModel,
     };
 
     try {
@@ -434,11 +438,12 @@ export default function AIPlaygroundPage() {
 
     const { averagePastMonthlyExpenses, pastSpendingBreakdown } = calculateBudgetingAssistantInputs();
 
-    const input: BudgetingAssistantInput = {
+    const input: BudgetingAssistantInput & { model?: AIModel } = {
       statedMonthlyIncome: incomeNum,
       statedMonthlySavingsGoalPercentage: savingsGoalNum,
       averagePastMonthlyExpenses: averagePastMonthlyExpenses || 0,
       pastSpendingBreakdown: pastSpendingBreakdown || "No significant past spending data available from the last 3 months.",
+      model: selectedModel,
     };
 
     try {
@@ -530,13 +535,14 @@ export default function AIPlaygroundPage() {
         .reduce((sum, t) => sum + t.amount, 0);
 
 
-    const input: FinancialHealthCheckInput = {
+    const input: FinancialHealthCheckInput & { model?: AIModel } = {
       periodDescription,
       currentTotalIncome: currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
       currentTotalExpenses: currentCoreExpenses, // Use core expenses
       currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions.filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))), // Pass only core expenses for breakdown
       previousTotalIncome: previousTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
       previousTotalExpenses: previousCoreExpenses, // Use core expenses
+      model: selectedModel,
     };
 
     try {

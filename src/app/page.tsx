@@ -14,7 +14,7 @@ import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-ch
 import type { AppTransaction, Category, Budget } from '@/lib/types';
 import { getTransactions, getCategories } from '@/lib/actions/transactions';
 import { getBudgets } from '@/lib/actions/budgets';
-import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff } from 'lucide-react';
+import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff, MoreVertical, Check } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,8 @@ import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 import { InvestmentTracker } from '@/components/investment-tracker';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { useAIModel, type AIModel } from '@/contexts/AIModelContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -71,6 +73,7 @@ export default function DashboardPage() {
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
+  const { selectedModel, setSelectedModel, availableModels } = useAIModel();
 
   const handleScrollToForm = () => {
     addTransactionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -472,14 +475,39 @@ export default function DashboardPage() {
         </motion.div>
       </main>
       
-      <Button 
-        onClick={handleScrollToForm}
-        className="md:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-accent shadow-lg text-accent-foreground z-40"
-        size="icon"
-        aria-label="Add Transaction"
-      >
-        <Plus className="h-8 w-8" />
-      </Button>
+      <div className="md:hidden fixed bottom-6 right-6 z-40 flex flex-col items-center gap-2">
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button 
+                    variant="secondary"
+                    className="h-12 w-12 rounded-full bg-primary/90 text-primary-foreground shadow-lg"
+                    size="icon"
+                    aria-label="Select AI Model"
+                >
+                    <MoreVertical className="h-6 w-6" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="end" className="w-56">
+                <DropdownMenuLabel>Select AI Model</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {availableModels.map(model => (
+                    <DropdownMenuItem key={model} onSelect={() => setSelectedModel(model as AIModel)}>
+                        <Check className={cn("mr-2 h-4 w-4", selectedModel === model ? "opacity-100" : "opacity-0")} />
+                        {model}
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+        
+        <Button 
+          onClick={handleScrollToForm}
+          className="h-14 w-14 rounded-full bg-accent shadow-lg text-accent-foreground"
+          size="icon"
+          aria-label="Add Transaction"
+        >
+          <Plus className="h-8 w-8" />
+        </Button>
+      </div>
     </>
   );
 }

@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { BudgetingAssistantInput, BudgetingAssistantOutput } from '@/lib/types';
+import type { BudgetingAssistantInput, BudgetingAssistantOutput, AIModel } from '@/lib/types';
 
 // Internal Zod schemas for AI flow - not exported from 'use server' file
 const BudgetingAssistantInputSchemaInternal = z.object({
@@ -19,6 +19,7 @@ const BudgetingAssistantInputSchemaInternal = z.object({
   statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
   averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
   pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
+  model: z.string().optional(),
 });
 
 const BudgetingAssistantOutputSchemaInternal = z.object({
@@ -37,7 +38,7 @@ const BudgetingAssistantOutputSchemaInternal = z.object({
 });
 
 export async function suggestBudgetPlan(
-  input: BudgetingAssistantInput
+  input: BudgetingAssistantInput & { model?: AIModel }
 ): Promise<BudgetingAssistantOutput> {
   try {
     // Validate input against internal schema before passing to AI
@@ -61,9 +62,9 @@ export async function suggestBudgetPlan(
   }
 }
 
-const budgetPrompt = ai.definePrompt({
+const budgetPrompt = ai().definePrompt({
   name: 'budgetingAssistantPrompt',
-  input: { schema: BudgetingAssistantInputSchemaInternal },
+  input: { schema: BudgetingAssistantInputSchemaInternal.omit({ model: true }) },
   output: { schema: BudgetingAssistantOutputSchemaInternal },
   config: {
     temperature: 0.6, // Allow for some creative yet grounded advice
@@ -105,7 +106,7 @@ Ensure all monetary values in the output are non-negative.
 `,
 });
 
-const budgetingAssistantFlow = ai.defineFlow(
+const budgetingAssistantFlow = ai().defineFlow(
   {
     name: 'budgetingAssistantFlow',
     inputSchema: BudgetingAssistantInputSchemaInternal,
@@ -122,7 +123,9 @@ const budgetingAssistantFlow = ai.defineFlow(
         analysisSummary: "A meaningful budget cannot be created without a stated monthly income. Please provide your income to get a personalized plan.",
       };
     }
-    const result = await retryableAIGeneration(() => budgetPrompt(input));
+    const llm = ai(input.model as AIModel);
+    const configuredPrompt = llm.definePrompt(budgetPrompt.getDefinition());
+    const result = await retryableAIGeneration(() => configuredPrompt(input));
     return result.output!;
   }
 );
