@@ -15,7 +15,7 @@ interface AIModelContextType {
 const AIModelContext = createContext<AIModelContextType | undefined>(undefined);
 
 const AI_MODEL_STORAGE_KEY = "finwiseAIModel";
-const DEFAULT_MODEL: AIModel = 'gemini-1.5-flash-latest';
+const DEFAULT_MODEL: AIModel = 'gemini-2.5-flash';
 
 export function AIModelProvider({ children }: { children: ReactNode }) {
   const [selectedModel, setSelectedModel] = useState<AIModel>(DEFAULT_MODEL);
@@ -60,5 +60,3 @@ export function useAIModel() {
   }
   return context;
 }
-
-    

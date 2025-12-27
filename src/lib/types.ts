@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // AI Model Selection
-export const modelNames = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gpt-4o', 'gpt-5.2-chat'] as const;
+export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
 export type AIModel = (typeof modelNames)[number];
 
 
