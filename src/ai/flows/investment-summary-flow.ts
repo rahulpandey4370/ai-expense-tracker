@@ -17,7 +17,7 @@ const InvestmentSummaryOutputSchema = z.object({
   summary: z.string().describe("A concise, bulleted summary of the user's monthly investments, suitable for copying. Start with the total amount vs target, then breakdown by category, then list key individual investments."),
 });
 
-export type InvestmentSummaryOutput = z.infer<typeof InvestmentSummaryOutputSchema>;
+type InvestmentSummaryOutput = z.infer<typeof InvestmentSummaryOutputSchema>;
 
 const InvestmentSummaryInputSchemaInternal = InvestmentSummaryInputSchema.extend({
     model: z.string().optional(),

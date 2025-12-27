@@ -8,8 +8,14 @@
  * - ChatMessage - Type for chat history messages.
  */
 
+<<<<<<< HEAD
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+=======
+import {ai} from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import {z}from 'genkit';
+>>>>>>> 8c1072a (Try fixing this error: `Runtime Error: TypeError: {imported module [proj)
 import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
