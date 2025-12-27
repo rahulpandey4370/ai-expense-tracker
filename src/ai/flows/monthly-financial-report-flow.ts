@@ -17,7 +17,7 @@ export const MonthlyFinancialReportInputSchema = z.object({
   monthName: z.string().describe("The name of the month being analyzed (e.g., 'January')."),
   year: z.number().describe("The year being analyzed (e.g., 2024)."),
   currentMonthTransactions: z.array(z.custom<AITransactionForAnalysis>()).describe("An array of all transactions for the current month."),
-  previousMonthTransactions: z.array(z.custom<A.ITransactionForAnalysis>()).describe("An array of all transactions for the previous month, for comparison."),
+  previousMonthTransactions: z.array(z.custom<AITransactionForAnalysis>()).describe("An array of all transactions for the previous month, for comparison."),
   model: z.string().optional().describe("The AI model to use for generation."),
 });
 export type MonthlyFinancialReportInput = z.infer<typeof MonthlyFinancialReportInputSchema>;
@@ -60,7 +60,7 @@ export const MonthlyFinancialReportOutputSchema = z.object({
 export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
 
 
-const reportPrompt = ai().definePrompt({
+const reportPrompt = ai.definePrompt({
   name: 'monthlyFinancialReportPrompt',
   input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
   output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
@@ -105,16 +105,16 @@ const reportPrompt = ai().definePrompt({
 `,
 });
 
-const monthlyFinancialReportFlow = ai().defineFlow(
+const monthlyFinancialReportFlow = ai.defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
     inputSchema: MonthlyFinancialReportInputSchema,
     outputSchema: MonthlyFinancialReportOutputSchema,
   },
   async (input) => {
-    const llm = ai(input.model as AIModel || 'gemini-3-flash-preview');
-
-    const { output } = await retryableAIGeneration(() => reportPrompt(input, { llm }));
+    const modelToUse = input.model || 'gemini-2.5-flash';
+    
+    const { output } = await retryableAIGeneration(() => reportPrompt(input));
 
     if (!output) {
       throw new Error("AI failed to generate a valid report structure.");
@@ -122,7 +122,7 @@ const monthlyFinancialReportFlow = ai().defineFlow(
 
     return {
         ...output,
-        model: input.model || 'gemini-3-flash-preview',
+        model: modelToUse,
     };
   }
 );
