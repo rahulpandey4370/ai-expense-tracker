@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { AIModel } from '@/contexts/AIModelContext';
+import type { AIModel } from '@/lib/types';
 import { 
     MonthlyFinancialReportInputSchema, 
     MonthlyFinancialReportOutputSchema,
