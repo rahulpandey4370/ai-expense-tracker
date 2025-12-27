@@ -8,6 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
@@ -167,7 +168,7 @@ const parseTransactionsFlow = ai().defineFlow(
     inputSchema: ParseTransactionTextInputSchemaInternal,
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
-  async (input) => {
+  async (input, { model }) => {
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }

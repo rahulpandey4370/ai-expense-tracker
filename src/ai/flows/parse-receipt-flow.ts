@@ -8,6 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
@@ -122,7 +123,7 @@ const parseReceiptImageFlow = ai().defineFlow(
     inputSchema: ParseReceiptImageInputSchemaInternal,
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }),
   },
-  async (input) => {
+  async (input, { model }) => {
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }

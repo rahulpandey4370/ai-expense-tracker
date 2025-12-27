@@ -9,6 +9,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { 
@@ -35,7 +36,7 @@ export async function analyzeFixedExpenses(
         summary: `No transactions were provided for ${input.monthName} ${input.year}, so no analysis could be performed.`,
       };
     }
-    return await fixedExpenseAnalyzerFlow(validatedInput);
+    return await fixedExpenseAnalyzerFlow(validatedInput, { model: input.model });
   } catch (flowError: any) {
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';

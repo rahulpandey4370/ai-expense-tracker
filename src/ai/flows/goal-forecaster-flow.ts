@@ -9,6 +9,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
@@ -21,6 +22,7 @@ const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
 
 const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
 
+export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema> & { model: AIModel };
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
@@ -106,10 +108,10 @@ If goalAmount *was* provided but income is ₹0, calculate required monthly savi
 const financialGoalForecasterFlow = ai().defineFlow(
   {
     name: 'financialGoalForecasterFlow',
-    inputSchema: GoalForecasterInputSchemaInternal,
-    outputSchema: GoalForecasterOutputSchemaInternal,
+    inputSchema: GoalForecasterInputSchema,
+    outputSchema: GoalForecasterOutputSchema,
   },
-  async (input) => {
+  async (input, { model }) => {
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",

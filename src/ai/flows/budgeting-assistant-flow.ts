@@ -9,6 +9,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import type { BudgetingAssistantInput, BudgetingAssistantOutput, AIModel } from '@/lib/types';
@@ -42,8 +43,8 @@ export async function suggestBudgetPlan(
 ): Promise<BudgetingAssistantOutput> {
   try {
     // Validate input against internal schema before passing to AI
-    const validatedInput = BudgetingAssistantInputSchemaInternal.parse(input);
-    return await budgetingAssistantFlow(validatedInput);
+    const validatedInput = BudgetingAssistantInputSchema.parse(input);
+    return await budgetingAssistantFlow(validatedInput, { model: input.model });
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -109,10 +110,10 @@ Ensure all monetary values in the output are non-negative.
 const budgetingAssistantFlow = ai().defineFlow(
   {
     name: 'budgetingAssistantFlow',
-    inputSchema: BudgetingAssistantInputSchemaInternal,
-    outputSchema: BudgetingAssistantOutputSchemaInternal,
+    inputSchema: BudgetingAssistantInputSchema,
+    outputSchema: BudgetingAssistantOutputSchema,
   },
-  async (input) => {
+  async (input, { model }) => {
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },
