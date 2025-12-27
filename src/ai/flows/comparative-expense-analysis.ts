@@ -2,11 +2,7 @@
 'use server';
 
 /**
- * @fileOverview Provides comparative analysis of expenses between different months using Gemini.
- *
- * - comparativeExpenseAnalysis - A function that handles the comparative expense analysis process.
- * - ComparativeExpenseAnalysisInput - The input type for the comparativeExpenseAnalysis function.
- * - ComparativeExpenseAnalysisOutput - The return type for the comparativeExpenseAnalysis function.
+ * @fileOverview This file is deprecated. The functionality has been replaced by the more comprehensive monthly-financial-report-flow.
  */
 
 import {ai} from '@/ai/genkit';
@@ -26,7 +22,7 @@ const ComparativeExpenseAnalysisInputSchema = z.object({
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 
 const ComparativeExpenseAnalysisOutputSchema = z.object({
-  analysis: z.string().describe('A detailed comparative analysis of expenses between the current and previous months, including trends and potential savings areas.'),
+  analysis: z.string(),
 });
 export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
 

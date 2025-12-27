@@ -101,6 +101,7 @@ export const ParsedAITransactionSchema = z.object({
       participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
       splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
   }).optional().describe("If the text mentions splitting the bill, populate this object."),
+  model: z.string().optional(),
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
@@ -115,6 +116,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
+  model: z.string().optional(),
 });
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
 
@@ -138,6 +140,7 @@ export const GoalForecasterOutputSchema = z.object({
   motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
   estimatedOrProvidedGoalAmount: z.number().min(0.01).describe("The goal amount used for forecasting, either user-provided or AI-estimated, in INR."),
   wasAmountEstimatedByAI: z.boolean().describe("True if the goal amount was estimated by the AI, false if provided by the user."),
+  model: z.string().optional(),
 });
 export type GoalForecasterOutput = z.infer<typeof GoalForecasterOutputSchema>;
 
@@ -164,6 +167,7 @@ export const BudgetingAssistantOutputSchema = z.object({
     generalTips: z.array(z.string()).describe("General financial tips to help the user stick to the budget and improve savings. E.g., 'Review subscriptions for potential cuts.' or 'Set up automatic transfers to your savings account on payday.'"),
   }).describe("Actionable advice to help the user achieve their financial plan."),
   analysisSummary: z.string().describe("A brief overall analysis comparing the suggested budget to past spending habits and explaining how it helps achieve the savings goal. Mention any significant changes required."),
+  model: z.string().optional(),
 });
 export type BudgetingAssistantOutput = z.infer<typeof BudgetingAssistantOutputSchema>;
 
@@ -208,6 +212,7 @@ export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInput
 
 export const FinancialHealthCheckOutputSchema = z.object({
   healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (eg., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+  model: z.string().optional(),
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
 
@@ -318,9 +323,6 @@ const IdentifiedFixedExpenseSchema = z.object({
   estimatedAmount: z.number().describe("The estimated monthly amount for this fixed expense in INR."),
   confidence: z.enum(['High', 'Medium', 'Low']).describe("The AI's confidence that this is a true fixed/recurring expense."),
   reasoning: z.string().describe("A brief explanation for why this was identified as a fixed expense (e.g., 'Similar amount and description across months', 'Name indicates a subscription')."),
-  paymentMethodName: z.string().optional().describe("The payment method used."),
-  paymentMethodId: z.string().optional().describe("The ID of the payment method used."),
-  expenseType: z.enum(['need', 'want', 'investment']).optional().describe("The type of expense."),
 });
 export type IdentifiedFixedExpense = z.infer<typeof IdentifiedFixedExpenseSchema>;
 
@@ -328,6 +330,7 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   identifiedExpenses: z.array(IdentifiedFixedExpenseSchema).describe("A list of all identified fixed/recurring expenses for the month."),
   totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
+  model: z.string().optional(),
 });
 export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
 
@@ -407,3 +410,7 @@ export const InvestmentSummaryInputSchema = z.object({
   })),
 });
 export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;
+
+
+// Reports
+export type MonthlyFinancialReportOutput = z.infer<typeof import('../ai/flows/monthly-financial-report-flow').MonthlyFinancialReportOutputSchema>;

@@ -12,5 +12,6 @@ import '@/ai/flows/budgeting-assistant-flow.ts';
 import '@/ai/flows/financial-health-check-flow.ts';
 import '@/ai/flows/fixed-expense-analyzer-flow.ts';
 import '@/ai/flows/investment-summary-flow.ts';
+import '@/ai/flows/monthly-financial-report-flow.ts';
 
     
