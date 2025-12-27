@@ -14,7 +14,6 @@ import type { AIModel } from '@/contexts/AIModelContext';
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-<<<<<<< HEAD
 import { modelNames, type AIModel } from '@/lib/types';
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
@@ -37,6 +36,14 @@ const SpendingInsightsInputSchema = z.object({
 });
 
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
+
+
+// --- Output Schema ---
+const SpendingInsightsOutputSchema = z.object({
+  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
+  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
+  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
+});
 
 
 // --- Output Schema ---
@@ -83,9 +90,6 @@ const spendingInsightsPrompt = ai().definePrompt({
     maxOutputTokens: 1200,
 =======
     schema: SpendingInsightsOutputSchema,
-=======
-    schema: SpendingInsightsOutputSchema.omit({ model: true }),
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   },
   config: {
     temperature: 0.8,
@@ -140,7 +144,6 @@ Rules for the output:
 const spendingInsightsFlow = ai().defineFlow(
   {
     name: 'spendingInsightsFlow',
-<<<<<<< HEAD
     inputSchema: SpendingInsightsInputSchema,
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
