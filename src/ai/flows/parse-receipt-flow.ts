@@ -68,7 +68,11 @@ export async function parseReceiptImage(
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
   
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
+=======
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   
   try {
     const result = await parseReceiptImageFlow({ 
@@ -81,8 +85,17 @@ export async function parseReceiptImage(
     });
 =======
         currentDate 
+<<<<<<< HEAD
     }, { model: input.model });
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+    }, { model: modelToUse });
+
+    // Add model name to the successful response
+    const finalParsedTransaction = result.parsedTransaction ? { ...result.parsedTransaction, model: modelToUse } : null;
+
+    return { parsedTransaction: finalParsedTransaction, model: modelToUse };
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
     console.error("Error executing parseReceiptImageFlow:", flowError);
     return {
@@ -96,8 +109,13 @@ export async function parseReceiptImage(
 
 const parseReceiptImagePrompt = ai().definePrompt({
   name: 'parseReceiptImagePrompt',
+<<<<<<< HEAD
   input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true }) },
   output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }) }, // Ensure output schema matches expected
+=======
+  input: { schema: ParseReceiptImageInputSchemaInternal },
+  output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) }, // Ensure output schema matches expected
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   prompt: `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
 Your task is to extract transaction details from the provided receipt image. Assume receipts are for expenses.
 The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative.
@@ -156,12 +174,16 @@ const parseReceiptImageFlow = ai().defineFlow(
     let outputFromAI;
     try {
 <<<<<<< HEAD
+<<<<<<< HEAD
       const llm = ai(input.model as AIModel);
       const configuredPrompt = llm.definePrompt(parseReceiptImagePrompt.getDefinition());
       const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 2000);
 =======
       const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: model || googleAI.model('gemini-1.5-flash-latest') }), 3, 2000);
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+      const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: googleAI.model(model) }), 3, 2000);
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
       outputFromAI = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);

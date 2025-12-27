@@ -111,11 +111,13 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '../utils/retry-helper';
 import { MonthlyFinancialReportInputSchema, MonthlyFinancialReportOutputSchema } from '@/lib/types';
 import type { MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '@/lib/types';
+import { googleAI } from '@genkit-ai/googleai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
-    const result = await monthlyFinancialReportFlow(input);
-    return result;
+    const result = await monthlyFinancialReportFlow(input, { model: modelToUse });
+    return { ...result, model: modelToUse };
   } catch (error: any) {
     console.error(`Error in generateMonthlyFinancialReport flow: ${error.message}`, error.stack);
     throw new Error(`An unexpected error occurred while generating the financial report: ${error.message}`);
@@ -171,11 +173,10 @@ Transaction Data:
 const monthlyFinancialReportFlow = ai.defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
-    inputSchema: MonthlyFinancialReportInputSchema,
-    outputSchema: MonthlyFinancialReportOutputSchema,
+    inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
+    outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
-  async (input) => {
-    const model = ai(input.model);
+  async (input, { model }) => {
     
     // Create the prompt input, excluding the model property
     const promptInput = {
@@ -184,11 +185,11 @@ const monthlyFinancialReportFlow = ai.defineFlow(
       transactions: input.transactions,
     };
     
-    const { output } = await retryableAIGeneration(() => reportPrompt(promptInput, { model }));
+    const { output } = await retryableAIGeneration(() => reportPrompt(promptInput, { model: googleAI.model(model) }));
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");
     }
-    return { ...output, model: input.model || 'gemini-1.5-flash-latest' };
+    return output;
   }
 );
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)

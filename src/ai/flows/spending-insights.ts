@@ -12,9 +12,9 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import type { AIModel } from '@/contexts/AIModelContext';
 =======
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+<<<<<<< HEAD
 import { modelNames, type AIModel } from '@/lib/types';
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
@@ -46,6 +46,8 @@ const SpendingInsightsOutputSchema = z.object({
   keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
 });
 
+=======
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
 // --- Personas ---
@@ -81,6 +83,9 @@ const spendingInsightsPrompt = ai().definePrompt({
     maxOutputTokens: 1200,
 =======
     schema: SpendingInsightsOutputSchema,
+=======
+    schema: SpendingInsightsOutputSchema.omit({ model: true }),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   },
   config: {
     temperature: 0.8,
@@ -135,6 +140,7 @@ Rules for the output:
 const spendingInsightsFlow = ai().defineFlow(
   {
     name: 'spendingInsightsFlow',
+<<<<<<< HEAD
     inputSchema: SpendingInsightsInputSchema,
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },

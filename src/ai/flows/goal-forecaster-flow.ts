@@ -27,12 +27,17 @@ export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 =======
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
 
+<<<<<<< HEAD
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema> & { model: AIModel };
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
 ): Promise<GoalForecasterOutput> {
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against the main schema before passing to AI
@@ -43,6 +48,14 @@ export async function forecastFinancialGoal(
     const validatedInput = GoalForecasterInputSchema.parse(input);
     return await financialGoalForecasterFlow(validatedInput, { model: input.model });
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  try {
+    // Validate input against the main schema before passing to AI
+    const validatedInput = GoalForecasterInputSchema.omit({model: true}).parse(input);
+    const result = await financialGoalForecasterFlow(validatedInput, { model: modelToUse });
+    return { ...result, model: modelToUse };
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -71,12 +84,17 @@ export async function forecastFinancialGoal(
 const financialGoalPrompt = ai().definePrompt({
   name: 'financialGoalPrompt',
 <<<<<<< HEAD
+<<<<<<< HEAD
   input: { schema: GoalForecasterInputSchemaInternal.omit({ model: true }) },
   output: { schema: GoalForecasterOutputSchemaInternal },
 =======
   input: { schema: GoalForecasterInputSchema },
   output: { schema: GoalForecasterOutputSchema },
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+  input: { schema: GoalForecasterInputSchema.omit({model: true}) },
+  output: { schema: GoalForecasterOutputSchema.omit({model: true}) },
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   config: {
     temperature: 0.5, // Allow for some creative yet grounded advice
     maxOutputTokens: 800,
@@ -125,6 +143,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
   {
     name: 'financialGoalForecasterFlow',
 <<<<<<< HEAD
+<<<<<<< HEAD
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
@@ -133,6 +152,10 @@ const financialGoalForecasterFlow = ai().defineFlow(
 =======
     inputSchema: GoalForecasterInputSchema,
     outputSchema: GoalForecasterOutputSchema,
+=======
+    inputSchema: GoalForecasterInputSchema.omit({model: true}),
+    outputSchema: GoalForecasterOutputSchema.omit({model: true}),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   },
   async (input, { model }) => {
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
@@ -157,6 +180,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
         };
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
@@ -164,5 +188,12 @@ const financialGoalForecasterFlow = ai().defineFlow(
     const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model }));
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     return result.output!;
+=======
+    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model: googleAI.model(model) }));
+    if (!result.output) {
+      throw new Error("AI analysis failed to produce a valid goal forecast.");
+    }
+    return result.output;
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   }
 );

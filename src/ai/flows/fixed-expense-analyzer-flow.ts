@@ -28,14 +28,20 @@ const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.
     model: z.string().optional(),
 });
 
-export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema> & { model: AIModel };
+export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
 
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput & { model?: AIModel }
 ): Promise<FixedExpenseAnalyzerOutput> {
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchemaInternal.parse(input);
+=======
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  try {
+    const validatedInput = FixedExpenseAnalyzerInputSchema.omit({model: true}).parse(input);
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
     if (validatedInput.transactions.length === 0) {
       return {
         identifiedExpenses: [],
@@ -45,11 +51,16 @@ export async function analyzeFixedExpenses(
       };
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     const result = await fixedExpenseAnalyzerFlow(input);
     return { ...result, model: modelToUse };
 =======
     return await fixedExpenseAnalyzerFlow(validatedInput, { model: input.model });
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+    const result = await fixedExpenseAnalyzerFlow(validatedInput, { model: modelToUse });
+    return { ...result, model: modelToUse };
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -71,8 +82,13 @@ export async function analyzeFixedExpenses(
 
 const fixedExpensePrompt = ai().definePrompt({
   name: 'fixedExpenseAnalyzerPrompt',
+<<<<<<< HEAD
   input: { schema: FixedExpenseAnalyzerInputSchemaInternal.omit({ model: true }) },
   output: { schema: FixedExpenseAnalyzerOutputSchema },
+=======
+  input: { schema: FixedExpenseAnalyzerInputSchema.omit({model: true}) },
+  output: { schema: FixedExpenseAnalyzerOutputSchema.omit({model: true}) },
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   config: {
     temperature: 0.2, // Low temperature for factual analysis
     maxOutputTokens: 1000,
@@ -121,8 +137,13 @@ IMPORTANT:
 const fixedExpenseAnalyzerFlow = ai().defineFlow(
   {
     name: 'fixedExpenseAnalyzerFlow',
+<<<<<<< HEAD
     inputSchema: FixedExpenseAnalyzerInputSchemaInternal,
     outputSchema: FixedExpenseAnalyzerOutputSchema,
+=======
+    inputSchema: FixedExpenseAnalyzerInputSchema.omit({model: true}),
+    outputSchema: FixedExpenseAnalyzerOutputSchema.omit({model: true}),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   },
 <<<<<<< HEAD
   async (input) => {
@@ -131,8 +152,16 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
     const result = await retryableAIGeneration(() => configuredPrompt(input));
 =======
   async (input, { model }) => {
+<<<<<<< HEAD
     const result = await retryableAIGeneration(() => fixedExpensePrompt(input, { model }));
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     return result.output!;
+=======
+    const result = await retryableAIGeneration(() => fixedExpensePrompt(input, { model: googleAI.model(model) }));
+    if (!result.output) {
+      throw new Error("AI analysis failed to produce a valid fixed expense analysis.");
+    }
+    return result.output;
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   }
 );

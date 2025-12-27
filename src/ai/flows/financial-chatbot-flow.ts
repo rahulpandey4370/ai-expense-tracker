@@ -43,7 +43,10 @@ const FinancialChatbotInputSchemaInternal = z.object({
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'."),
+<<<<<<< HEAD
   model: z.string().optional().describe("The AI model to use."),
+=======
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -156,8 +159,15 @@ export async function askFinancialBot(input: {
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : ''),
+<<<<<<< HEAD
     model: input.model,
   });
+=======
+  };
+  
+  const result = await financialChatbotFlow(flowInput, { model: input.model });
+  return { ...result, model: input.model };
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 }
 
 
@@ -167,8 +177,12 @@ const financialChatbotFlow = ai().defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
+<<<<<<< HEAD
   async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     
+=======
+  async ({ query, transactions, chatHistory, dataScopeMessage }, { model }) => {
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -263,12 +277,18 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     }
     messages.push({ role: 'user', content: query });
     
+<<<<<<< HEAD
     const selectedModel = model || 'gemini-1.5-flash-latest';
 
     const llm = ai(model as AIModel); // Use the selected model
 
     const llmResponse = await retryableAIGeneration(() => llm.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
+=======
+    const llmResponse = await retryableAIGeneration(() => ai.generate({
+      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
+      model: googleAI.model(model),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
       config: {
         temperature: 0.1,
         maxOutputTokens: 800,

@@ -6,7 +6,7 @@ import { z } from 'zod';
 export type AIModel = 'gemini-2.5-flash' | 'gemini-3-flash' | 'gemini-2.5-flash-lite' | 'gemma-3-27b';
 =======
 // AI Model Selection
-export const modelNames = ['gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite'] as const;
+export const modelNames = ['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite'] as const;
 export type AIModel = (typeof modelNames)[number];
 
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
@@ -116,7 +116,11 @@ export const ParsedAITransactionSchema = z.object({
       participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
       splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
   }).optional().describe("If the text mentions splitting the bill, populate this object."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
@@ -135,7 +139,11 @@ export const ParsedReceiptTransactionSchema = z.object({
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
 
@@ -160,7 +168,11 @@ export const GoalForecasterOutputSchema = z.object({
   motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
   estimatedOrProvidedGoalAmount: z.number().min(0.01).describe("The goal amount used for forecasting, either user-provided or AI-estimated, in INR."),
   wasAmountEstimatedByAI: z.boolean().describe("True if the goal amount was estimated by the AI, false if provided by the user."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type GoalForecasterOutput = z.infer<typeof GoalForecasterOutputSchema>;
 
@@ -188,7 +200,11 @@ export const BudgetingAssistantOutputSchema = z.object({
     generalTips: z.array(z.string()).describe("General financial tips to help the user stick to the budget and improve savings. E.g., 'Review subscriptions for potential cuts.' or 'Set up automatic transfers to your savings account on payday.'"),
   }).describe("Actionable advice to help the user achieve their financial plan."),
   analysisSummary: z.string().describe("A brief overall analysis comparing the suggested budget to past spending habits and explaining how it helps achieve the savings goal. Mention any significant changes required."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type BudgetingAssistantOutput = z.infer<typeof BudgetingAssistantOutputSchema>;
 
@@ -234,7 +250,11 @@ export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInput
 
 export const FinancialHealthCheckOutputSchema = z.object({
   healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (eg., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
 
@@ -364,7 +384,11 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   identifiedExpenses: z.array(IdentifiedFixedExpenseSchema).describe("A list of all identified fixed/recurring expenses for the month."),
   totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
+<<<<<<< HEAD
   model: z.string().optional(),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 });
 export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
 
@@ -508,14 +532,21 @@ export const ComparativeExpenseAnalysisInputSchema = z.object({
   previousMonthExpenses: z.number().describe('Total expenses for the previous month in INR.'),
   expenseCategoriesCurrent: z.string().describe('A string representation of expense categories and amounts for the current month, e.g., "Food: ₹5000, Transport: ₹3000".'),
   expenseCategoriesPrevious: z.string().describe('A string representation of expense categories and amounts for the previous month, e.g., "Food: ₹4000, Transport: ₹2500".'),
-  model: z.nativeEnum(modelNames).optional(),
+  model: z.enum(modelNames).optional(),
 });
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
+
+export const ComparativeExpenseAnalysisOutputSchema = z.object({
+  analysis: z.string().describe("A concise, insightful summary comparing spending habits between the two months. Use '\\n' for new lines in a single string."),
+  model: z.enum(modelNames).optional(),
+});
+export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
+
 export const MonthlyFinancialReportInputSchema = z.object({
   monthName: z.string(),
   year: z.number(),
   transactions: z.array(AITransactionForAnalysisSchema),
-  model: z.nativeEnum(modelNames).optional(),
+  model: z.enum(modelNames).optional(),
 });
 export type MonthlyFinancialReportInput = z.infer<typeof MonthlyFinancialReportInputSchema>;
 export const MonthlyFinancialReportOutputSchema = z.object({
@@ -524,7 +555,17 @@ export const MonthlyFinancialReportOutputSchema = z.object({
   categoryDeepDive: z.string(),
   savingsAndInvestmentAnalysis: z.string(),
   actionableRecommendations: z.array(z.string()),
-  model: z.nativeEnum(modelNames).optional(),
+  model: z.enum(modelNames).optional(),
 });
 export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
+<<<<<<< HEAD
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
+=======
+
+// Spending Insights
+export const SpendingInsightsOutputSchema = z.object({
+  insights: z.string().describe("A string containing 4-6 numbered insights, separated by \\n."),
+  model: z.enum(modelNames).optional(),
+});
+export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)

@@ -94,7 +94,7 @@ export async function getReport(monthYearKey: string): Promise<MonthlyFinancialR
 'use server';
 
 import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
-import { AITransactionForAnalysisSchema, type AIModel } from "@/lib/types";
+import { AITransactionForAnalysisSchema, type AIModel, modelNames } from "@/lib/types";
 import { getTransactions } from "./transactions";
 
 export async function getMonthlyReport(month: number, year: number, model: AIModel): Promise<MonthlyFinancialReportOutput> {
@@ -133,7 +133,7 @@ export async function getMonthlyReport(month: number, year: number, model: AIMod
     monthName: monthNames[month],
     year: year,
     transactions: relevantTransactions,
-    model: model,
+    model: model || 'gemini-1.5-flash-latest',
   };
 
   return await generateMonthlyFinancialReport(input);

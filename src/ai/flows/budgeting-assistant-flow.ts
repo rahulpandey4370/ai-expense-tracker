@@ -41,11 +41,19 @@ const BudgetingAssistantOutputSchemaInternal = z.object({
 export async function suggestBudgetPlan(
   input: BudgetingAssistantInput & { model?: AIModel }
 ): Promise<BudgetingAssistantOutput> {
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
     const result = await budgetingAssistantFlow(validatedInput);
+=======
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  try {
+    // Validate input against internal schema before passing to AI
+    const validatedInput = BudgetingAssistantInputSchema.parse(input);
+    const result = await budgetingAssistantFlow(validatedInput, { model: modelToUse });
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
@@ -69,8 +77,13 @@ export async function suggestBudgetPlan(
 
 const budgetPrompt = ai().definePrompt({
   name: 'budgetingAssistantPrompt',
+<<<<<<< HEAD
   input: { schema: BudgetingAssistantInputSchemaInternal.omit({ model: true }) },
   output: { schema: BudgetingAssistantOutputSchemaInternal },
+=======
+  input: { schema: BudgetingAssistantInputSchema },
+  output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   config: {
     temperature: 0.6, // Allow for some creative yet grounded advice
     maxOutputTokens: 1000,
@@ -130,9 +143,13 @@ const budgetingAssistantFlow = ai().defineFlow(
         analysisSummary: "A meaningful budget cannot be created without a stated monthly income. Please provide your income to get a personalized plan.",
       };
     }
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(budgetPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
+=======
+    const result = await retryableAIGeneration(() => budgetPrompt(input, { model: googleAI.model(model) }));
+>>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
     return result.output!;
   }
 );
