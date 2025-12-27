@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -16,7 +15,8 @@ import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-tren
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
-import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput } from '@/ai/flows/monthly-financial-report-flow';
+import { generateMonthlyFinancialReport } from '@/ai/flows/monthly-financial-report-flow';
+import type { AITransactionForAnalysis, MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '@/lib/types';
 import { getReport, saveReport } from '@/lib/actions/reports';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -29,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
+import { Badge } from '@/components/ui/badge';
 
 
 const pageVariants = {

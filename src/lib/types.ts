@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 // For model selection context
@@ -413,4 +412,48 @@ export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema
 
 
 // Reports
-export type MonthlyFinancialReportOutput = z.infer<typeof import('../ai/flows/monthly-financial-report-flow').MonthlyFinancialReportOutputSchema>;
+export const MonthlyFinancialReportInputSchema = z.object({
+  monthName: z.string().describe("The name of the month being analyzed (e.g., 'January')."),
+  year: z.number().describe("The year being analyzed (e.g., 2024)."),
+  currentMonthTransactions: z.array(z.custom<AITransactionForAnalysis>()).describe("An array of all transactions for the current month."),
+  previousMonthTransactions: z.array(z.custom<AITransactionForAnalysis>()).describe("An array of all transactions for the previous month, for comparison."),
+  model: z.string().optional().describe("The AI model to use for generation."),
+});
+export type MonthlyFinancialReportInput = z.infer<typeof MonthlyFinancialReportInputSchema>;
+
+
+export const MonthlyFinancialReportOutputSchema = z.object({
+  reportTitle: z.string().describe("A suitable title for the report, e.g., 'Financial Report for January 2024'."),
+  overallSummary: z.string().describe("A 2-3 sentence high-level summary of the month's financial health, mentioning income, spending, and savings."),
+  incomeAnalysis: z.object({
+    totalIncome: z.number().describe("Total income for the month in INR."),
+    incomeSources: z.array(z.object({ source: z.string(), amount: z.number() })).describe("A breakdown of income by source/category."),
+    comparison: z.string().describe("A brief comparison of this month's income to the last."),
+  }),
+  spendingAnalysis: z.object({
+    totalSpending: z.number().describe("Total spending for the month in INR."),
+    comparison: z.string().describe("A brief comparison of this month's spending to the last."),
+    categoryBreakdown: z.array(z.object({
+      category: z.string(),
+      amount: z.number(),
+      percentage: z.number().describe("Percentage of total spending."),
+      insight: z.string().optional().describe("A brief insight into this category's spending."),
+    })).describe("A detailed breakdown of spending by the top 5-7 categories."),
+    notableTransactions: z.array(z.object({
+        description: z.string(),
+        amount: z.number(),
+        date: z.string(),
+        reason: z.string().describe("Why this transaction is considered notable (e.g., 'Largest purchase', 'Unusual category')."),
+    })).optional().describe("A list of 2-3 particularly large, unusual, or interesting transactions."),
+  }),
+  savingsAndInvestmentAnalysis: z.object({
+    totalSavings: z.number().describe("Net savings for the month (Income - Expenses) in INR."),
+    savingsRate: z.number().describe("Savings rate as a percentage of income."),
+    totalInvestments: z.number().describe("Total amount actively invested this month."),
+    investmentRate: z.number().describe("Investment rate as a percentage of income."),
+    summary: z.string().describe("A summary of savings and investment performance."),
+  }),
+  actionableInsights: z.array(z.string()).describe("A list of 3-5 concrete, actionable tips for the user based on the analysis (e.g., 'Consider setting a budget for 'Food and Dining'', 'Your savings rate is strong, consider automating investments.')."),
+  model: z.string().optional().describe("The AI model that generated this report."),
+});
+export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
