@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -48,12 +49,12 @@ const spendingInsightsPrompt = ai().definePrompt({
     schema: z.object({
       persona: z.string(),
       analysisPeriod: z.string(),
-      currentDate: z.string(),  // 👈 NEW: dynamically passed in
+      currentDate: z.string(),
       jsonInput: z.string(),
     }),
   },
-  output: { 
-    schema: SpendingInsightsOutputSchema, 
+  output: {
+    schema: SpendingInsightsOutputSchema,
   },
   config: {
     temperature: 0.8,
@@ -113,7 +114,7 @@ const spendingInsightsFlow = ai().defineFlow(
   async (input) => {
     const selectedPersona =
       personas[input.insightType || 'default'] || personas['default'];
-    
+
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
@@ -131,7 +132,7 @@ const spendingInsightsFlow = ai().defineFlow(
     const promptInput = {
       persona: selectedPersona,
       analysisPeriod,
-      currentDate, // 👈 pass to prompt
+      currentDate,
       jsonInput: JSON.stringify(input, null, 2),
     };
     

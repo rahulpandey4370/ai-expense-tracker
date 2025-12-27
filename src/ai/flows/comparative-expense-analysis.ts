@@ -29,6 +29,8 @@ export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpense
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
+  // We can't directly pass the full input to the flow if the flow's internal schema is different.
+  // The flow expects the raw input, and it will derive the model from it.
   return comparativeExpenseAnalysisFlow(input);
 }
 

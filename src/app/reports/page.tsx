@@ -70,6 +70,7 @@ export default function ReportsPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   
   const [categoryExpenseTypeFilter, setCategoryExpenseTypeFilter] = useState<'all' | ExpenseType>('all');
+  const { selectedModel } = useAIModel();
 
   const { toast } = useToast();
 
