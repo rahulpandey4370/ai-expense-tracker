@@ -14,6 +14,7 @@ import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAIModel } from '@/contexts/AIModelContext';
 
 
 interface FinancialChatbotProps {
@@ -78,6 +79,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { selectedModel } = useAIModel();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -110,6 +112,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
         query: userMessage.content,
         transactions: allTransactions, // Pass AppTransaction array
         chatHistory: messages.slice(-5),
+        model: selectedModel,
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response };
       setMessages(prev => [...prev, assistantMessage]);
