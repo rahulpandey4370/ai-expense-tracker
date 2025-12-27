@@ -97,6 +97,7 @@ Rules for the output:
 - It must be a single, valid JSON object.
 - Use the Rupee symbol (₹).
 - Do NOT include markdown code blocks (like \`\`\`json) in the output, just the raw JSON object.
+- The final output MUST be a valid JSON object.
 
 ## USER FINANCIAL DATA
 \`\`\`json
@@ -108,12 +109,12 @@ Rules for the output:
 const spendingInsightsFlow = ai().defineFlow(
   {
     name: 'spendingInsightsFlow',
-    inputSchema: SpendingInsightsInputSchema.omit({ model: true }),
+    inputSchema: SpendingInsightsInputSchema,
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
-    const selectedPersona = personas[(input as any).insightType || 'default'] || personas['default'];
+    const model = input.model || 'gemini-3-flash-preview';
+    const selectedPersona = personas[input.insightType || 'default'] || personas['default'];
 
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
@@ -151,6 +152,16 @@ const spendingInsightsFlow = ai().defineFlow(
     };
   }
 );
+
+function simpleTemplateRender(template: string, data: Record<string, any>): string {
+    let rendered = template;
+    for (const key in data) {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        rendered = rendered.replace(regex, data[key]);
+    }
+    return rendered;
+}
+
 
 // --- Main Export Function ---
 export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {

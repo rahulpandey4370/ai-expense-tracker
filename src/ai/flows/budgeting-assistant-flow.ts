@@ -108,6 +108,7 @@ Be empathetic and provide motivating, practical advice.
 If income is ₹0 or very low, state that a meaningful budget cannot be created without income, but still offer general saving tips if possible.
 If the savings goal is very aggressive (e.g., making total allocated expenses + savings > income), point this out and suggest a more conservative savings goal or the need for higher income.
 Ensure all monetary values in the output are non-negative.
+You must respond in a valid JSON format.
 `;
 
 const budgetingAssistantFlow = ai().defineFlow(

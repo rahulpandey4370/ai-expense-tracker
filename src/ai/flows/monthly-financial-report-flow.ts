@@ -67,7 +67,7 @@ const reportPrompt = ai().definePrompt({
 const monthlyFinancialReportFlow = ai().defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
-    inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
+    inputSchema: MonthlyFinancialReportInputSchema,
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
