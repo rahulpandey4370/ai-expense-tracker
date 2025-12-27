@@ -36,7 +36,7 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         return JSON.stringify(value, null, 2);
     });
 
-    // Replace {{...}}
+    // Replace {{#each ...}} ... {{/each}}
     output = output.replace(/{{#each\s+([^}]+)}}([\s\S]*?){{\/each}}/g, (match, arrayKey, content) => {
         const array = data[arrayKey.trim()];
         if (!Array.isArray(array)) return '';
@@ -44,7 +44,7 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
             return content.replace(/{{this\.([\w]+)}}/g, (m, prop) => item[prop] || '');
         }).join('');
     });
-
+    
     // Replace {{{...}}} and {{...}}
     output = output.replace(/{{{\s*([\w.]+)\s*}}}/g, (match, key) => {
         const keys = key.trim().split('.');
