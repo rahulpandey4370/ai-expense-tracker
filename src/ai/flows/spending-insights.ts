@@ -112,7 +112,8 @@ const spendingInsightsFlow = ai().defineFlow(
     inputSchema: SpendingInsightsInputSchema.omit({ model: true }),
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     const selectedPersona =
       personas[input.insightType || 'default'] || personas['default'];
 

@@ -171,7 +171,8 @@ const parseTransactionsFlow = ai().defineFlow(
     inputSchema: ParseTransactionTextInputSchemaInternal,
     outputSchema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }

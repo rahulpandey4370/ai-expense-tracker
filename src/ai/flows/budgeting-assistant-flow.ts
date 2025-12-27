@@ -117,7 +117,8 @@ const budgetingAssistantFlow = ai().defineFlow(
     inputSchema: BudgetingAssistantInputSchema,
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },

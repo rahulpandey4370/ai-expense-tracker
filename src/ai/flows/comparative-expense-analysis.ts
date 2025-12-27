@@ -47,8 +47,8 @@ Current Period: {{currentMonth}}
 Previous Period: {{previousMonth}}
 Current Period Expenses: ₹{{currentMonthExpenses}}
 Previous Period Expenses: ₹{{previousMonthExpenses}}
-Current Period Expense Categories: {{expenseCategoriesCurrent}}
-Previous Period Expense Categories: {{expenseCategoriesPrevious}}
+Expense Categories Current: {{expenseCategoriesCurrent}}
+Expense Categories Previous: {{expenseCategoriesPrevious}}
 
 Provide a detailed comparative analysis. Focus on identifying specific categories where spending has increased or decreased significantly. Offer suggestions for potential savings or areas where the user could adjust their spending habits.
 `,

@@ -128,7 +128,8 @@ const parseReceiptImageFlow = ai().defineFlow(
     inputSchema: ParseReceiptImageInputSchemaInternal,
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }

@@ -165,7 +165,8 @@ const financialChatbotFlow = ai().defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage }, { model }) => {
+  async ({ query, transactions, chatHistory, dataScopeMessage }, options) => {
+    const model = options?.model;
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -179,12 +180,12 @@ You are the AI Financial Assistant for FinWise AI, specializing in personal fina
 - Income and spending pattern identification
 - Financial insights and recommendations
 - Indian financial context and currency (INR)
+- Application Features: This expense tracker includes a 'Yearly Overview' page for comprehensive yearly summaries
 
 ## CONTEXT
 - Current Date: ${currentDate}
 - Transaction Data Scope: ${dataScopeMessage || 'the most recent period (up to 250 transactions)'}
 - Currency: All amounts are in Indian Rupees (INR)
-- Application Features: This expense tracker includes a 'Yearly Overview' page for comprehensive yearly summaries
 
 ## TASK
 Your primary tasks include:

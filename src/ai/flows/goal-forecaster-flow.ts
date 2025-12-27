@@ -112,7 +112,8 @@ const financialGoalForecasterFlow = ai().defineFlow(
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
