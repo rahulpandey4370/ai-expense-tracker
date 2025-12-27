@@ -73,7 +73,7 @@ export default function DashboardPage() {
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
-  const { selectedModel, setSelectedModel, availableModels } = useAIModel();
+  const { selectedModel, setSelectedModel, modelNames } = useAIModel();
 
   const handleScrollToForm = () => {
     addTransactionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -490,7 +490,7 @@ export default function DashboardPage() {
             <DropdownMenuContent side="top" align="end" className="w-56">
                 <DropdownMenuLabel>Select AI Model</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {availableModels.map(model => (
+                {modelNames.map(model => (
                     <DropdownMenuItem key={model} onSelect={() => setSelectedModel(model as AIModel)}>
                         <Check className={cn("mr-2 h-4 w-4", selectedModel === model ? "opacity-100" : "opacity-0")} />
                         {model}
