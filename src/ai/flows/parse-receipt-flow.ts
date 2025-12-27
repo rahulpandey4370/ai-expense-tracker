@@ -69,10 +69,14 @@ export async function parseReceiptImage(
     .map(({ type, ...rest }) => rest);
   
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
 =======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
   
   try {
     const result = await parseReceiptImageFlow({ 

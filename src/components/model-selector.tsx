@@ -14,10 +14,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { Bot } from "lucide-react";
 =======
 import { BrainCircuit } from "lucide-react";
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
+=======
+import { Bot } from "lucide-react";
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
 import type { AIModel } from "@/lib/types";
 
 export function ModelSelector() {
@@ -28,10 +32,14 @@ export function ModelSelector() {
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon">
 <<<<<<< HEAD
+<<<<<<< HEAD
           <Bot className="h-[1.2rem] w-[1.2rem]" />
 =======
           <BrainCircuit className="h-[1.2rem] w-[1.2rem]" />
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
+=======
+          <Bot className="h-[1.2rem] w-[1.2rem]" />
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
           <span className="sr-only">Select AI Model</span>
         </Button>
       </DropdownMenuTrigger>

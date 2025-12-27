@@ -45,6 +45,7 @@ export async function comparativeExpenseAnalysis(
 ): Promise<ComparativeExpenseAnalysisOutput> {
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   const result = await comparativeExpenseAnalysisFlow(input);
   return { ...result, model: modelToUse };
@@ -60,6 +61,9 @@ const prompt = ai().definePrompt({
   return comparativeExpenseAnalysisFlow(input);
 =======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
   const result = await comparativeExpenseAnalysisFlow(input, { model: modelToUse });
   return { ...result, model: modelToUse };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)

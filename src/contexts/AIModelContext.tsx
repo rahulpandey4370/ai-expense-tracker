@@ -64,7 +64,7 @@ export function AIModelProvider({ children }: { children: ReactNode }) {
       {isInitialized ? children : null}
 =======
 const AI_MODEL_STORAGE_KEY = "finwiseAIModel";
-const DEFAULT_MODEL: AIModel = 'gemini-1.5-flash-latest';
+const DEFAULT_MODEL: AIModel = 'gemini-3-flash-preview';
 
 export function AIModelProvider({ children }: { children: ReactNode }) {
   const [selectedModel, setSelectedModel] = useState<AIModel>(DEFAULT_MODEL);

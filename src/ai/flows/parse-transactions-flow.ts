@@ -13,11 +13,15 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 import { callAzureOpenAI } from '@/lib/azure-openai';
 =======
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -49,7 +53,6 @@ export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInput
 const ParseTransactionTextOutputSchemaInternal = z.object({
   parsedTransactions: z.array(ParsedAITransactionSchema.omit({ model: true })).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
   summaryMessage: z.string().optional().describe("A brief overall summary or any general notes about the parsing process (be concise)."),
-  model: z.enum(['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']).optional(),
 });
 export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchemaInternal> & { model?: AIModel };
 
@@ -67,10 +70,14 @@ export async function parseTransactionsFromText(
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
 =======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -131,8 +138,12 @@ const parseTransactionsPrompt = ai().definePrompt({
 =======
 =======
   input: { schema: ParseTransactionTextInputSchemaInternal },
+<<<<<<< HEAD
   output: { schema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }) },
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  output: { schema: ParseTransactionTextOutputSchemaInternal },
+>>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
   // Model configuration for potentially faster responses
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   config: {
@@ -209,7 +220,7 @@ const parseTransactionsFlow = ai().defineFlow(
   {
     name: 'parseTransactionsFlow',
     inputSchema: ParseTransactionTextInputSchemaInternal,
-    outputSchema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }),
+    outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
 <<<<<<< HEAD
 <<<<<<< HEAD

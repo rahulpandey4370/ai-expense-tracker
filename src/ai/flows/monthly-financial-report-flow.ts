@@ -114,7 +114,7 @@ import type { MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '
 import { googleAI } from '@genkit-ai/googleai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const result = await monthlyFinancialReportFlow(input, { model: modelToUse });
     return { ...result, model: modelToUse };
