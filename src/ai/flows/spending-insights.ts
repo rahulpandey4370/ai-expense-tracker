@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -50,7 +49,7 @@ const spendingInsightsPrompt = ai().definePrompt({
     schema: z.object({
       persona: z.string(),
       analysisPeriod: z.string(),
-      currentDate: z.string(),
+      currentDate: z.string(),  // 👈 NEW: dynamically passed in
       jsonInput: z.string(),
     }),
   },
@@ -122,6 +121,7 @@ const spendingInsightsFlow = ai().defineFlow(
     ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
+    // Dynamically compute today's date in India time (Bangalore)
     const currentDate = new Intl.DateTimeFormat('en-IN', {
       day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
     }).format(new Date());
@@ -129,7 +129,7 @@ const spendingInsightsFlow = ai().defineFlow(
     const promptInput = {
       persona: selectedPersona,
       analysisPeriod,
-      currentDate,
+      currentDate, // 👈 pass to prompt
       jsonInput: JSON.stringify(input, null, 2),
     };
     
