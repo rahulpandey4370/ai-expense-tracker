@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
-import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction } from "@/lib/types";
+import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
@@ -28,6 +28,8 @@ import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransactionSchema } from '@/lib/types';
 import Image from 'next/image';
+import { useAIModel } from '@/contexts/AIModelContext';
+import { ModelInfoBadge } from './model-info-badge';
 
 
 interface TransactionFormProps {
@@ -60,6 +62,7 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('ai_text');
+  const { selectedModel } = useAIModel();
 
   // Single Transaction State
   const [type, setType] = useState<AppTransactionTypeEnum>('expense');
@@ -89,6 +92,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [aiReviewTransactions, setAiReviewTransactions] = useState<TransactionInput[]>([]);
   const [isProcessingAIText, setIsProcessingAIText] = useState(false);
   const [aiProcessingError, setAiProcessingError] = useState<string | null>(null);
+  const [lastUsedAIModel, setLastUsedAIModel] = useState<AIModel | undefined>();
 
   // AI Receipt Input State
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -485,6 +489,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setParsedAITransactions([]);
     setAiReviewTransactions([]);
     setAiProcessingError(null);
+    setLastUsedAIModel(selectedModel);
     try {
       const categoryNamesForAI = allCategories.map(c => ({id: c.id, name: c.name, type: c.type as 'income' | 'expense'}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({id: p.id, name: p.name }));
@@ -493,6 +498,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         naturalLanguageText: aiText,
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
+        model: selectedModel,
       });
       
       if (result.summaryMessage && result.parsedTransactions.length === 0) {
@@ -700,6 +706,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setParsedReceiptTransaction(null);
     setAiReceiptReviewTransaction(null);
     setAiReceiptError(null);
+    setLastUsedAIModel(selectedModel);
 
     try {
       const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'})); 
@@ -709,6 +716,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         receiptImageUri: receiptPreview, 
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
+        model: selectedModel,
       });
       
       if (result.parsedTransaction?.error && !result.parsedTransaction?.amount && !result.parsedTransaction?.description) {
@@ -1013,7 +1021,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
       {aiReviewTransactions.length > 0 && !isProcessingAIText && !aiProcessingError && (
         <div className="space-y-3">
-          <h4 className="text-md font-semibold text-primary">Review AI Suggestions ({aiReviewTransactions.length} potential transactions)</h4>
+          <div className="flex justify-between items-center">
+            <h4 className="text-md font-semibold text-primary">Review AI Suggestions ({aiReviewTransactions.length} potential transactions)</h4>
+            {lastUsedAIModel && <ModelInfoBadge model={lastUsedAIModel}/>}
+          </div>
            <Alert variant="destructive" className="text-sm">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>AI is not perfect!</AlertTitle>
@@ -1162,7 +1173,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
         {aiReceiptReviewTransaction && !isProcessingAIReceipt && !aiReceiptError && (
             <div className="space-y-3 pt-3">
-                <h4 className="text-md font-semibold text-primary">Review AI Receipt Suggestion</h4>
+                <div className="flex justify-between items-center">
+                    <h4 className="text-md font-semibold text-primary">Review AI Receipt Suggestion</h4>
+                    {lastUsedAIModel && <ModelInfoBadge model={lastUsedAIModel}/>}
+                </div>
                 <Alert variant="destructive" className="text-sm">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>AI is not perfect!</AlertTitle>
