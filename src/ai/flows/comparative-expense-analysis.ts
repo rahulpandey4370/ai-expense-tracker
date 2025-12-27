@@ -90,7 +90,7 @@ const comparativeExpenseAnalysisFlow = ai().defineFlow(
     const {output} = await retryableAIGeneration(() => configuredPrompt(input));
 =======
   async (input) => {
-    const model = ai(input.model); // Get the specific model instance
+    const model = input.model;
     const { output } = await retryableAIGeneration(() => prompt(input, { model }));
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
     return output!;

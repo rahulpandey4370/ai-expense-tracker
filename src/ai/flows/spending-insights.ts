@@ -167,7 +167,10 @@ const spendingInsightsFlow = ai().defineFlow(
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
+    const model = input.model;
+
     const { output } = await retryableAIGeneration(() =>
+<<<<<<< HEAD
 <<<<<<< HEAD
       configuredPrompt(promptInput)
     );
@@ -175,6 +178,9 @@ const spendingInsightsFlow = ai().defineFlow(
     if (!output) {
 =======
       spendingInsightsPrompt(promptInput, { model: ai(input.model) })
+=======
+      spendingInsightsPrompt(promptInput, { model })
+>>>>>>> f195e67 (Try fixing this error: `Console Error: Error: (0 , {imported module [pro)
     );
 
     if (!output || !output.insights) {
