@@ -5,6 +5,7 @@
  * @fileOverview AI-powered insights about spending habits using Gemini.
  */
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import type { AIModel } from '@/contexts/AIModelContext';
@@ -139,7 +140,7 @@ const spendingInsightsFlow = ai().defineFlow(
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
-    const model = input.model;
+    const model = input.model || 'gemini-1.5-flash-latest';
 
     const { output } = await retryableAIGeneration(() =>
       configuredPrompt(promptInput)

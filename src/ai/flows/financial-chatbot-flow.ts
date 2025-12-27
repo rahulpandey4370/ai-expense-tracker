@@ -255,6 +255,8 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
       });
     }
     messages.push({ role: 'user', content: query });
+    
+    const selectedModel = model || 'gemini-1.5-flash-latest';
 
     const llm = ai(model as AIModel); // Use the selected model
 
