@@ -13,6 +13,8 @@ import { z } from 'genkit';
 import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
+import { callAzureOpenAIChat } from '@/lib/azure-openai';
+
 
 const AITransactionSchema = z.object({
   id: z.string(),
@@ -165,8 +167,8 @@ const financialChatbotFlow = ai().defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage }, options) => {
-    const model = options?.model;
+  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
+    
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -256,7 +258,7 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     if (chatHistory && chatHistory.length > 0) {
       chatHistory.slice(-5).forEach(msg => {
-        messages.push({ role: msg.role, content: msg.content });
+        messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
       });
     }
     messages.push({ role: 'user', content: query });
@@ -279,7 +281,6 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
       },
     }));
 
-    const responseText = llmResponse.text;
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);
       return { response: "I'm sorry, I encountered an issue generating a response. Please try again." };

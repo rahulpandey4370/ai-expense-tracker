@@ -31,7 +31,7 @@ export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
   const modelToUse = input.model || 'gemini-3-flash-preview';
-  const result = await comparativeExpenseAnalysisFlow(input, { model: modelToUse });
+  const result = await comparativeExpenseAnalysisFlow(input);
   return { ...result, model: modelToUse };
 }
 
@@ -51,8 +51,7 @@ Expense Categories Current: {{expenseCategoriesCurrent}}
 Expense Categories Previous: {{expenseCategoriesPrevious}}
 
 Provide a detailed comparative analysis. Focus on identifying specific categories where spending has increased or decreased significantly. Offer suggestions for potential savings or areas where the user could adjust their spending habits.
-`,
-});
+`;
 
 const comparativeExpenseAnalysisFlow = ai().defineFlow(
   {

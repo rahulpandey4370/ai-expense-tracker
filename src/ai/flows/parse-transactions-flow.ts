@@ -13,6 +13,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -167,8 +168,7 @@ Input Text:
 
 Return an array of structured transaction objects. Each object MUST correspond to a distinct financial event mentioned in the text. Do not invent or duplicate transactions. If none, return an empty array.
 Provide a very concise \`summaryMessage\` only if necessary (e.g., general parsing issues). Focus on speed and transaction accuracy.
-`,
-});
+`;
 
 const parseTransactionsFlow = ai().defineFlow(
   {
@@ -176,8 +176,8 @@ const parseTransactionsFlow = ai().defineFlow(
     inputSchema: ParseTransactionTextInputSchemaInternal,
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
-  async (input, options) => {
-    const model = options?.model;
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }

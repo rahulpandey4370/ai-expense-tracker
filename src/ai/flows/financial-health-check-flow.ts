@@ -31,10 +31,10 @@ const FinancialHealthCheckOutputSchemaInternal = z.object({
 export async function getFinancialHealthCheck(
   input: FinancialHealthCheckInput & { model?: AIModel }
 ): Promise<FinancialHealthCheckOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
-    const result = await financialHealthCheckFlow(validatedInput, { model: modelToUse });
+    const result = await financialHealthCheckFlow(input);
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing financialHealthCheckFlow in wrapper:", flowError);
@@ -89,8 +89,7 @@ Your Task:
 5.  Provide 1-2 specific, actionable suggestions for optimizing spending, potentially focusing on the identified top categories or general saving tips.
 6.  Give a brief overall sentiment about their financial health for this period (e.g., "Overall, spending seems well-managed this period.", "Expenses were notably high compared to income.").
 7.  Be positive and constructive. Use the ₹ symbol for INR amounts.
-`,
-});
+`;
 
 const financialHealthCheckFlow = ai().defineFlow(
   {

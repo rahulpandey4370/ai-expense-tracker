@@ -39,7 +39,7 @@ Your response MUST be in a valid JSON format.
 - **Total Invested:** ₹{{totalInvested}}
 - **Monthly Target:** ₹{{monthlyTarget}}
 - **Category Breakdown:**
-{{#each targetBreakdown}}
+{{#each categoryBreakdown}}
   - {{this.name}}: Target ₹{{this.targetAmount}}, Actual ₹{{this.actualAmount}}
 {{/each}}
 - **Individual Investments:**

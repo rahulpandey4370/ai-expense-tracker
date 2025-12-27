@@ -27,7 +27,7 @@ export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
 ): Promise<GoalForecasterOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against the main schema before passing to AI
     const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
@@ -103,8 +103,7 @@ Your Task:
 Structure your output according to the defined schema. Ensure all monetary values are positive.
 If average monthly income is ₹0, and goalAmount was not provided (AI needs to estimate), state that a goal cannot be estimated or planned without income, set feasibility to 'Insufficient Data for Full Forecast', estimatedOrProvidedGoalAmount to 0, and provide general saving tips.
 If goalAmount *was* provided but income is ₹0, calculate required monthly savings but state feasibility is 'Insufficient Data for Full Forecast'.
-`,
-});
+`;
 
 const financialGoalForecasterFlow = ai().defineFlow(
   {
@@ -112,8 +111,8 @@ const financialGoalForecasterFlow = ai().defineFlow(
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
-  async (input, options) => {
-    const model = options?.model;
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",

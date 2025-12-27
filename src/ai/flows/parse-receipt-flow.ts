@@ -13,6 +13,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -119,8 +120,7 @@ Receipt Image:
 
 Parse the receipt and return a single structured transaction object. If the image is not a receipt or completely unparseable, return null for parsedTransaction or include a clear error message.
 Prioritize extracting the total amount paid. If items are listed, use the overall total, not individual item prices, unless it's the only amount visible.
-`,
-});
+`;
 
 const parseReceiptImageFlow = ai().defineFlow(
   {
@@ -128,8 +128,8 @@ const parseReceiptImageFlow = ai().defineFlow(
     inputSchema: ParseReceiptImageInputSchemaInternal,
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
-  async (input, options) => {
-    const model = options?.model;
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }

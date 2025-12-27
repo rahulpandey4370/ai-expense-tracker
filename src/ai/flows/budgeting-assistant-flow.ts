@@ -41,11 +41,11 @@ const BudgetingAssistantOutputSchemaInternal = z.object({
 export async function suggestBudgetPlan(
   input: BudgetingAssistantInput & { model?: AIModel }
 ): Promise<BudgetingAssistantOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
-    const result = await budgetingAssistantFlow(validatedInput, { model: modelToUse });
+    const result = await budgetingAssistantFlow(validatedInput);
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
@@ -108,8 +108,7 @@ Be empathetic and provide motivating, practical advice.
 If income is ₹0 or very low, state that a meaningful budget cannot be created without income, but still offer general saving tips if possible.
 If the savings goal is very aggressive (e.g., making total allocated expenses + savings > income), point this out and suggest a more conservative savings goal or the need for higher income.
 Ensure all monetary values in the output are non-negative.
-`,
-});
+`;
 
 const budgetingAssistantFlow = ai().defineFlow(
   {
@@ -117,8 +116,9 @@ const budgetingAssistantFlow = ai().defineFlow(
     inputSchema: BudgetingAssistantInputSchema,
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
-  async (input, options) => {
-    const model = options?.model;
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
+
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },

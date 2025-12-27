@@ -19,6 +19,7 @@ import {
     type FixedExpenseAnalyzerOutput,
     type AIModel
 } from '@/lib/types';
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.extend({
     model: z.string().optional(),
@@ -27,7 +28,7 @@ const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput & { model?: AIModel }
 ): Promise<FixedExpenseAnalyzerOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchemaInternal.parse(input);
     if (validatedInput.transactions.length === 0) {
@@ -38,7 +39,7 @@ export async function analyzeFixedExpenses(
         model: modelToUse,
       };
     }
-    const result = await fixedExpenseAnalyzerFlow(validatedInput, { model: modelToUse });
+    const result = await fixedExpenseAnalyzerFlow(input);
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
@@ -106,8 +107,7 @@ IMPORTANT:
 - Again, **explicitly exclude all investment-related transactions.**
 - Structure your output precisely according to the defined JSON schema.
 - If no fixed expenses can be identified, return an empty 'identifiedExpenses' array and a summary stating that.
-`,
-});
+`;
 
 const fixedExpenseAnalyzerFlow = ai().defineFlow(
   {

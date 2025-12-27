@@ -102,8 +102,7 @@ Rules for the output:
 \`\`\`json
 {{jsonInput}}
 \`\`\`
-`
-});
+`;
 
 // --- Flow Definition ---
 const spendingInsightsFlow = ai().defineFlow(
@@ -112,10 +111,9 @@ const spendingInsightsFlow = ai().defineFlow(
     inputSchema: SpendingInsightsInputSchema.omit({ model: true }),
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
-  async (input, options) => {
-    const model = options?.model;
-    const selectedPersona =
-      personas[input.insightType || 'default'] || personas['default'];
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
+    const selectedPersona = personas[(input as any).insightType || 'default'] || personas['default'];
 
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
@@ -123,12 +121,8 @@ const spendingInsightsFlow = ai().defineFlow(
     ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-    // Dynamically compute today's date in India time (Bangalore)
     const currentDate = new Intl.DateTimeFormat('en-IN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'Asia/Kolkata',
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
     }).format(new Date());
 
     const promptInput = {
@@ -160,7 +154,7 @@ const spendingInsightsFlow = ai().defineFlow(
 
 // --- Main Export Function ---
 export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = SpendingInsightsInputSchema.parse(input);
     return await spendingInsightsFlow(validatedInput);
