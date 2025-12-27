@@ -55,7 +55,7 @@ const spendingInsightsPrompt = ai().definePrompt({
     }),
   },
   output: {
-    schema: SpendingInsightsOutputSchema,
+    schema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
   config: {
     temperature: 0.8,
@@ -109,10 +109,10 @@ Rules for the output:
 const spendingInsightsFlow = ai().defineFlow(
   {
     name: 'spendingInsightsFlow',
-    inputSchema: SpendingInsightsInputSchema,
-    outputSchema: SpendingInsightsOutputSchema,
+    inputSchema: SpendingInsightsInputSchema.omit({ model: true }),
+    outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
-  async (input) => {
+  async (input, { model }) => {
     const selectedPersona =
       personas[input.insightType || 'default'] || personas['default'];
 
@@ -140,8 +140,6 @@ const spendingInsightsFlow = ai().defineFlow(
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
-    const model = input.model || 'gemini-1.5-flash-latest';
-
     const { output } = await retryableAIGeneration(() =>
       configuredPrompt(promptInput)
     );
@@ -161,6 +159,7 @@ const spendingInsightsFlow = ai().defineFlow(
 
 // --- Main Export Function ---
 export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
     const validatedInput = SpendingInsightsInputSchema.parse(input);
     return await spendingInsightsFlow(validatedInput);

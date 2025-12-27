@@ -31,19 +31,23 @@ const FinancialHealthCheckOutputSchemaInternal = z.object({
 export async function getFinancialHealthCheck(
   input: FinancialHealthCheckInput & { model?: AIModel }
 ): Promise<FinancialHealthCheckOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
-    const validatedInput = FinancialHealthCheckInputSchemaInternal.parse(input);
-    return await financialHealthCheckFlow(validatedInput);
+    const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
+    const result = await financialHealthCheckFlow(validatedInput, { model: modelToUse });
+    return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing financialHealthCheckFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
     if (flowError instanceof z.ZodError) {
       return {
-        healthSummary: `Could not generate health check due to input errors: ${JSON.stringify(flowError.flatten().fieldErrors)}. Please check server logs.`
+        healthSummary: `Could not generate health check due to input errors: ${JSON.stringify(flowError.flatten().fieldErrors)}. Please check server logs.`,
+        model: modelToUse,
       };
     }
     return {
-      healthSummary: `An unexpected error occurred while generating the health check: ${errorMessage}`
+      healthSummary: `An unexpected error occurred while generating the health check: ${errorMessage}`,
+      model: modelToUse,
     };
   }
 }
@@ -91,8 +95,8 @@ Your Task:
 const financialHealthCheckFlow = ai().defineFlow(
   {
     name: 'financialHealthCheckFlow',
-    inputSchema: FinancialHealthCheckInputSchemaInternal,
-    outputSchema: FinancialHealthCheckOutputSchemaInternal,
+    inputSchema: FinancialHealthCheckInputSchema.omit({model: true}),
+    outputSchema: FinancialHealthCheckOutputSchema.omit({model: true}),
   },
   async (input) => {
     const llm = ai(input.model as AIModel);

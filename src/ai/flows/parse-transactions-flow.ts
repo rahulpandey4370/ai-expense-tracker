@@ -42,8 +42,9 @@ export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInput
 
 // Internal schema for AI flow output, not exported. Relies on imported ParsedAITransactionSchema
 const ParseTransactionTextOutputSchemaInternal = z.object({
-  parsedTransactions: z.array(ParsedAITransactionSchema).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
+  parsedTransactions: z.array(ParsedAITransactionSchema.omit({ model: true })).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
   summaryMessage: z.string().optional().describe("A brief overall summary or any general notes about the parsing process (be concise)."),
+  model: z.enum(['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']).optional(),
 });
 export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchemaInternal>;
 
@@ -56,6 +57,7 @@ export async function parseTransactionsFromText(
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -69,7 +71,7 @@ export async function parseTransactionsFromText(
       console.warn("parseTransactionsFromText called with an empty category list. AI may struggle to map categories correctly. This might indicate an upstream data loading issue for categories.");
   }
   try {
-    return await parseTransactionsFlow({
+    const result = await parseTransactionsFlow({
         naturalLanguageText: input.naturalLanguageText,
         expenseCategories: expenseCategoriesForAI,
         incomeCategories: incomeCategoriesForAI,
@@ -88,7 +90,8 @@ export async function parseTransactionsFromText(
     }
     return {
       parsedTransactions: [],
-      summaryMessage: userFriendlyMessage
+      summaryMessage: userFriendlyMessage,
+      model: modelToUse,
     };
   }
 }
@@ -166,7 +169,7 @@ const parseTransactionsFlow = ai().defineFlow(
   {
     name: 'parseTransactionsFlow',
     inputSchema: ParseTransactionTextInputSchemaInternal,
-    outputSchema: ParseTransactionTextOutputSchemaInternal,
+    outputSchema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }),
   },
   async (input, { model }) => {
     if (!input.naturalLanguageText.trim()) {

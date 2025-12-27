@@ -41,25 +41,29 @@ const BudgetingAssistantOutputSchemaInternal = z.object({
 export async function suggestBudgetPlan(
   input: BudgetingAssistantInput & { model?: AIModel }
 ): Promise<BudgetingAssistantOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
-    return await budgetingAssistantFlow(validatedInput, { model: input.model });
+    const result = await budgetingAssistantFlow(validatedInput, { model: modelToUse });
+    return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
-    if (flowError instanceof z.ZodError) {
-      return {
+    const baseErrorReturn = {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: input.statedMonthlyIncome || 0 },
+        detailedSuggestions: { categoryAdjustments: [], generalTips: [] },
+        analysisSummary: `An unexpected error occurred while generating the budget: ${errorMessage}`,
+        model: modelToUse,
+    };
+    if (flowError instanceof z.ZodError) {
+      return { 
+        ...baseErrorReturn, 
         detailedSuggestions: { categoryAdjustments: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`], generalTips: [] },
         analysisSummary: "Could not generate budget due to input errors. Please check your income and savings goal.",
       };
     }
-    return {
-      recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: input.statedMonthlyIncome || 0 },
-      detailedSuggestions: { categoryAdjustments: [], generalTips: [] },
-      analysisSummary: `An unexpected error occurred while generating the budget: ${errorMessage}`,
-    };
+    return baseErrorReturn;
   }
 }
 
@@ -111,7 +115,7 @@ const budgetingAssistantFlow = ai().defineFlow(
   {
     name: 'budgetingAssistantFlow',
     inputSchema: BudgetingAssistantInputSchema,
-    outputSchema: BudgetingAssistantOutputSchema,
+    outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
   async (input, { model }) => {
     if (input.statedMonthlyIncome <= 0) {

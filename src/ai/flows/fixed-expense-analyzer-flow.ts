@@ -27,6 +27,7 @@ const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput & { model?: AIModel }
 ): Promise<FixedExpenseAnalyzerOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchemaInternal.parse(input);
     if (validatedInput.transactions.length === 0) {
@@ -34,24 +35,27 @@ export async function analyzeFixedExpenses(
         identifiedExpenses: [],
         totalFixedExpenses: 0,
         summary: `No transactions were provided for ${input.monthName} ${input.year}, so no analysis could be performed.`,
+        model: modelToUse,
       };
     }
-    return await fixedExpenseAnalyzerFlow(validatedInput, { model: input.model });
+    const result = await fixedExpenseAnalyzerFlow(validatedInput, { model: modelToUse });
+    return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
-    if (flowError instanceof z.ZodError) {
-      return {
+    const baseErrorReturn = {
         identifiedExpenses: [],
         totalFixedExpenses: 0,
+        summary: `An unexpected error occurred while analyzing fixed expenses: ${errorMessage}`,
+        model: modelToUse,
+    };
+    if (flowError instanceof z.ZodError) {
+      return {
+        ...baseErrorReturn,
         summary: `Could not perform analysis due to invalid input: ${JSON.stringify(flowError.flatten().fieldErrors)}.`,
       };
     }
-    return {
-      identifiedExpenses: [],
-      totalFixedExpenses: 0,
-      summary: `An unexpected error occurred while analyzing fixed expenses: ${errorMessage}`,
-    };
+    return baseErrorReturn;
   }
 }
 

@@ -26,12 +26,13 @@ const ComparativeExpenseAnalysisOutputSchema = z.object({
 });
 export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
 
+
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
-  // We can't directly pass the full input to the flow if the flow's internal schema is different.
-  // The flow expects the raw input, and it will derive the model from it.
-  return comparativeExpenseAnalysisFlow(input);
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const result = await comparativeExpenseAnalysisFlow(input, { model: modelToUse });
+  return { ...result, model: modelToUse };
 }
 
 const prompt = ai().definePrompt({
@@ -56,8 +57,8 @@ Provide a detailed comparative analysis. Focus on identifying specific categorie
 const comparativeExpenseAnalysisFlow = ai().defineFlow(
   {
     name: 'comparativeExpenseAnalysisFlow',
-    inputSchema: ComparativeExpenseAnalysisInputSchema,
-    outputSchema: ComparativeExpenseAnalysisOutputSchema,
+    inputSchema: ComparativeExpenseAnalysisInputSchema.omit({ model: true }),
+    outputSchema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }),
   },
   async input => {
     const llm = ai(input.model as AIModel);

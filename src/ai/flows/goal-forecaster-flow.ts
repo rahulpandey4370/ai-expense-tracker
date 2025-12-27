@@ -22,11 +22,12 @@ const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
 
 const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
 
-export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema> & { model: AIModel };
+export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
 ): Promise<GoalForecasterOutput> {
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
     // Validate input against the main schema before passing to AI
     const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
@@ -34,25 +35,25 @@ export async function forecastFinancialGoal(
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
-    // Check if it's a Zod validation error from our explicit parse
-    if (flowError instanceof z.ZodError) {
-       return {
-        feasibilityAssessment: "Input Error",
-        estimatedOrProvidedGoalAmount: input.goalAmount || 0,
-        wasAmountEstimatedByAI: !input.goalAmount,
-        requiredMonthlySavings: 0,
-        suggestedActions: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`],
-        motivationalMessage: "Please check your input values."
-      };
-    }
-    return {
+    const baseErrorReturn = {
       feasibilityAssessment: "Error",
       estimatedOrProvidedGoalAmount: input.goalAmount || 0,
       wasAmountEstimatedByAI: !input.goalAmount,
       requiredMonthlySavings: 0,
       suggestedActions: [`An unexpected error occurred: ${errorMessage}`],
-      motivationalMessage: "Please try again later."
+      motivationalMessage: "Please try again later.",
+      model: modelToUse,
     };
+    // Check if it's a Zod validation error from our explicit parse
+    if (flowError instanceof z.ZodError) {
+       return {
+        ...baseErrorReturn,
+        feasibilityAssessment: "Input Error",
+        suggestedActions: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`],
+        motivationalMessage: "Please check your input values."
+      };
+    }
+    return baseErrorReturn;
   }
 }
 
@@ -108,8 +109,8 @@ If goalAmount *was* provided but income is ₹0, calculate required monthly savi
 const financialGoalForecasterFlow = ai().defineFlow(
   {
     name: 'financialGoalForecasterFlow',
-    inputSchema: GoalForecasterInputSchema,
-    outputSchema: GoalForecasterOutputSchema,
+    inputSchema: GoalForecasterInputSchema.omit({model: true}),
+    outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
   async (input, { model }) => {
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {

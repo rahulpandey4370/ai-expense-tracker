@@ -67,8 +67,8 @@ const reportPrompt = ai().definePrompt({
 const monthlyFinancialReportFlow = ai().defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
-    inputSchema: MonthlyFinancialReportInputSchema,
-    outputSchema: MonthlyFinancialReportOutputSchema,
+    inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
+    outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
     const modelToUse = 'gemini-2.5-flash';

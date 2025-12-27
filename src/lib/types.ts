@@ -129,6 +129,7 @@ export const GoalForecasterInputSchema = z.object({
   averageMonthlyIncome: z.number().min(0).describe("The user's average monthly income in INR based on recent data. Can be 0."),
   averageMonthlyExpenses: z.number().min(0).describe("The user's average monthly expenses (excluding dedicated savings/investments for this specific goal) in INR based on recent data. Can be 0."),
   currentSavingsRate: z.number().min(0).max(100).describe("The user's current approximate savings rate as a percentage of income (e.g., 20 for 20%)."),
+  model: z.enum(modelNames).optional(),
 });
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
@@ -151,6 +152,7 @@ export const BudgetingAssistantInputSchema = z.object({
   statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
   averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
   pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
+  model: z.enum(modelNames).optional(),
 });
 export type BudgetingAssistantInput = z.infer<typeof BudgetingAssistantInputSchema>;
 
@@ -207,6 +209,7 @@ export const FinancialHealthCheckInputSchema = z.object({
   currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries: ₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
+  model: z.enum(modelNames).optional(),
 });
 export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInputSchema>;
 
@@ -313,7 +316,8 @@ export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSc
 export const FixedExpenseAnalyzerInputSchema = z.object({
   transactions: z.array(AITransactionForAnalysisSchema).describe("An array of financial transactions for a specific month."),
   monthName: z.string().describe("The name of the month being analyzed (e.g., 'January')."),
-  year: z.number().describe("The year being analyzed (e.g., 2024).")
+  year: z.number().describe("The year being analyzed (e.g., 2024)."),
+  model: z.enum(modelNames).optional(),
 });
 export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
 
@@ -458,3 +462,10 @@ export const MonthlyFinancialReportOutputSchema = z.object({
   model: z.string().optional().describe("The AI model that generated this report."),
 });
 export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
+
+// Spending Insights
+export const SpendingInsightsOutputSchema = z.object({
+  insights: z.string().describe("A string containing 4-6 numbered insights, separated by \\n."),
+  model: z.enum(modelNames).optional(),
+});
+export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;

@@ -30,8 +30,10 @@ type AITransaction = z.infer<typeof AITransactionSchema>;
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
+  model: z.enum(modelNames).optional(), // Add model to message
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
 
 // Not exported - internal to the flow
 const FinancialChatbotInputSchemaInternal = z.object({
@@ -46,8 +48,10 @@ type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaI
 
 const FinancialChatbotOutputSchema = z.object({
   response: z.string().describe("The AI's response to the user's query."),
+  model: z.enum(modelNames).optional(),
 });
 export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema>;
+
 
 const monthNamesForParsing = [
   "january", "february", "march", "april", "may", "june",
@@ -145,7 +149,7 @@ export async function askFinancialBot(input: {
     }))
     .slice(0, 250); // Limit to 250 transactions after filtering
 
-  return financialChatbotFlow({
+  const flowInput: FinancialChatbotInputInternal = {
     query: input.query,
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
@@ -159,9 +163,9 @@ const financialChatbotFlow = ai().defineFlow(
   {
     name: 'financialChatbotFlow',
     inputSchema: FinancialChatbotInputSchemaInternal,
-    outputSchema: FinancialChatbotOutputSchema,
+    outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
+  async ({ query, transactions, chatHistory, dataScopeMessage }, { model }) => {
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     

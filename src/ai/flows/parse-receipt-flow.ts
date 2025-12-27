@@ -43,6 +43,7 @@ export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchema
 
 export type ParseReceiptImageOutput = {
   parsedTransaction: ParsedReceiptTransaction | null;
+  model?: AIModel;
 };
 
 
@@ -58,8 +59,11 @@ export async function parseReceiptImage(
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
+  
+  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  
   try {
-    return await parseReceiptImageFlow({ 
+    const result = await parseReceiptImageFlow({ 
         receiptImageUri: input.receiptImageUri,
         categories: expenseCategoriesForAI, // Only pass expense categories
         paymentMethods: input.paymentMethods,
@@ -70,8 +74,9 @@ export async function parseReceiptImage(
     console.error("Error executing parseReceiptImageFlow:", flowError);
     return {
       parsedTransaction: {
-        error: `An unexpected error occurred during AI processing: ${flowError.message || 'Unknown error'}. Please check server logs.`
-      }
+        error: `An unexpected error occurred during AI processing: ${flowError.message || 'Unknown error'}. Please check server logs.`,
+      },
+      model: modelToUse,
     };
   }
 }
@@ -121,7 +126,7 @@ const parseReceiptImageFlow = ai().defineFlow(
   {
     name: 'parseReceiptImageFlow',
     inputSchema: ParseReceiptImageInputSchemaInternal,
-    outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.nullable() }),
+    outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
   async (input, { model }) => {
     if (!input.receiptImageUri) {
