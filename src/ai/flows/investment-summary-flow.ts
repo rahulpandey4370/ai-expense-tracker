@@ -4,18 +4,18 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { InvestmentSummaryInputSchema, type AIModel } from '@/lib/types';
+import { InvestmentSummaryInputSchema, type AIModel, modelNames } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 const InvestmentSummaryOutputSchema = z.object({
   summary: z.string().describe("A concise, bulleted summary of the user's monthly investments, suitable for copying. Start with the total amount vs target, then breakdown by category, then list key individual investments."),
 });
 
-type InvestmentSummaryOutput = z.infer<typeof InvestmentSummaryOutputSchema>;
+type InvestmentSummaryOutput = z.infer<typeof InvestmentSummaryOutputSchema> & { model?: AIModel };
 
 const InvestmentSummaryInputSchemaInternal = InvestmentSummaryInputSchema.extend({
-    model: z.string().optional(),
+    model: z.enum(modelNames).optional(),
 });
 
 export async function summarizeInvestments(input: z.infer<typeof InvestmentSummaryInputSchema> & { model?: AIModel }): Promise<InvestmentSummaryOutput> {
@@ -23,7 +23,8 @@ export async function summarizeInvestments(input: z.infer<typeof InvestmentSumma
   if (!validation.success) {
     throw new Error(`Invalid input for AI summary: ${JSON.stringify(validation.error.flatten().fieldErrors)}`);
   }
-  return await investmentSummaryFlow(validation.data);
+  const result = await investmentSummaryFlow(validation.data);
+  return { ...result, model: validation.data.model };
 }
 
 const investmentSummaryFlow = ai.defineFlow(
@@ -33,6 +34,13 @@ const investmentSummaryFlow = ai.defineFlow(
     outputSchema: InvestmentSummaryOutputSchema,
   },
   async (input) => {
+    const model = input.model || 'gemini-1.5-flash-latest';
+
+    if (model === 'gpt-5.2-chat') {
+        const result = await callAzureOpenAI(investmentSummaryPromptTemplate, input, InvestmentSummaryOutputSchema);
+        return { summary: result.summary };
+    }
+
     const prompt = ai.definePrompt({
       name: 'investmentSummaryPrompt',
       input: { schema: InvestmentSummaryInputSchemaInternal.omit({ model: true }) },
@@ -41,7 +49,18 @@ const investmentSummaryFlow = ai.defineFlow(
         temperature: 0.2,
         maxOutputTokens: 600,
       },
-      prompt: `You are a financial assistant. Your task is to generate a clean, concise, copiable summary of a user's investments for a specific month. Use bullet points (•) and be factual.
+      prompt: investmentSummaryPromptTemplate,
+    });
+    
+    const { output } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+    if (!output) {
+        throw new Error("AI failed to generate a valid summary structure.");
+    }
+    return output;
+  }
+);
+
+const investmentSummaryPromptTemplate = `You are a financial assistant. Your task is to generate a clean, concise, copiable summary of a user's investments for a specific month. Use bullet points (•) and be factual.
 Your response MUST be in a valid JSON format.
 
 **Data for {{monthYear}}:**
@@ -74,13 +93,4 @@ Investment Summary for 2024-07
   • Parag Parikh Flexi Cap: ₹5,000
   • UTI Nifty 50 Index: ₹3,000
   • HDFC Liquid Fund: ₹2,000
-`,
-    });
-    
-    const { output } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(input.model!) }));
-    if (!output) {
-        throw new Error("AI failed to generate a valid summary structure.");
-    }
-    return output;
-  }
-);
+`;

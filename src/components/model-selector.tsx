@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { BrainCircuit } from "lucide-react";
+import { Bot } from "lucide-react";
 import type { AIModel } from "@/lib/types";
 
 export function ModelSelector() {
@@ -23,7 +23,7 @@ export function ModelSelector() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon">
-          <BrainCircuit className="h-[1.2rem] w-[1.2rem]" />
+          <Bot className="h-[1.2rem] w-[1.2rem]" />
           <span className="sr-only">Select AI Model</span>
         </Button>
       </DropdownMenuTrigger>
@@ -41,5 +41,3 @@ export function ModelSelector() {
     </DropdownMenu>
   );
 }
-
-    
