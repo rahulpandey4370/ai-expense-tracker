@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 // For model selection context
@@ -58,7 +59,7 @@ export const TransactionInputSchema = z.object({
   categoryId: z.string().optional(),
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
-  expenseType: z.enum(['need', 'want', 'investment']).optional(),
+  expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -81,7 +82,7 @@ export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
-export type ExpenseType = 'need' | 'want' | 'investment';
+export type ExpenseType = 'need' | 'want' | 'investment' | 'investment_expense';
 
 
 // Zod schema for a single transaction parsed by AI from text
@@ -92,7 +93,7 @@ export const ParsedAITransactionSchema = z.object({
   type: z.enum(['income', 'expense']).describe("The type of transaction."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment', 'investment_expense']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment'. If not clearly identifiable or income, leave blank."),
   sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
@@ -112,7 +113,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
   categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
   paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
+  expenseTypeNameGuess: z.enum(['need', 'want', 'investment', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', or 'investment'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
   model: z.string().optional(),
