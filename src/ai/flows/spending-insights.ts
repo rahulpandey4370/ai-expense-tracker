@@ -69,6 +69,14 @@ const SpendingInsightsOutputSchema = z.object({
   keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
 });
 
+
+// --- Output Schema ---
+const SpendingInsightsOutputSchema = z.object({
+  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
+  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
+  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
+});
+
 =======
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
@@ -119,9 +127,6 @@ const spendingInsightsPrompt = ai().definePrompt({
     ],
   },
   prompt: `## PERSONALITY
-=======
-const spendingInsightsPromptTemplate = `## PERSONALITY
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 {{persona}}
 
 ## ROLE
@@ -168,17 +173,12 @@ const spendingInsightsFlow = ai().defineFlow(
   },
   async (input) => {
 <<<<<<< HEAD
-<<<<<<< HEAD
     const model = input.model || 'gemini-3-flash-preview';
     const selectedPersona = personas[input.insightType || 'default'] || personas['default'];
 =======
     const selectedPersona =
       personas[input.insightType || 'default'] || personas['default'];
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
-=======
-    const model = input.model || 'gemini-3-flash-preview';
-    const selectedPersona = personas[input.insightType || 'default'] || personas['default'];
->>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
@@ -186,6 +186,7 @@ const spendingInsightsFlow = ai().defineFlow(
     ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
+    // Dynamically compute today's date in India time (Bangalore)
     const currentDate = new Intl.DateTimeFormat('en-IN', {
       day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
     }).format(new Date());
@@ -197,7 +198,6 @@ const spendingInsightsFlow = ai().defineFlow(
       jsonInput: JSON.stringify(input, null, 2),
     };
     
-<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
@@ -216,31 +216,6 @@ const spendingInsightsFlow = ai().defineFlow(
       spendingInsightsPrompt(promptInput, { model })
 >>>>>>> f195e67 (Try fixing this error: `Console Error: Error: (0 , {imported module [pro)
     );
-=======
-    let output;
-    if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }));
-    } else {
-        const prompt = ai.definePrompt({
-          name: 'spendingInsightsPrompt',
-          input: { schema: z.any() },
-          output: { schema: SpendingInsightsOutputSchema.omit({ model: true }) },
-           config: {
-            temperature: 0.8,
-            maxOutputTokens: 3000,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: simpleTemplateRender(spendingInsightsPromptTemplate, promptInput),
-        });
-        const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result;
-    }
->>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 
     if (!output || !output.insights) {
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
@@ -292,6 +267,7 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
 =======
   } catch (e: any) {
     console.error("Error in getSpendingInsights:", e);
+    // Re-throw the error to be caught by the caller, ensuring UI can show a proper error state
     throw new Error(e.message || "An unexpected error occurred while generating insights.");
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
   }

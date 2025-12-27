@@ -45,10 +45,14 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     // Replace {{#each ...}} ... {{/each}}
 =======
     // Replace {{...}}
 >>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
+=======
+    // Replace {{#each ...}} ... {{/each}}
+>>>>>>> 7b90414 (Fix this)
     output = output.replace(/{{#each\s+([^}]+)}}([\s\S]*?){{\/each}}/g, (match, arrayKey, content) => {
         const array = data[arrayKey.trim()];
         if (!Array.isArray(array)) return '';
@@ -57,12 +61,16 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         }).join('');
     });
 <<<<<<< HEAD
+<<<<<<< HEAD
     
 =======
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 =======
 
 >>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
+=======
+    
+>>>>>>> 7b90414 (Fix this)
     // Replace {{{...}}} and {{...}}
     output = output.replace(/{{{\s*([\w.]+)\s*}}}/g, (match, key) => {
         const keys = key.trim().split('.');
