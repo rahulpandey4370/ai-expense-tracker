@@ -33,6 +33,7 @@ const investmentSummaryPrompt = ai().definePrompt({
     maxOutputTokens: 600,
   },
   prompt: `You are a financial assistant. Your task is to generate a clean, concise, copiable summary of a user's investments for a specific month. Use bullet points (•) and be factual.
+Your response MUST be in a valid JSON format.
 
 **Data for {{monthYear}}:**
 - **Total Invested:** ₹{{totalInvested}}

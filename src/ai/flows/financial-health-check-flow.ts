@@ -64,6 +64,7 @@ const healthCheckPrompt = ai().definePrompt({
   },
   prompt: `You are a friendly financial assistant for FinWise AI.
 Provide a concise (3-5 sentences) financial health check summary for the user based on the provided data in Indian Rupees (INR).
+Your response must be in a valid JSON format.
 
 Period: {{periodDescription}}
 

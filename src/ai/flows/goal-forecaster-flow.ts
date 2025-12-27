@@ -70,6 +70,7 @@ const financialGoalPrompt = ai().definePrompt({
   },
   prompt: `You are a helpful and insightful personal finance advisor for FinWise AI.
 The user wants to achieve a financial goal. Analyze their goal against their current financial situation (averages based on recent data in INR) and provide a forecast and actionable plan.
+Your response MUST be in a valid JSON format.
 
 User's Goal:
 - Description: {{goalDescription}}

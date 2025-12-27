@@ -38,6 +38,8 @@ const prompt = ai().definePrompt({
   output: {schema: ComparativeExpenseAnalysisOutputSchema},
   prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
 
+Your response MUST be a valid JSON object.
+
 Current Period: {{currentMonth}}
 Previous Period: {{previousMonth}}
 Current Period Expenses: ₹{{currentMonthExpenses}}

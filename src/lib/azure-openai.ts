@@ -1,3 +1,4 @@
+
 'use server';
 
 import { AzureOpenAI } from 'openai';
@@ -35,6 +36,15 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         return JSON.stringify(value, null, 2);
     });
 
+    // Replace {{...}}
+    output = output.replace(/{{#each\s+([^}]+)}}([\s\S]*?){{\/each}}/g, (match, arrayKey, content) => {
+        const array = data[arrayKey.trim()];
+        if (!Array.isArray(array)) return '';
+        return array.map(item => {
+            return content.replace(/{{this\.([\w]+)}}/g, (m, prop) => item[prop] || '');
+        }).join('');
+    });
+
     // Replace {{{...}}} and {{...}}
     output = output.replace(/{{{\s*([\w.]+)\s*}}}/g, (match, key) => {
         const keys = key.trim().split('.');
@@ -44,6 +54,18 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
                 current = current[k];
             } else {
                 return ''; 
+            }
+        }
+        return String(current);
+    });
+     output = output.replace(/{{([\w.]+)}}/g, (match, key) => {
+        const keys = key.trim().split('.');
+        let current: any = data;
+        for (const k of keys) {
+            if (current && typeof current === 'object' && k in current) {
+                current = current[k];
+            } else {
+                return ''; // Return empty if path not found
             }
         }
         return String(current);

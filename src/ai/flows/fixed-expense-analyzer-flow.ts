@@ -73,7 +73,7 @@ Fixed expenses are payments that are the same, or very similar, each month. Exam
 
 **CRITICAL RULE: DO NOT include investments in this analysis.** Exclude any transactions related to Stocks, Mutual Funds, Bonds, Recurring Deposits, or any other form of financial investment. Fixed expenses are for living costs (goods and services), not wealth-building.
 
-Analyze the provided transactions for {{monthName}} {{year}}.
+Analyze the provided transactions for {{monthName}} {{year}}. Your response must be in a valid JSON format.
 
 Transaction Data:
 \`\`\`json
