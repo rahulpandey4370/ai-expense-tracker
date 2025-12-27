@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -27,6 +28,7 @@ import {
 import type { AppTransaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useAIModel } from "@/contexts/AIModelContext";
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
@@ -113,6 +115,7 @@ export function SpendingInsights({
   const [error, setError] = useState<string | null>(null);
   const [currentInsightType, setCurrentInsightType] =
     useState<InsightType>("default");
+  const { selectedModel } = useAIModel();
 
   // Carousel state: [index, direction]
   const [[currentInsightIndex, direction], setCurrentInsightIndex] = useState<
@@ -158,6 +161,7 @@ export function SpendingInsights({
         insightType,
         selectedMonth,
         selectedYear,
+        model: selectedModel,
       };
 
       try {
@@ -190,6 +194,7 @@ export function SpendingInsights({
       lastMonthSpendingByCategory,
       selectedMonth,
       selectedYear,
+      selectedModel,
     ]
   );
 

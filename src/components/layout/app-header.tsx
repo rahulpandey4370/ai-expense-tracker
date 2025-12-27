@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { CalendarDays } from "lucide-react";
 import { usePathname } from 'next/navigation'; // Import usePathname
+import { ModelSelector } from '../model-selector';
 
 export default function AppHeader() {
   const { 
@@ -64,6 +65,7 @@ export default function AppHeader() {
           </Button>
         </div>
         <ThemeToggle />
+        {!isDemoRoute && <ModelSelector />}
         {!isDemoRoute && <UserNav />}
       </div>
     </header>
