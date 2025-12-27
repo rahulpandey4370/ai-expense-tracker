@@ -6,7 +6,7 @@ import { z } from 'zod';
 export type AIModel = 'gemini-2.5-flash' | 'gemini-3-flash' | 'gemini-2.5-flash-lite' | 'gemma-3-27b';
 =======
 // AI Model Selection
-export const modelNames = ['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] as const;
+export const modelNames = ['gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite'] as const;
 export type AIModel = (typeof modelNames)[number];
 
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
