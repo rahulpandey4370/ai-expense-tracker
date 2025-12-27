@@ -139,6 +139,8 @@ const spendingInsightsFlow = ai().defineFlow(
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
 
+    const model = input.model;
+
     const { output } = await retryableAIGeneration(() =>
       configuredPrompt(promptInput)
     );
