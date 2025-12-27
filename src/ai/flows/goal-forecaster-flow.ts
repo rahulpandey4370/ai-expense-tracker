@@ -12,6 +12,7 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+<<<<<<< HEAD
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
 
 // Internal Zod schemas - not exported from this 'use server' file
@@ -23,6 +24,11 @@ const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
 const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
 
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
+=======
+import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
+
+export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema> & { model: AIModel };
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
@@ -30,8 +36,13 @@ export async function forecastFinancialGoal(
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against the main schema before passing to AI
+<<<<<<< HEAD
     const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
     return await financialGoalForecasterFlow(validatedInput);
+=======
+    const validatedInput = GoalForecasterInputSchema.parse(input);
+    return await financialGoalForecasterFlow(validatedInput, { model: input.model });
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -59,8 +70,13 @@ export async function forecastFinancialGoal(
 
 const financialGoalPrompt = ai().definePrompt({
   name: 'financialGoalPrompt',
+<<<<<<< HEAD
   input: { schema: GoalForecasterInputSchemaInternal.omit({ model: true }) },
   output: { schema: GoalForecasterOutputSchemaInternal },
+=======
+  input: { schema: GoalForecasterInputSchema },
+  output: { schema: GoalForecasterOutputSchema },
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   config: {
     temperature: 0.5, // Allow for some creative yet grounded advice
     maxOutputTokens: 800,
@@ -108,11 +124,18 @@ If goalAmount *was* provided but income is ₹0, calculate required monthly savi
 const financialGoalForecasterFlow = ai().defineFlow(
   {
     name: 'financialGoalForecasterFlow',
+<<<<<<< HEAD
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
   async (input) => {
     const model = (input as any).model || 'gemini-3-flash-preview';
+=======
+    inputSchema: GoalForecasterInputSchema,
+    outputSchema: GoalForecasterOutputSchema,
+  },
+  async (input, { model }) => {
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
@@ -133,9 +156,13 @@ const financialGoalForecasterFlow = ai().defineFlow(
             motivationalMessage: "Update your transaction history for a more accurate forecast."
         };
     }
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
+=======
+    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model }));
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     return result.output!;
   }
 );

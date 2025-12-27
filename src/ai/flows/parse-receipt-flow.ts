@@ -13,7 +13,10 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+<<<<<<< HEAD
 import { callAzureOpenAI } from '@/lib/azure-openai';
+=======
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -53,7 +56,11 @@ export async function parseReceiptImage(
     receiptImageUri: string;
     categories: {id: string; name: string; type: 'income' | 'expense'}[];
     paymentMethods: {id: string; name: string;}[];
+<<<<<<< HEAD
     model?: AIModel;
+=======
+    model: AIModel;
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   }
 ): Promise<ParseReceiptImageOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
@@ -68,9 +75,14 @@ export async function parseReceiptImage(
         receiptImageUri: input.receiptImageUri,
         categories: expenseCategoriesForAI, // Only pass expense categories
         paymentMethods: input.paymentMethods,
+<<<<<<< HEAD
         currentDate,
         model: input.model
     });
+=======
+        currentDate 
+    }, { model: input.model });
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   } catch (flowError: any) {
     console.error("Error executing parseReceiptImageFlow:", flowError);
     return {
@@ -128,8 +140,12 @@ const parseReceiptImageFlow = ai().defineFlow(
     inputSchema: ParseReceiptImageInputSchemaInternal,
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
+=======
+  async (input, { model }) => {
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }
@@ -139,9 +155,13 @@ const parseReceiptImageFlow = ai().defineFlow(
 
     let outputFromAI;
     try {
+<<<<<<< HEAD
       const llm = ai(input.model as AIModel);
       const configuredPrompt = llm.definePrompt(parseReceiptImagePrompt.getDefinition());
       const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 2000);
+=======
+      const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: model || googleAI.model('gemini-1.5-flash-latest') }), 3, 2000);
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
       outputFromAI = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);

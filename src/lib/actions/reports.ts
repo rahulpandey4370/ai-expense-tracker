@@ -94,10 +94,10 @@ export async function getReport(monthYearKey: string): Promise<MonthlyFinancialR
 'use server';
 
 import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
-import { AITransactionForAnalysisSchema } from "@/lib/types";
+import { AITransactionForAnalysisSchema, type AIModel } from "@/lib/types";
 import { getTransactions } from "./transactions";
 
-export async function getMonthlyReport(month: number, year: number, model: MonthlyFinancialReportInput['model']): Promise<MonthlyFinancialReportOutput> {
+export async function getMonthlyReport(month: number, year: number, model: AIModel): Promise<MonthlyFinancialReportOutput> {
   const allTransactions = await getTransactions();
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   

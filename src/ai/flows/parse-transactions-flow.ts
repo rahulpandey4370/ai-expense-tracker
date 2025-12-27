@@ -12,8 +12,12 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
+<<<<<<< HEAD
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 import { callAzureOpenAI } from '@/lib/azure-openai';
+=======
+import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -53,7 +57,11 @@ export async function parseTransactionsFromText(
     naturalLanguageText: string;
     categories: {id: string; name: string; type: 'income' | 'expense'}[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
+<<<<<<< HEAD
     model?: AIModel;
+=======
+    model: AIModel;
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
@@ -76,9 +84,14 @@ export async function parseTransactionsFromText(
         expenseCategories: expenseCategoriesForAI,
         incomeCategories: incomeCategoriesForAI,
         paymentMethods: input.paymentMethods,
+<<<<<<< HEAD
         currentDate,
         model: input.model
     });
+=======
+        currentDate
+    }, { model: input.model });
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   } catch (error: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", error);
     const errorMessage = error.message || 'Unknown error';
@@ -102,6 +115,10 @@ const parseTransactionsPrompt = ai().definePrompt({
   name: 'parseTransactionsPrompt',
   input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) }, // model is not part of the prompt itself
   output: { schema: ParseTransactionTextOutputSchemaInternal },
+<<<<<<< HEAD
+=======
+  // Model configuration for potentially faster responses
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   config: {
     temperature: 0.2, 
     maxOutputTokens: 1500, 
@@ -178,17 +195,25 @@ const parseTransactionsFlow = ai().defineFlow(
     inputSchema: ParseTransactionTextInputSchemaInternal,
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
+=======
+  async (input, { model }) => {
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
     try {
+<<<<<<< HEAD
       const llm = ai(input.model as AIModel);
       const configuredPrompt = llm.definePrompt(parseTransactionsPrompt.getDefinition());
       const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 1500);
+=======
+      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: model || googleAI.model('gemini-1.5-flash-latest') }), 3, 1500);
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
       output = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);

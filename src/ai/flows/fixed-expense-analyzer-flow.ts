@@ -15,7 +15,10 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { 
     FixedExpenseAnalyzerInputSchema, 
     FixedExpenseAnalyzerOutputSchema, 
+<<<<<<< HEAD
     type FixedExpenseAnalyzerInput, 
+=======
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     type FixedExpenseAnalyzerOutput,
     type AIModel
 } from '@/lib/types';
@@ -24,6 +27,8 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.extend({
     model: z.string().optional(),
 });
+
+export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema> & { model: AIModel };
 
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput & { model?: AIModel }
@@ -39,8 +44,12 @@ export async function analyzeFixedExpenses(
         model: modelToUse,
       };
     }
+<<<<<<< HEAD
     const result = await fixedExpenseAnalyzerFlow(input);
     return { ...result, model: modelToUse };
+=======
+    return await fixedExpenseAnalyzerFlow(validatedInput, { model: input.model });
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   } catch (flowError: any) {
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -115,10 +124,15 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
     inputSchema: FixedExpenseAnalyzerInputSchemaInternal,
     outputSchema: FixedExpenseAnalyzerOutputSchema,
   },
+<<<<<<< HEAD
   async (input) => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(fixedExpensePrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
+=======
+  async (input, { model }) => {
+    const result = await retryableAIGeneration(() => fixedExpensePrompt(input, { model }));
+>>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
     return result.output!;
   }
 );
