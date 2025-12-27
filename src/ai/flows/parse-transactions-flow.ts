@@ -16,12 +16,15 @@ import { format, parse as parseDateFns } from 'date-fns';
 <<<<<<< HEAD
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 import { callAzureOpenAI } from '@/lib/azure-openai';
+<<<<<<< HEAD
 =======
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 =======
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 >>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -43,7 +46,11 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
+<<<<<<< HEAD
   model: z.string().optional().describe("The AI model to use."),
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 });
 // Type exported for the wrapper function
 export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
@@ -97,6 +104,7 @@ export async function parseTransactionsFromText(
         incomeCategories: incomeCategoriesForAI,
         paymentMethods: input.paymentMethods,
 <<<<<<< HEAD
+<<<<<<< HEAD
         currentDate,
         model: input.model
     });
@@ -107,6 +115,11 @@ export async function parseTransactionsFromText(
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 =======
     }, { model: modelToUse });
+=======
+        currentDate,
+        model: modelToUse,
+    });
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
     return { ...result, model: modelToUse };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
@@ -129,6 +142,7 @@ export async function parseTransactionsFromText(
   }
 }
 
+<<<<<<< HEAD
 const parseTransactionsPrompt = ai().definePrompt({
   name: 'parseTransactionsPrompt',
 <<<<<<< HEAD
@@ -157,6 +171,9 @@ const parseTransactionsPrompt = ai().definePrompt({
     ],
   },
   prompt: `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
+=======
+const parseTransactionsPromptTemplate = `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yesterday", "last Tuesday") to YYYY-MM-DD format.
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
@@ -224,6 +241,7 @@ const parseTransactionsFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 =======
@@ -233,12 +251,17 @@ const parseTransactionsFlow = ai().defineFlow(
   async (input, options) => {
     const model = options?.model;
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
     try {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -255,6 +278,30 @@ const parseTransactionsFlow = ai().defineFlow(
       const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: model ? googleAI.model(model as string) : undefined }), 3, 1500);
 >>>>>>> 40cdc81 (Still the same error)
       output = result.output;
+=======
+      if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal);
+      } else {
+          const prompt = ai.definePrompt({
+            name: 'parseTransactionsPrompt',
+            input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) },
+            output: { schema: ParseTransactionTextOutputSchemaInternal },
+            config: {
+              temperature: 0.2, 
+              maxOutputTokens: 1500, 
+              safetySettings: [ 
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              ],
+            },
+            prompt: parseTransactionsPromptTemplate,
+          });
+          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 1500);
+          output = result.output;
+      }
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
       if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error") || (aiError.message.includes("GoogleGenerativeAI Error") && aiError.message.includes("Invalid JSON payload")))) {

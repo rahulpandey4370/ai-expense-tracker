@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 'use server';
 
 import { AzureOpenAI } from 'openai';
@@ -36,6 +39,7 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         return JSON.stringify(value, null, 2);
     });
 
+<<<<<<< HEAD
     // Replace {{#each ...}} ... {{/each}}
     output = output.replace(/{{#each\s+([^}]+)}}([\s\S]*?){{\/each}}/g, (match, arrayKey, content) => {
         const array = data[arrayKey.trim()];
@@ -45,6 +49,8 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         }).join('');
     });
     
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     // Replace {{{...}}} and {{...}}
     output = output.replace(/{{{\s*([\w.]+)\s*}}}/g, (match, key) => {
         const keys = key.trim().split('.');
@@ -58,6 +64,7 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         }
         return String(current);
     });
+<<<<<<< HEAD
      output = output.replace(/{{([\w.]+)}}/g, (match, key) => {
         const keys = key.trim().split('.');
         let current: any = data;
@@ -70,6 +77,8 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         }
         return String(current);
     });
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     
     // Replace {{#if ...}} ... {{/if}}
     output = output.replace(/{{#if\s+([^}]+)}}([\s\S]*?){{\/if}}/g, (match, key, content) => {
@@ -149,4 +158,8 @@ export async function callAzureOpenAIChat(
     console.error("Error calling Azure OpenAI Chat:", error);
     throw new Error(`Failed to get a valid chat response from Azure OpenAI: ${error.message}`);
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)

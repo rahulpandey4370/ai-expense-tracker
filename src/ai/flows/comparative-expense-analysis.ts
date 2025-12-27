@@ -26,7 +26,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { AIModel, ComparativeExpenseAnalysisInputSchema, ComparativeExpenseAnalysisOutputSchema } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 >>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
@@ -48,6 +48,7 @@ export async function comparativeExpenseAnalysis(
 <<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   const result = await comparativeExpenseAnalysisFlow(input);
+<<<<<<< HEAD
   return { ...result, model: modelToUse };
 }
 
@@ -65,10 +66,13 @@ const prompt = ai().definePrompt({
   const modelToUse = input.model || 'gemini-3-flash-preview';
 >>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
   const result = await comparativeExpenseAnalysisFlow(input, { model: modelToUse });
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   return { ...result, model: modelToUse };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 }
 
+<<<<<<< HEAD
 
 const prompt = ai.definePrompt({
   name: 'comparativeExpenseAnalysisPrompt',
@@ -81,6 +85,9 @@ const prompt = ai.definePrompt({
   output: { schema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }) },
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   prompt: `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
+=======
+const universalPromptTemplate = `You are a personal finance advisor. Analyze the user's spending habits in Indian Rupees (INR) between the current and previous months and provide insights on their spending trends, potential areas of savings, and any significant changes in spending patterns.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 Your response MUST be a valid JSON object.
 
@@ -105,6 +112,7 @@ const comparativeExpenseAnalysisFlow = ai().defineFlow(
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async input => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(prompt.getDefinition());
@@ -123,6 +131,25 @@ const comparativeExpenseAnalysisFlow = ai().defineFlow(
     const model = options?.model;
     const { output } = await retryableAIGeneration(() => prompt(input, { model: model ? googleAI.model(model as string) : undefined }));
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
+    let output;
+
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+          name: 'comparativeExpenseAnalysisPrompt',
+          input: { schema: ComparativeExpenseAnalysisInputSchema.omit({ model: true }) },
+          output: { schema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }) },
+          prompt: universalPromptTemplate,
+        });
+        const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result;
+    }
+
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (!output) {
       throw new Error("AI analysis failed to produce a valid output structure.");
     }

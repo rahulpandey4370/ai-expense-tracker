@@ -13,6 +13,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
 
 // Internal Zod schemas - not exported from this 'use server' file
@@ -22,6 +23,10 @@ const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
 });
 
 const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
+=======
+import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
+import { callAzureOpenAI } from '@/lib/azure-openai';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 =======
@@ -38,6 +43,7 @@ export async function forecastFinancialGoal(
   input: GoalForecasterInput & { model?: AIModel }
 ): Promise<GoalForecasterOutput> {
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against the main schema before passing to AI
@@ -50,10 +56,13 @@ export async function forecastFinancialGoal(
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 =======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   try {
     // Validate input against the main schema before passing to AI
     const validatedInput = GoalForecasterInputSchema.omit({model: true}).parse(input);
-    const result = await financialGoalForecasterFlow(validatedInput, { model: modelToUse });
+    const result = await financialGoalForecasterFlow(input);
     return { ...result, model: modelToUse };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
@@ -81,6 +90,7 @@ export async function forecastFinancialGoal(
   }
 }
 
+<<<<<<< HEAD
 const financialGoalPrompt = ai().definePrompt({
   name: 'financialGoalPrompt',
 <<<<<<< HEAD
@@ -106,6 +116,9 @@ const financialGoalPrompt = ai().definePrompt({
     ],
   },
   prompt: `You are a helpful and insightful personal finance advisor for FinWise AI.
+=======
+const financialGoalPromptTemplate = `You are a helpful and insightful personal finance advisor for FinWise AI.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 The user wants to achieve a financial goal. Analyze their goal against their current financial situation (averages based on recent data in INR) and provide a forecast and actionable plan.
 Your response MUST be in a valid JSON format.
 
@@ -148,6 +161,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = (input as any).model || 'gemini-3-flash-preview';
 =======
@@ -164,6 +178,10 @@ const financialGoalForecasterFlow = ai().defineFlow(
   async (input, options) => {
     const model = options?.model;
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
@@ -187,6 +205,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
@@ -204,5 +223,36 @@ const financialGoalForecasterFlow = ai().defineFlow(
     }
     return result.output;
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+
+    let output;
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(financialGoalPromptTemplate, input, GoalForecasterOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+          name: 'financialGoalPrompt',
+          input: { schema: GoalForecasterInputSchema.omit({model: true}) },
+          output: { schema: GoalForecasterOutputSchema.omit({model: true}) },
+          config: {
+            temperature: 0.5, // Allow for some creative yet grounded advice
+            maxOutputTokens: 800,
+             safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+          prompt: financialGoalPromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result.output;
+    }
+    
+    if (!output) {
+      throw new Error("AI analysis failed to produce a valid goal forecast.");
+    }
+    return output;
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );

@@ -112,11 +112,12 @@ import { retryableAIGeneration } from '../utils/retry-helper';
 import { MonthlyFinancialReportInputSchema, MonthlyFinancialReportOutputSchema } from '@/lib/types';
 import type { MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
-    const result = await monthlyFinancialReportFlow(input, { model: modelToUse });
+    const result = await monthlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
   } catch (error: any) {
     console.error(`Error in generateMonthlyFinancialReport flow: ${error.message}`, error.stack);
@@ -124,11 +125,7 @@ export async function generateMonthlyFinancialReport(input: MonthlyFinancialRepo
   }
 }
 
-const reportPrompt = ai.definePrompt({
-  name: 'monthlyFinancialReportPrompt',
-  input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
-  output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
-  prompt: `You are an expert financial analyst. Your task is to create a detailed monthly financial report in markdown format based on the user's transaction data for {{monthName}} {{year}}.
+const reportPromptTemplate = `You are an expert financial analyst. Your task is to create a detailed monthly financial report in markdown format based on the user's transaction data for {{monthName}} {{year}}.
 
 Transaction Data:
 \`\`\`json
@@ -166,8 +163,7 @@ Transaction Data:
 - Use bolding for key terms and figures.
 - Use bullet points for lists.
 - All monetary values must be in Indian Rupees (₹).
-`,
-});
+`;
 
 
 const monthlyFinancialReportFlow = ai.defineFlow(
@@ -176,8 +172,8 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
-  async (input, options) => {
-    const model = options?.model;
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
     
     // Create the prompt input, excluding the model property
     const promptInput = {
@@ -186,7 +182,20 @@ const monthlyFinancialReportFlow = ai.defineFlow(
       transactions: input.transactions,
     };
     
-    const { output } = await retryableAIGeneration(() => reportPrompt(promptInput, { model: model ? googleAI.model(model as string) : undefined }));
+    let output;
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+            name: 'monthlyFinancialReportPrompt',
+            input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
+            output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
+            prompt: reportPromptTemplate,
+        });
+        const { output: result } = await retryableAIGeneration(() => prompt(promptInput, { model: googleAI.model(model) }));
+        output = result;
+    }
+    
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");
     }

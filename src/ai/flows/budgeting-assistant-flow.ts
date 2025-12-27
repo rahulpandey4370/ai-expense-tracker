@@ -12,7 +12,13 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+<<<<<<< HEAD
 import type { BudgetingAssistantInput, BudgetingAssistantOutput, AIModel } from '@/lib/types';
+=======
+import { BudgetingAssistantInputSchema, BudgetingAssistantOutputSchema, type BudgetingAssistantOutput, type AIModel } from '@/lib/types';
+import { callAzureOpenAI } from '@/lib/azure-openai';
+
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 // Internal Zod schemas for AI flow - not exported from 'use server' file
 const BudgetingAssistantInputSchemaInternal = z.object({
@@ -42,6 +48,7 @@ export async function suggestBudgetPlan(
   input: BudgetingAssistantInput & { model?: AIModel }
 ): Promise<BudgetingAssistantOutput> {
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against internal schema before passing to AI
@@ -54,6 +61,13 @@ export async function suggestBudgetPlan(
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
     const result = await budgetingAssistantFlow(validatedInput, { model: modelToUse });
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+  try {
+    // Validate input against internal schema before passing to AI
+    const validatedInput = BudgetingAssistantInputSchema.parse(input);
+    const result = await budgetingAssistantFlow(validatedInput);
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
@@ -75,6 +89,7 @@ export async function suggestBudgetPlan(
   }
 }
 
+<<<<<<< HEAD
 const budgetPrompt = ai().definePrompt({
   name: 'budgetingAssistantPrompt',
 <<<<<<< HEAD
@@ -95,6 +110,9 @@ const budgetPrompt = ai().definePrompt({
     ],
   },
   prompt: `You are a friendly and practical Personal Finance Advisor for FinWise AI.
+=======
+const budgetPromptTemplate = `You are a friendly and practical Personal Finance Advisor for FinWise AI.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 The user wants a personalized monthly budget plan in Indian Rupees (INR).
 Analyze their stated income, savings goal, and past spending patterns to create a realistic and actionable budget.
 
@@ -121,7 +139,10 @@ Be empathetic and provide motivating, practical advice.
 If income is ₹0 or very low, state that a meaningful budget cannot be created without income, but still offer general saving tips if possible.
 If the savings goal is very aggressive (e.g., making total allocated expenses + savings > income), point this out and suggest a more conservative savings goal or the need for higher income.
 Ensure all monetary values in the output are non-negative.
+<<<<<<< HEAD
 You must respond in a valid JSON format.
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 `;
 
 const budgetingAssistantFlow = ai().defineFlow(
@@ -131,6 +152,7 @@ const budgetingAssistantFlow = ai().defineFlow(
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 
@@ -138,6 +160,11 @@ const budgetingAssistantFlow = ai().defineFlow(
   async (input, options) => {
     const model = options?.model;
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
+
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },
@@ -150,6 +177,7 @@ const budgetingAssistantFlow = ai().defineFlow(
     }
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(budgetPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
@@ -160,5 +188,36 @@ const budgetingAssistantFlow = ai().defineFlow(
     const result = await retryableAIGeneration(() => budgetPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
 >>>>>>> 40cdc81 (Still the same error)
     return result.output!;
+=======
+
+    let output;
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+            name: 'budgetingAssistantPrompt',
+            input: { schema: BudgetingAssistantInputSchema },
+            output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
+            config: {
+                temperature: 0.6,
+                maxOutputTokens: 1000,
+                 safetySettings: [
+                  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                ],
+            },
+            prompt: budgetPromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result.output;
+    }
+    
+    if (!output) {
+      throw new Error("AI analysis failed to produce a valid budget plan.");
+    }
+    return output;
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );

@@ -44,9 +44,13 @@ const FinancialChatbotInputSchemaInternal = z.object({
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'."),
 <<<<<<< HEAD
+<<<<<<< HEAD
   model: z.string().optional().describe("The AI model to use."),
 =======
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  model: z.enum(modelNames).optional(),
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -160,12 +164,16 @@ export async function askFinancialBot(input: {
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : ''),
 <<<<<<< HEAD
+<<<<<<< HEAD
     model: input.model,
   });
 =======
+=======
+    model: input.model
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   };
   
-  const result = await financialChatbotFlow(flowInput, { model: input.model });
+  const result = await financialChatbotFlow(flowInput);
   return { ...result, model: input.model };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 }
@@ -179,6 +187,7 @@ const financialChatbotFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     
 =======
@@ -188,6 +197,10 @@ const financialChatbotFlow = ai().defineFlow(
   async ({ query, transactions, chatHistory, dataScopeMessage }, options) => {
     const model = options?.model;
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
+    
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -283,6 +296,7 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     messages.push({ role: 'user', content: query });
     
 <<<<<<< HEAD
+<<<<<<< HEAD
     const selectedModel = model || 'gemini-1.5-flash-latest';
 
     const llm = ai(model as AIModel); // Use the selected model
@@ -309,6 +323,30 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
         ],
       },
     }));
+=======
+    let responseText = '';
+    const modelToUse = model || 'gemini-3-flash-preview';
+
+    if (modelToUse === 'gpt-5.2-chat') {
+        responseText = await callAzureOpenAIChat(messages);
+    } else {
+        const llmResponse = await retryableAIGeneration(() => ai.generate({
+          prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
+          model: googleAI.model(modelToUse),
+          config: {
+            temperature: 0.1, // Lower temperature for more consistent and accurate responses
+            maxOutputTokens: 800, // Increased token limit for detailed responses
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+        }));
+        responseText = llmResponse.text;
+    }
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);

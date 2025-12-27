@@ -4,7 +4,14 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
+<<<<<<< HEAD
 import { InvestmentSummaryInputSchema, type AIModel } from '@/lib/types';
+=======
+import { InvestmentSummaryInputSchema } from '@/lib/types';
+// Note: Azure OpenAI is not used here as this is a simple text generation
+// and can be handled well by Gemini. If more complex logic were needed,
+// we could add the gpt-5.2-chat condition.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 const InvestmentSummaryOutputSchema = z.object({
   summary: z.string().describe("A concise, bulleted summary of the user's monthly investments, suitable for copying. Start with the total amount vs target, then breakdown by category, then list key individual investments."),
@@ -75,9 +82,15 @@ const investmentSummaryFlow = ai().defineFlow(
     outputSchema: InvestmentSummaryOutputSchema,
   },
   async (input) => {
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(investmentSummaryPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
+=======
+    // This flow is simple enough that we can rely on the default Gemini model.
+    // No need for a gpt-5.2-chat check unless more complex reasoning is added.
+    const result = await retryableAIGeneration(() => investmentSummaryPrompt(input));
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (!result.output) {
         throw new Error("AI failed to generate a valid summary structure.");
     }

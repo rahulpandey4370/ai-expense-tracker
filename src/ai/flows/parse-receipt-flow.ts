@@ -14,9 +14,13 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel } from '@/lib/types'; // Import from lib/types
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { callAzureOpenAI } from '@/lib/azure-openai';
 =======
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+import { callAzureOpenAI } from '@/lib/azure-openai';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -39,7 +43,11 @@ const ParseReceiptImageInputSchemaInternal = z.object({
   categories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates if any are ambiguously parsed from the receipt."),
+<<<<<<< HEAD
   model: z.string().optional().describe("The AI model to use."),
+=======
+  model: z.nativeEnum(['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat']).optional(),
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 });
 // Type exported for the wrapper function
 export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchemaInternal>;
@@ -84,6 +92,7 @@ export async function parseReceiptImage(
         categories: expenseCategoriesForAI, // Only pass expense categories
         paymentMethods: input.paymentMethods,
 <<<<<<< HEAD
+<<<<<<< HEAD
         currentDate,
         model: input.model
     });
@@ -94,6 +103,11 @@ export async function parseReceiptImage(
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 =======
     }, { model: modelToUse });
+=======
+        currentDate,
+        model: modelToUse
+    });
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
     // Add model name to the successful response
     const finalParsedTransaction = result.parsedTransaction ? { ...result.parsedTransaction, model: modelToUse } : null;
@@ -111,6 +125,7 @@ export async function parseReceiptImage(
   }
 }
 
+<<<<<<< HEAD
 const parseReceiptImagePrompt = ai().definePrompt({
   name: 'parseReceiptImagePrompt',
 <<<<<<< HEAD
@@ -121,6 +136,9 @@ const parseReceiptImagePrompt = ai().definePrompt({
   output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) }, // Ensure output schema matches expected
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   prompt: `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
+=======
+const receiptPromptTemplate = `You are an expert financial assistant specialized in parsing text from receipt images in Indian Rupees (INR).
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 Your task is to extract transaction details from the provided receipt image. Assume receipts are for expenses.
 The current date is {{currentDate}}. Use this if the receipt date is ambiguous or relative.
 You must respond in a valid JSON format.
@@ -164,6 +182,7 @@ const parseReceiptImageFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 =======
@@ -173,6 +192,10 @@ const parseReceiptImageFlow = ai().defineFlow(
   async (input, options) => {
     const model = options?.model;
 >>>>>>> 40cdc81 (Still the same error)
+=======
+  async (input) => {
+    const model = input.model || 'gemini-3-flash-preview';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }
@@ -182,6 +205,7 @@ const parseReceiptImageFlow = ai().defineFlow(
 
     let outputFromAI;
     try {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -198,6 +222,21 @@ const parseReceiptImageFlow = ai().defineFlow(
       const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: model ? googleAI.model(model as string) : undefined }), 3, 2000);
 >>>>>>> 40cdc81 (Still the same error)
       outputFromAI = result.output;
+=======
+      if (model === 'gpt-5.2-chat') {
+          const result = await callAzureOpenAI(receiptPromptTemplate, input, z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }));
+          outputFromAI = result;
+      } else {
+          const prompt = ai.definePrompt({
+            name: 'parseReceiptImagePrompt',
+            input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true}) },
+            output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) },
+            prompt: receiptPromptTemplate,
+          });
+          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 2000);
+          outputFromAI = result.output;
+      }
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);
       return { parsedTransaction: { error: `AI model failed to process the receipt: ${aiError.message || 'Unknown AI error'}` } };

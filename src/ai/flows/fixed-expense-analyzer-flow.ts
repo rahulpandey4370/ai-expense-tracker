@@ -23,10 +23,13 @@ import {
     type AIModel
 } from '@/lib/types';
 import { callAzureOpenAI } from '@/lib/azure-openai';
+<<<<<<< HEAD
 
 const FixedExpenseAnalyzerInputSchemaInternal = FixedExpenseAnalyzerInputSchema.extend({
     model: z.string().optional(),
 });
+=======
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
 
@@ -34,11 +37,15 @@ export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput & { model?: AIModel }
 ): Promise<FixedExpenseAnalyzerOutput> {
 <<<<<<< HEAD
+<<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchemaInternal.parse(input);
 =======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchema.omit({model: true}).parse(input);
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
@@ -52,6 +59,7 @@ export async function analyzeFixedExpenses(
     }
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     const result = await fixedExpenseAnalyzerFlow(input);
     return { ...result, model: modelToUse };
 =======
@@ -59,6 +67,9 @@ export async function analyzeFixedExpenses(
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
 =======
     const result = await fixedExpenseAnalyzerFlow(validatedInput, { model: modelToUse });
+=======
+    const result = await fixedExpenseAnalyzerFlow(input);
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     return { ...result, model: modelToUse };
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
@@ -80,6 +91,7 @@ export async function analyzeFixedExpenses(
   }
 }
 
+<<<<<<< HEAD
 const fixedExpensePrompt = ai().definePrompt({
   name: 'fixedExpenseAnalyzerPrompt',
 <<<<<<< HEAD
@@ -100,6 +112,9 @@ const fixedExpensePrompt = ai().definePrompt({
     ],
   },
   prompt: `You are an expert financial analyst for FinWise AI. Your task is to identify fixed, recurring monthly expenses from a list of transactions for a specific month.
+=======
+const fixedExpensePromptTemplate = `You are an expert financial analyst for FinWise AI. Your task is to identify fixed, recurring monthly expenses from a list of transactions for a specific month.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 Fixed expenses are payments that are the same, or very similar, each month. Examples include rent, loan EMIs, subscriptions (Netflix, Spotify), insurance premiums, and utility bills. Some expenses like 'Groceries' or 'Auto & Transportation' (petrol) can also be considered fixed if they show a consistent, recurring pattern.
 
 **CRITICAL RULE: DO NOT include investments in this analysis.** Exclude any transactions related to Stocks, Mutual Funds, Bonds, Recurring Deposits, or any other form of financial investment. Fixed expenses are for living costs (goods and services), not wealth-building.
@@ -147,6 +162,7 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(fixedExpensePrompt.getDefinition());
@@ -169,5 +185,38 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
     }
     return result.output;
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
+    let output;
+
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({model: true}));
+    } else {
+        const prompt = ai.definePrompt({
+          name: 'fixedExpenseAnalyzerPrompt',
+          input: { schema: FixedExpenseAnalyzerInputSchema.omit({model: true}) },
+          output: { schema: FixedExpenseAnalyzerOutputSchema.omit({model: true}) },
+          config: {
+            temperature: 0.2, // Low temperature for factual analysis
+            maxOutputTokens: 1000,
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+          prompt: fixedExpensePromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result.output;
+    }
+    
+    if (!output) {
+      throw new Error("AI analysis failed to produce a valid fixed expense analysis.");
+    }
+    return output;
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );

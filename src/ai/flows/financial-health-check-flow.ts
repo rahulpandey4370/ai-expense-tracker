@@ -31,12 +31,14 @@ const FinancialHealthCheckOutputSchemaInternal = z.object({
 =======
 import { FinancialHealthCheckInputSchema, FinancialHealthCheckOutputSchema } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 
 export async function getFinancialHealthCheck(
   input: FinancialHealthCheckInput & { model?: AIModel }
 ): Promise<FinancialHealthCheckOutput> {
+<<<<<<< HEAD
 <<<<<<< HEAD
   const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
@@ -48,6 +50,12 @@ export async function getFinancialHealthCheck(
     const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
     const result = await financialHealthCheckFlow(validatedInput, { model: modelToUse });
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+  try {
+    const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
+    const result = await financialHealthCheckFlow(input);
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing financialHealthCheckFlow in wrapper:", flowError);
@@ -65,6 +73,7 @@ export async function getFinancialHealthCheck(
   }
 }
 
+<<<<<<< HEAD
 const healthCheckPrompt = ai().definePrompt({
   name: 'financialHealthCheckPrompt',
 <<<<<<< HEAD
@@ -85,6 +94,9 @@ const healthCheckPrompt = ai().definePrompt({
     ],
   },
   prompt: `You are a friendly financial assistant for FinWise AI.
+=======
+const healthCheckPromptTemplate = `You are a friendly financial assistant for FinWise AI.
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 Provide a concise (3-5 sentences) financial health check summary for the user based on the provided data in Indian Rupees (INR).
 Your response must be in a valid JSON format.
 
@@ -117,6 +129,7 @@ const financialHealthCheckFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(healthCheckPrompt.getDefinition());
@@ -135,5 +148,38 @@ const financialHealthCheckFlow = ai().defineFlow(
     }
     return result.output;
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  async (input) => {
+    const model = (input as any).model || 'gemini-3-flash-preview';
+    let output;
+
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(healthCheckPromptTemplate, input, FinancialHealthCheckOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+          name: 'financialHealthCheckPrompt',
+          input: { schema: FinancialHealthCheckInputSchema.omit({model: true}) },
+          output: { schema: FinancialHealthCheckOutputSchema.omit({model: true}) },
+          config: {
+            temperature: 0.4,
+            maxOutputTokens: 400,
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+          prompt: healthCheckPromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result.output;
+    }
+    
+    if (!output) {
+      throw new Error("AI analysis failed to produce a valid health check summary.");
+    }
+    return output;
+>>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );
