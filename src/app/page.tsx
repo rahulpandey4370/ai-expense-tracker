@@ -476,29 +476,6 @@ export default function DashboardPage() {
       </main>
       
       <div className="md:hidden fixed bottom-6 right-6 z-40 flex flex-col items-center gap-2">
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button 
-                    variant="secondary"
-                    className="h-12 w-12 rounded-full bg-primary/90 text-primary-foreground shadow-lg"
-                    size="icon"
-                    aria-label="Select AI Model"
-                >
-                    <MoreVertical className="h-6 w-6" />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="end" className="w-56">
-                <DropdownMenuLabel>Select AI Model</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {modelNames.map(model => (
-                    <DropdownMenuItem key={model} onSelect={() => setSelectedModel(model as AIModel)}>
-                        <Check className={cn("mr-2 h-4 w-4", selectedModel === model ? "opacity-100" : "opacity-0")} />
-                        {model}
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
-        
         <Button 
           onClick={handleScrollToForm}
           className="h-14 w-14 rounded-full bg-accent shadow-lg text-accent-foreground"
