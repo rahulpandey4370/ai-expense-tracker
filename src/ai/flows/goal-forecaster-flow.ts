@@ -12,59 +12,20 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterInput, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
-
-// Internal Zod schemas - not exported from this 'use server' file
-// These will now be based on the imported schemas to ensure alignment
-const GoalForecasterInputSchemaInternal = GoalForecasterInputSchema.extend({
-    model: z.string().optional(),
-});
-
-const GoalForecasterOutputSchemaInternal = GoalForecasterOutputSchema;
-=======
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
 import { callAzureOpenAI } from '@/lib/azure-openai';
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
-=======
-import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
-
-<<<<<<< HEAD
-export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema> & { model: AIModel };
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 
 export async function forecastFinancialGoal(
-  input: GoalForecasterInput & { model?: AIModel }
+  input: GoalForecasterInput
 ): Promise<GoalForecasterOutput> {
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const modelToUse = input.model || 'gemini-3-flash-preview';
-  try {
-    // Validate input against the main schema before passing to AI
-<<<<<<< HEAD
-    const validatedInput = GoalForecasterInputSchemaInternal.parse(input);
-    return await financialGoalForecasterFlow(validatedInput);
-=======
-    const validatedInput = GoalForecasterInputSchema.parse(input);
-    return await financialGoalForecasterFlow(validatedInput, { model: input.model });
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
-=======
-  const modelToUse = input.model || 'gemini-3-flash-preview';
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   try {
     // Validate input against the main schema before passing to AI
     const validatedInput = GoalForecasterInputSchema.omit({model: true}).parse(input);
     const result = await financialGoalForecasterFlow(input);
     return { ...result, model: modelToUse };
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (flowError: any) {
     console.error("Error executing financialGoalForecasterFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
@@ -90,35 +51,7 @@ export async function forecastFinancialGoal(
   }
 }
 
-<<<<<<< HEAD
-const financialGoalPrompt = ai().definePrompt({
-  name: 'financialGoalPrompt',
-<<<<<<< HEAD
-<<<<<<< HEAD
-  input: { schema: GoalForecasterInputSchemaInternal.omit({ model: true }) },
-  output: { schema: GoalForecasterOutputSchemaInternal },
-=======
-  input: { schema: GoalForecasterInputSchema },
-  output: { schema: GoalForecasterOutputSchema },
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-  input: { schema: GoalForecasterInputSchema.omit({model: true}) },
-  output: { schema: GoalForecasterOutputSchema.omit({model: true}) },
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-  config: {
-    temperature: 0.5, // Allow for some creative yet grounded advice
-    maxOutputTokens: 800,
-     safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-    ],
-  },
-  prompt: `You are a helpful and insightful personal finance advisor for FinWise AI.
-=======
 const financialGoalPromptTemplate = `You are a helpful and insightful personal finance advisor for FinWise AI.
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 The user wants to achieve a financial goal. Analyze their goal against their current financial situation (averages based on recent data in INR) and provide a forecast and actionable plan.
 Your response MUST be in a valid JSON format.
 
@@ -152,36 +85,14 @@ If average monthly income is ₹0, and goalAmount was not provided (AI needs to 
 If goalAmount *was* provided but income is ₹0, calculate required monthly savings but state feasibility is 'Insufficient Data for Full Forecast'.
 `;
 
-const financialGoalForecasterFlow = ai().defineFlow(
+const financialGoalForecasterFlow = ai.defineFlow(
   {
     name: 'financialGoalForecasterFlow',
-<<<<<<< HEAD
-<<<<<<< HEAD
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
-=======
-    inputSchema: GoalForecasterInputSchema,
-    outputSchema: GoalForecasterOutputSchema,
-=======
-    inputSchema: GoalForecasterInputSchema.omit({model: true}),
-    outputSchema: GoalForecasterOutputSchema.omit({model: true}),
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-  },
-  async (input, { model }) => {
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-  async (input, options) => {
-    const model = options?.model;
->>>>>>> 40cdc81 (Still the same error)
-=======
-  async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+    const model = (input as any).model || 'gemini-1.5-flash-latest';
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
@@ -202,28 +113,6 @@ const financialGoalForecasterFlow = ai().defineFlow(
             motivationalMessage: "Update your transaction history for a more accurate forecast."
         };
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    const llm = ai(input.model as AIModel);
-    const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
-    const result = await retryableAIGeneration(() => configuredPrompt(input));
-=======
-    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model }));
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-    return result.output!;
-=======
-    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model: googleAI.model(model) }));
-=======
-    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
->>>>>>> 40cdc81 (Still the same error)
-    if (!result.output) {
-      throw new Error("AI analysis failed to produce a valid goal forecast.");
-    }
-    return result.output;
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
 
     let output;
     if (model === 'gpt-5.2-chat') {
@@ -253,6 +142,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
       throw new Error("AI analysis failed to produce a valid goal forecast.");
     }
     return output;
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );
+
+    

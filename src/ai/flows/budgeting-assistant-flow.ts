@@ -12,62 +12,17 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-<<<<<<< HEAD
-import type { BudgetingAssistantInput, BudgetingAssistantOutput, AIModel } from '@/lib/types';
-=======
 import { BudgetingAssistantInputSchema, BudgetingAssistantOutputSchema, type BudgetingAssistantOutput, type AIModel } from '@/lib/types';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
-
-// Internal Zod schemas for AI flow - not exported from 'use server' file
-const BudgetingAssistantInputSchemaInternal = z.object({
-  statedMonthlyIncome: z.number().min(0).describe("User's stated monthly income in INR. Can be 0 if not provided recently."),
-  statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
-  averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
-  pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
-  model: z.string().optional(),
-});
-
-const BudgetingAssistantOutputSchemaInternal = z.object({
-  recommendedMonthlyBudget: z.object({
-    needs: z.number().min(0).describe("Recommended monthly spending for 'Needs' in INR."),
-    wants: z.number().min(0).describe("Recommended monthly spending for 'Wants' in INR."),
-    investmentsAsSpending: z.number().min(0).describe("Recommended monthly allocation for 'Investments' (treated as an expense category like SIPs, stock purchases) in INR. This is separate from pure 'Savings'."),
-    targetSavings: z.number().min(0).describe("The target amount to be saved each month based on the user's income and savings goal percentage, in INR. This is pure cash savings or unallocated investment funds."),
-    discretionarySpendingOrExtraSavings: z.number().min(0).describe("Remaining amount after allocating to needs, wants, investments (as spending), and target savings. This can be used for flexible spending or additional savings/investments, in INR."),
-  }).describe("The AI's recommended monthly budget breakdown in INR."),
-  detailedSuggestions: z.object({
-    categoryAdjustments: z.array(z.string()).describe("Specific suggestions for adjusting spending in certain categories to meet the budget and savings goals. E.g., 'Consider reducing 'Dining Out' expenses by approximately ₹500.' or 'Allocate ₹X towards your Mutual Fund SIP.'"),
-    generalTips: z.array(z.string()).describe("General financial tips to help the user stick to the budget and improve savings. E.g., 'Review subscriptions for potential cuts.' or 'Set up automatic transfers to your savings account on payday.'"),
-  }).describe("Actionable advice to help the user achieve their financial plan."),
-  analysisSummary: z.string().describe("A brief overall analysis comparing the suggested budget to past spending habits and explaining how it helps achieve the savings goal. Mention any significant changes required."),
-});
-
 export async function suggestBudgetPlan(
-  input: BudgetingAssistantInput & { model?: AIModel }
+  input: z.infer<typeof BudgetingAssistantInputSchema>
 ): Promise<BudgetingAssistantOutput> {
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const modelToUse = input.model || 'gemini-3-flash-preview';
-  try {
-    // Validate input against internal schema before passing to AI
-    const validatedInput = BudgetingAssistantInputSchema.parse(input);
-    const result = await budgetingAssistantFlow(validatedInput);
-=======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
-    const result = await budgetingAssistantFlow(validatedInput, { model: modelToUse });
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-  const modelToUse = input.model || 'gemini-3-flash-preview';
-  try {
-    // Validate input against internal schema before passing to AI
-    const validatedInput = BudgetingAssistantInputSchema.parse(input);
     const result = await budgetingAssistantFlow(validatedInput);
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
@@ -89,30 +44,8 @@ export async function suggestBudgetPlan(
   }
 }
 
-<<<<<<< HEAD
-const budgetPrompt = ai().definePrompt({
-  name: 'budgetingAssistantPrompt',
-<<<<<<< HEAD
-  input: { schema: BudgetingAssistantInputSchemaInternal.omit({ model: true }) },
-  output: { schema: BudgetingAssistantOutputSchemaInternal },
-=======
-  input: { schema: BudgetingAssistantInputSchema },
-  output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-  config: {
-    temperature: 0.6, // Allow for some creative yet grounded advice
-    maxOutputTokens: 1000,
-     safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-    ],
-  },
-  prompt: `You are a friendly and practical Personal Finance Advisor for FinWise AI.
-=======
 const budgetPromptTemplate = `You are a friendly and practical Personal Finance Advisor for FinWise AI.
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+Your response must be in a valid JSON format.
 The user wants a personalized monthly budget plan in Indian Rupees (INR).
 Analyze their stated income, savings goal, and past spending patterns to create a realistic and actionable budget.
 
@@ -139,36 +72,17 @@ Be empathetic and provide motivating, practical advice.
 If income is ₹0 or very low, state that a meaningful budget cannot be created without income, but still offer general saving tips if possible.
 If the savings goal is very aggressive (e.g., making total allocated expenses + savings > income), point this out and suggest a more conservative savings goal or the need for higher income.
 Ensure all monetary values in the output are non-negative.
-<<<<<<< HEAD
-<<<<<<< HEAD
-You must respond in a valid JSON format.
-=======
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
-=======
-You must respond in a valid JSON format.
->>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 `;
 
-const budgetingAssistantFlow = ai().defineFlow(
+const budgetingAssistantFlow = ai.defineFlow(
   {
     name: 'budgetingAssistantFlow',
     inputSchema: BudgetingAssistantInputSchema,
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
   async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
+    const model = input.model || 'gemini-1.5-flash-latest';
 
-=======
-  async (input, options) => {
-    const model = options?.model;
->>>>>>> 40cdc81 (Still the same error)
-=======
-  async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
-
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },
@@ -179,20 +93,6 @@ const budgetingAssistantFlow = ai().defineFlow(
         analysisSummary: "A meaningful budget cannot be created without a stated monthly income. Please provide your income to get a personalized plan.",
       };
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    const llm = ai(input.model as AIModel);
-    const configuredPrompt = llm.definePrompt(budgetPrompt.getDefinition());
-    const result = await retryableAIGeneration(() => configuredPrompt(input));
-=======
-    const result = await retryableAIGeneration(() => budgetPrompt(input, { model: googleAI.model(model) }));
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-    const result = await retryableAIGeneration(() => budgetPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
->>>>>>> 40cdc81 (Still the same error)
-    return result.output!;
-=======
 
     let output;
     if (model === 'gpt-5.2-chat') {
@@ -222,6 +122,7 @@ const budgetingAssistantFlow = ai().defineFlow(
       throw new Error("AI analysis failed to produce a valid budget plan.");
     }
     return output;
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   }
 );
+
+    

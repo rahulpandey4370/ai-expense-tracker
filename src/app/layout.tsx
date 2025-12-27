@@ -7,11 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { DateSelectionProvider } from '@/contexts/DateSelectionContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper'; // Import the new wrapper
-<<<<<<< HEAD
-import { AIModelProvider } from '@/contexts/AIModelContext'; // Import the new AI Model Provider
-=======
 import { AIModelProvider } from '@/contexts/AIModelContext';
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -51,15 +47,6 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-<<<<<<< HEAD
-            <DateSelectionProvider>
-              <AIModelProvider> {/* Wrap with AIModelProvider */}
-                <ProtectedLayoutWrapper> {/* Use the new wrapper */}
-                  {children}
-                </ProtectedLayoutWrapper>
-              </AIModelProvider>
-            </DateSelectionProvider>
-=======
             <AIModelProvider>
               <DateSelectionProvider>
                 <ProtectedLayoutWrapper> {/* Use the new wrapper */}
@@ -67,7 +54,6 @@ export default function RootLayout({
                 </ProtectedLayoutWrapper>
               </DateSelectionProvider>
             </AIModelProvider>
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
             <Toaster />
           </ThemeProvider>
         </AuthProvider>
@@ -75,3 +61,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+    

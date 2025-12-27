@@ -1,21 +1,12 @@
 
 'use server';
 
-<<<<<<< HEAD
-/**
- * @fileOverview AI-powered insights about spending habits using Gemini.
- */
 import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { AIModel } from '@/contexts/AIModelContext';
-=======
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { modelNames, type AIModel } from '@/lib/types';
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
+import { modelNames, type AIModel, SpendingInsightsOutputSchema } from '@/lib/types';
+
 
 // --- Input Schema ---
 const SpendingInsightsInputSchema = z.object({
@@ -28,74 +19,21 @@ const SpendingInsightsInputSchema = z.object({
   insightType: z.enum(['default', 'cost_cutter', 'growth_investor']).optional().default('default'),
   selectedMonth: z.number().min(0).max(11).describe("The selected month for analysis (0=Jan, 11=Dec)."),
   selectedYear: z.number().describe("The selected year for analysis."),
-<<<<<<< HEAD
-  model: z.string().optional().describe("The AI model to use for generation."),
-=======
   model: z.enum(modelNames).optional().default('gemini-1.5-flash-latest'),
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 });
 
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
-
-
-// --- Output Schema ---
-const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
-});
-
-
-// --- Output Schema ---
-const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
-});
-
-
-// --- Output Schema ---
-const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
-});
-
-
-// --- Output Schema ---
-const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
-});
-
-
-// --- Output Schema ---
-const SpendingInsightsOutputSchema = z.object({
-  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
-  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
-  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
-});
-
-=======
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;
 
 // --- Personas ---
 const personas = {
-<<<<<<< HEAD
-  default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore. You give practical, actionable advice with a bit of local flavor. You are direct and don't sugarcoat things, but you are ultimately trying to help the user improve their financial health. You value common sense over complex financial jargon.`,
-  cost_cutter: `You are an aggressive cost-cutting financial analyst. Your primary goal is to find every single opportunity to save money. You are meticulous, data-driven, and believe that every rupee saved is a rupee earned. You see wasteful spending everywhere and are not afraid to point it out.`,
-  growth_investor: `You are a growth-focused financial advisor. You believe in spending money to make money and optimizing for long-term wealth creation. You are less concerned with small expenses and more focused on whether the user is investing enough and in the right places. You encourage smart risks and strategic spending.`
-=======
   default: `You are a brutally honest, no-nonsense financial advisor who lives in Bangalore. You get straight to the point. You are practical and give actionable advice relevant to an Indian urban context. Use Indian currency symbol (₹) and Indian number formatting (lakhs, crores where appropriate but prefer raw numbers for clarity). Be direct, a bit witty, and slightly critical to motivate the user.`,
   cost_cutter: `You are an aggressive cost-cutting financial analyst. Your only goal is to find savings. You are obsessed with efficiency and finding every rupee that can be saved. Your tone is sharp, analytical, and uncompromising. You see all 'want' spending as a liability. Provide specific, sometimes drastic, suggestions to cut costs.`,
   growth_investor: `You are a growth-focused financial advisor. You believe that money should be working for the user. Your goal is to maximize the user's investment potential. You view un-invested savings as a missed opportunity. Your tone is motivating, ambitious, and strategic. You push the user to invest more and cut frivolous spending to fuel their investments.`
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 };
 
 // --- Prompt Definition ---
-const spendingInsightsPrompt = ai().definePrompt({
+const spendingInsightsPrompt = ai.definePrompt({
   name: 'spendingInsightsPrompt',
   input: {
     schema: z.object({
@@ -106,19 +44,11 @@ const spendingInsightsPrompt = ai().definePrompt({
     }),
   },
   output: {
-<<<<<<< HEAD
-    schema: SpendingInsightsOutputSchema.omit({ model: true }),
-  },
-  config: {
-    temperature: 0.8,
-    maxOutputTokens: 1200,
-=======
     schema: SpendingInsightsOutputSchema,
   },
   config: {
     temperature: 0.8,
     maxOutputTokens: 3000,
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -162,23 +92,19 @@ Rules for the output:
 \`\`\`json
 {{jsonInput}}
 \`\`\`
-`;
+`,
+});
 
 // --- Flow Definition ---
-const spendingInsightsFlow = ai().defineFlow(
+const spendingInsightsFlow = ai.defineFlow(
   {
     name: 'spendingInsightsFlow',
     inputSchema: SpendingInsightsInputSchema,
     outputSchema: SpendingInsightsOutputSchema.omit({ model: true }),
   },
   async (input) => {
-<<<<<<< HEAD
-    const model = input.model || 'gemini-3-flash-preview';
-    const selectedPersona = personas[input.insightType || 'default'] || personas['default'];
-=======
     const selectedPersona =
       personas[input.insightType || 'default'] || personas['default'];
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
@@ -198,77 +124,33 @@ const spendingInsightsFlow = ai().defineFlow(
       jsonInput: JSON.stringify(input, null, 2),
     };
     
-    const llm = ai(input.model as AIModel);
-    const configuredPrompt = llm.definePrompt(spendingInsightsPrompt.getDefinition());
-
     const model = input.model;
 
     const { output } = await retryableAIGeneration(() =>
-<<<<<<< HEAD
-<<<<<<< HEAD
-      configuredPrompt(promptInput)
-    );
-    
-    if (!output) {
-=======
-      spendingInsightsPrompt(promptInput, { model: ai(input.model) })
-=======
-      spendingInsightsPrompt(promptInput, { model })
->>>>>>> f195e67 (Try fixing this error: `Console Error: Error: (0 , {imported module [pro)
+      spendingInsightsPrompt(promptInput, { model: googleAI.model(model!) })
     );
 
-    if (!output || !output.insights) {
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
+    if (!output) {
       console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));
       throw new Error("The AI returned a response, but it was empty or malformed.");
     }
-<<<<<<< HEAD
-    
-    return {
-      positiveObservations: output.positiveObservations || [],
-      areasForImprovement: output.areasForImprovement || [],
-      keyTakeaway: output.keyTakeaway || "",
-    };
-=======
 
     return output;
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
   }
 );
-
-function simpleTemplateRender(template: string, data: Record<string, any>): string {
-    let rendered = template;
-    for (const key in data) {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        rendered = rendered.replace(regex, data[key]);
-    }
-    return rendered;
-}
 
 
 // --- Main Export Function ---
 export async function getSpendingInsights(input: SpendingInsightsInput): Promise<SpendingInsightsOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = SpendingInsightsInputSchema.parse(input);
-    return await spendingInsightsFlow(validatedInput);
-<<<<<<< HEAD
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      console.error("Input Zod validation error:", error.flatten());
-      return { 
-          keyTakeaway: `Validation Error: ${error.message}` 
-      };
-    }
-    console.error("Error in getSpendingInsights:", error);
-    return { 
-      keyTakeaway: `I'm sorry, an unexpected error occurred while generating insights: ${error.message}` 
-    };
-=======
+    const result = await spendingInsightsFlow(validatedInput);
+    return { ...result, model: validatedInput.model };
   } catch (e: any) {
     console.error("Error in getSpendingInsights:", e);
     // Re-throw the error to be caught by the caller, ensuring UI can show a proper error state
     throw new Error(e.message || "An unexpected error occurred while generating insights.");
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
   }
 }
+
+    

@@ -12,19 +12,8 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 import { callAzureOpenAI } from '@/lib/azure-openai';
-<<<<<<< HEAD
-=======
-import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
->>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
-=======
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -46,11 +35,7 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
-<<<<<<< HEAD
-  model: z.string().optional().describe("The AI model to use."),
-=======
   model: z.enum(modelNames).optional(),
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 });
 // Type exported for the wrapper function
 export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
@@ -68,23 +53,11 @@ export async function parseTransactionsFromText(
     naturalLanguageText: string;
     categories: {id: string; name: string; type: 'income' | 'expense'}[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
-<<<<<<< HEAD
-    model?: AIModel;
-=======
     model: AIModel;
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const modelToUse = input.model || 'gemini-3-flash-preview';
-=======
   const modelToUse = input.model || 'gemini-1.5-flash-latest';
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-  const modelToUse = input.model || 'gemini-3-flash-preview';
->>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -103,26 +76,11 @@ export async function parseTransactionsFromText(
         expenseCategories: expenseCategoriesForAI,
         incomeCategories: incomeCategoriesForAI,
         paymentMethods: input.paymentMethods,
-<<<<<<< HEAD
-<<<<<<< HEAD
-        currentDate,
-        model: input.model
-    });
-=======
-        currentDate
-<<<<<<< HEAD
-    }, { model: input.model });
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-    }, { model: modelToUse });
-=======
         currentDate,
         model: modelToUse,
     });
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
     return { ...result, model: modelToUse };
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   } catch (error: any) {
     console.error("Error executing parseTransactionsFlow in wrapper:", error);
     const errorMessage = error.message || 'Unknown error';
@@ -142,44 +100,6 @@ export async function parseTransactionsFromText(
   }
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-const parseTransactionsPrompt = ai().definePrompt({
-  name: 'parseTransactionsPrompt',
-<<<<<<< HEAD
-  input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) }, // model is not part of the prompt itself
-  output: { schema: ParseTransactionTextOutputSchemaInternal },
-<<<<<<< HEAD
-=======
-=======
-  input: { schema: ParseTransactionTextInputSchemaInternal },
-<<<<<<< HEAD
-  output: { schema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }) },
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-  output: { schema: ParseTransactionTextOutputSchemaInternal },
->>>>>>> 999104a (So it works for chat but not for insights or the AI transaction parsing)
-  // Model configuration for potentially faster responses
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-  config: {
-    temperature: 0.2, 
-    maxOutputTokens: 1500, 
-    safetySettings: [ 
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-    ],
-  },
-  prompt: `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
-=======
-const parseTransactionsPromptTemplate = `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
-<<<<<<< HEAD
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
-=======
-Your response must be in a valid JSON format.
->>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
-=======
 const parseTransactionsPromptTemplate = `You are an expert financial assistant. Your task is to parse raw text for financial transactions in Indian Rupees (INR) and convert it into a structured JSON format.
 
 **CRITICAL INSTRUCTIONS:**
@@ -189,7 +109,6 @@ const parseTransactionsPromptTemplate = `You are an expert financial assistant. 
 4.  If no transactions are found, you **MUST** return an empty array: \`"parsedTransactions": []\`.
 5.  Each object in the array must conform to the schema described below.
 
->>>>>>> 42a5cdc (Still getting this error)
 Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yesterday", "last Tuesday") to YYYY-MM-DD format.
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
@@ -249,52 +168,20 @@ Return an array of structured transaction objects inside the \`parsedTransaction
 Provide a very concise \`summaryMessage\` only if necessary (e.g., general parsing issues). Focus on speed and transaction accuracy.
 `;
 
-const parseTransactionsFlow = ai().defineFlow(
+const parseTransactionsFlow = ai.defineFlow(
   {
     name: 'parseTransactionsFlow',
     inputSchema: ParseTransactionTextInputSchemaInternal,
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
-=======
-  async (input, { model }) => {
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-  async (input, options) => {
-    const model = options?.model;
->>>>>>> 40cdc81 (Still the same error)
-=======
-  async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+    const model = input.model || 'gemini-1.5-flash-latest';
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
     try {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-      const llm = ai(input.model as AIModel);
-      const configuredPrompt = llm.definePrompt(parseTransactionsPrompt.getDefinition());
-      const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 1500);
-=======
-      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: model || googleAI.model('gemini-1.5-flash-latest') }), 3, 1500);
->>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
-=======
-      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: googleAI.model(model) }), 3, 1500);
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: model ? googleAI.model(model as string) : undefined }), 3, 1500);
->>>>>>> 40cdc81 (Still the same error)
-      output = result.output;
-=======
       if (model === 'gpt-5.2-chat') {
         output = await callAzureOpenAI(parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal);
       } else {
@@ -317,7 +204,6 @@ const parseTransactionsFlow = ai().defineFlow(
           const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
           output = result.output;
       }
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
       if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error") || (aiError.message.includes("GoogleGenerativeAI Error") && aiError.message.includes("Invalid JSON payload")))) {
@@ -384,3 +270,5 @@ const parseTransactionsFlow = ai().defineFlow(
     };
   }
 );
+
+    

@@ -8,18 +8,14 @@
  * - ChatMessage - Type for chat history messages.
  */
 
-<<<<<<< HEAD
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-=======
 import {ai} from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import {z}from 'genkit';
->>>>>>> 8c1072a (Try fixing this error: `Runtime Error: TypeError: {imported module [proj)
 import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { callAzureOpenAIChat } from '@/lib/azure-openai';
+import { modelNames } from '@/lib/types';
 
 
 const AITransactionSchema = z.object({
@@ -49,14 +45,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'."),
-<<<<<<< HEAD
-<<<<<<< HEAD
-  model: z.string().optional().describe("The AI model to use."),
-=======
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
   model: z.enum(modelNames).optional(),
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -169,44 +158,22 @@ export async function askFinancialBot(input: {
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : ''),
-<<<<<<< HEAD
-<<<<<<< HEAD
-    model: input.model,
-  });
-=======
-=======
     model: input.model
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
   };
   
   const result = await financialChatbotFlow(flowInput);
   return { ...result, model: input.model };
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 }
 
 
-const financialChatbotFlow = ai().defineFlow(
+const financialChatbotFlow = ai.defineFlow(
   {
     name: 'financialChatbotFlow',
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     
-=======
-  async ({ query, transactions, chatHistory, dataScopeMessage }, { model }) => {
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-  async ({ query, transactions, chatHistory, dataScopeMessage }, options) => {
-    const model = options?.model;
->>>>>>> 40cdc81 (Still the same error)
-=======
-  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
-    
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -301,37 +268,8 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     }
     messages.push({ role: 'user', content: query });
     
-<<<<<<< HEAD
-<<<<<<< HEAD
-    const selectedModel = model || 'gemini-1.5-flash-latest';
-
-    const llm = ai(model as AIModel); // Use the selected model
-
-    const llmResponse = await retryableAIGeneration(() => llm.generate({
-      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-=======
-    const llmResponse = await retryableAIGeneration(() => ai.generate({
-      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-<<<<<<< HEAD
-      model: googleAI.model(model),
->>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
-=======
-      model: model ? googleAI.model(model as string) : undefined,
->>>>>>> 40cdc81 (Still the same error)
-      config: {
-        temperature: 0.1,
-        maxOutputTokens: 800,
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-        ],
-      },
-    }));
-=======
     let responseText = '';
-    const modelToUse = model || 'gemini-3-flash-preview';
+    const modelToUse = model || 'gemini-1.5-flash-latest';
 
     if (modelToUse === 'gpt-5.2-chat') {
         responseText = await callAzureOpenAIChat(messages);
@@ -352,7 +290,6 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
         }));
         responseText = llmResponse.text;
     }
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
 
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);
@@ -361,3 +298,5 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     return { response: responseText };
   }
 );
+
+    

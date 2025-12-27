@@ -4,14 +4,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-<<<<<<< HEAD
 import { InvestmentSummaryInputSchema, type AIModel } from '@/lib/types';
-=======
-import { InvestmentSummaryInputSchema } from '@/lib/types';
-// Note: Azure OpenAI is not used here as this is a simple text generation
-// and can be handled well by Gemini. If more complex logic were needed,
-// we could add the gpt-5.2-chat condition.
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+import { googleAI } from '@genkit-ai/googleai';
+
 
 const InvestmentSummaryOutputSchema = z.object({
   summary: z.string().describe("A concise, bulleted summary of the user's monthly investments, suitable for copying. Start with the total amount vs target, then breakdown by category, then list key individual investments."),
@@ -31,15 +26,22 @@ export async function summarizeInvestments(input: z.infer<typeof InvestmentSumma
   return await investmentSummaryFlow(validation.data);
 }
 
-const investmentSummaryPrompt = ai().definePrompt({
-  name: 'investmentSummaryPrompt',
-  input: { schema: InvestmentSummaryInputSchemaInternal.omit({ model: true }) },
-  output: { schema: InvestmentSummaryOutputSchema },
-  config: {
-    temperature: 0.2,
-    maxOutputTokens: 600,
+const investmentSummaryFlow = ai.defineFlow(
+  {
+    name: 'investmentSummaryFlow',
+    inputSchema: InvestmentSummaryInputSchemaInternal,
+    outputSchema: InvestmentSummaryOutputSchema,
   },
-  prompt: `You are a financial assistant. Your task is to generate a clean, concise, copiable summary of a user's investments for a specific month. Use bullet points (•) and be factual.
+  async (input) => {
+    const prompt = ai.definePrompt({
+      name: 'investmentSummaryPrompt',
+      input: { schema: InvestmentSummaryInputSchemaInternal.omit({ model: true }) },
+      output: { schema: InvestmentSummaryOutputSchema },
+      config: {
+        temperature: 0.2,
+        maxOutputTokens: 600,
+      },
+      prompt: `You are a financial assistant. Your task is to generate a clean, concise, copiable summary of a user's investments for a specific month. Use bullet points (•) and be factual.
 Your response MUST be in a valid JSON format.
 
 **Data for {{monthYear}}:**
@@ -73,27 +75,12 @@ Investment Summary for 2024-07
   • UTI Nifty 50 Index: ₹3,000
   • HDFC Liquid Fund: ₹2,000
 `,
-});
-
-const investmentSummaryFlow = ai().defineFlow(
-  {
-    name: 'investmentSummaryFlow',
-    inputSchema: InvestmentSummaryInputSchemaInternal,
-    outputSchema: InvestmentSummaryOutputSchema,
-  },
-  async (input) => {
-<<<<<<< HEAD
-    const llm = ai(input.model as AIModel);
-    const configuredPrompt = llm.definePrompt(investmentSummaryPrompt.getDefinition());
-    const result = await retryableAIGeneration(() => configuredPrompt(input));
-=======
-    // This flow is simple enough that we can rely on the default Gemini model.
-    // No need for a gpt-5.2-chat check unless more complex reasoning is added.
-    const result = await retryableAIGeneration(() => investmentSummaryPrompt(input));
->>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
-    if (!result.output) {
+    });
+    
+    const { output } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(input.model!) }));
+    if (!output) {
         throw new Error("AI failed to generate a valid summary structure.");
     }
-    return result.output;
+    return output;
   }
 );

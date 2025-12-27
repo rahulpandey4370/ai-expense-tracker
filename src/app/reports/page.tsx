@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -8,16 +9,14 @@ import { Button } from "@/components/ui/button";
 import type { AppTransaction, ExpenseType, AIModel } from '@/lib/types';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers, RefreshCw, Wand2, ArrowUp, ArrowDown, Banknote, ShoppingCart, Sparkles, Star } from 'lucide-react';
+import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers, RefreshCw, Wand2 } from 'lucide-react';
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
-import { generateMonthlyFinancialReport } from '@/ai/flows/monthly-financial-report-flow';
-import type { AITransactionForAnalysis, MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '@/lib/types';
-import { getReport, saveReport } from '@/lib/actions/reports';
+import { getMonthlyReport, type MonthlyFinancialReportOutput } from '@/lib/actions/reports';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
@@ -29,10 +28,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
-<<<<<<< HEAD
-import { Badge } from '@/components/ui/badge';
-=======
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
 
 const pageVariants = {
@@ -60,24 +55,18 @@ const progressColors = [
 
 export default function ReportsPage() {
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
-  const { selectedModel } = useAIModel();
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   const [reportYear, setReportYear] = useState<number>(selectedYear);
   const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for Annual
 
-  const [aiReport, setAiReport] = useState<MonthlyFinancialReportOutput | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<MonthlyFinancialReportOutput | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
   
   const [categoryExpenseTypeFilter, setCategoryExpenseTypeFilter] = useState<'all' | ExpenseType>('all');
   const { selectedModel } = useAIModel();
-<<<<<<< HEAD
-=======
-
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
   const { toast } = useToast();
 
@@ -98,36 +87,10 @@ export default function ReportsPage() {
       setIsLoadingData(false);
     }
   }, [toast]);
-  
-  const monthYearKey = useMemo(() => `${reportYear}-${String(reportMonth + 1).padStart(2, '0')}`, [reportYear, reportMonth]);
-  
-  const fetchReport = useCallback(async () => {
-    if (reportMonth === -1) {
-        setAiReport(null); // No AI reports for annual view yet
-        return;
-    }
-    setIsLoadingReport(true);
-    setAiReport(null);
-    setAiError(null);
-    try {
-      const savedReport = await getReport(monthYearKey);
-      setAiReport(savedReport);
-    } catch (error) {
-      // It's okay if a report doesn't exist, so we don't show an error toast here.
-      console.log(`No saved report found for ${monthYearKey}.`);
-      setAiReport(null);
-    } finally {
-      setIsLoadingReport(false);
-    }
-  }, [monthYearKey, reportMonth]);
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
-
-  useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
 
   const handleYearChange = (yearValue: string) => {
     const year = parseInt(yearValue, 10);
@@ -187,45 +150,14 @@ export default function ReportsPage() {
     }
     setIsAiLoading(true);
     setAiError(null);
-    setAiReport(null);
-
-    const prevMonthDate = new Date(reportYear, reportMonth - 1, 1);
-    const prevMonth = prevMonthDate.getMonth();
-    const prevYear = prevMonthDate.getFullYear();
-
-    const currentMonthTxs = filteredTransactionsForPeriod;
-    const prevMonthTxs = allTransactions.filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === prevYear && d.getMonth() === prevMonth;
-    });
-    
-    const formatForAI = (txs: AppTransaction[]): AITransactionForAnalysis[] => txs.map(t => ({
-        description: t.description,
-        amount: t.amount,
-        date: t.date.toISOString(),
-        categoryName: t.category?.name || (t.type === 'income' ? t.source : null),
-        expenseType: t.expenseType,
-    }));
-
-    const input: ComparativeExpenseAnalysisInput = {
-      currentMonth: currentPeriodName,
-      previousMonth: previousPeriodName,
-      currentMonthExpenses: currentPeriodExpensesTotal,
-      previousMonthExpenses: previousPeriodExpensesTotal,
-      expenseCategoriesCurrent: formatExpenseCategoriesForAI(filteredTransactionsForPeriod),
-      expenseCategoriesPrevious: formatExpenseCategoriesForAI(previousPeriodTransactions),
-      model: selectedModel,
-    };
+    setAiAnalysis(null);
 
     try {
-      const result = await generateMonthlyFinancialReport(input);
-      setAiReport(result);
-      await saveReport(monthYearKey, result);
-      toast({ title: "AI Report Generated!", description: "Your in-depth monthly report is ready." });
+      const result = await getMonthlyReport(reportMonth, reportYear, selectedModel);
+      setAiAnalysis(result);
     } catch (err: any) {
       console.error("Error generating AI report:", err);
       setAiError(err.message || "Failed to generate the AI report. Please try again.");
-      toast({ title: "AI Generation Failed", description: err.message, variant: "destructive" });
     } finally {
       setIsAiLoading(false);
     }
@@ -345,84 +277,6 @@ export default function ReportsPage() {
                 </Alert>
               ) : (
                 <>
-                {reportMonth !== -1 && ( // Only show AI section for monthly reports
-                    <motion.div variants={cardVariants}>
-                    <Card className={cn("shadow-lg border-accent/30 bg-accent/10", glowClass)}>
-                    <CardHeader>
-                        <CardTitle className="text-lg sm:text-xl font-semibold text-accent dark:text-accent-foreground flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                                <BookOpen className="h-5 w-5 text-accent" />
-                                AI Monthly Report
-                            </span>
-                            {aiReport?.model && <Badge variant="outline" className="text-xs">{aiReport.model}</Badge>}
-                        </CardTitle>
-                        <CardDescription className="text-xs sm:text-sm text-accent/80 dark:text-accent-foreground/80">
-                        In-depth AI analysis for {monthNamesList[reportMonth]} {reportYear}.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {(isAiLoading || isLoadingReport) ? (
-                        <div className="space-y-3 p-3">
-                            <Skeleton className="h-5 w-3/4 bg-accent/30" />
-                            <Skeleton className="h-4 w-full bg-accent/30" />
-                            <Skeleton className="h-4 w-full bg-accent/30" />
-                            <Skeleton className="h-4 w-5/6 bg-accent/30" />
-                        </div>
-                        ) : aiError ? (
-                            <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Analysis Failed</AlertTitle><AlertDescription>{aiError}</AlertDescription></Alert>
-                        ) : aiReport ? (
-                            <div className="space-y-4 text-sm">
-                                <div><p className="font-semibold text-primary mb-1">Overall Summary:</p><p className="text-foreground/90">{aiReport.overallSummary}</p></div>
-                                
-                                <div className="p-3 border rounded-lg bg-background/50">
-                                    <p className="font-semibold text-primary mb-2 flex items-center gap-1"><ArrowUp className="h-4 w-4 text-green-500" />Income Analysis:</p>
-                                    <p><strong className="text-muted-foreground">Total:</strong> ₹{aiReport.incomeAnalysis.totalIncome.toLocaleString()} - {aiReport.incomeAnalysis.comparison}</p>
-                                </div>
-                                <div className="p-3 border rounded-lg bg-background/50">
-                                    <p className="font-semibold text-primary mb-2 flex items-center gap-1"><ArrowDown className="h-4 w-4 text-red-500" />Spending Analysis:</p>
-                                    <p><strong className="text-muted-foreground">Total:</strong> ₹{aiReport.spendingAnalysis.totalSpending.toLocaleString()} - {aiReport.spendingAnalysis.comparison}</p>
-                                    <ul className="mt-2 space-y-1 list-disc list-inside text-foreground/80 pl-2">
-                                        {aiReport.spendingAnalysis.categoryBreakdown.map(cat => <li key={cat.category}><strong>{cat.category}:</strong> ₹{cat.amount.toLocaleString()} ({cat.percentage.toFixed(1)}%) - <span className="italic">{cat.insight}</span></li>)}
-                                    </ul>
-                                </div>
-                                 <div className="p-3 border rounded-lg bg-background/50">
-                                     <p className="font-semibold text-primary mb-2 flex items-center gap-1"><Sparkles className="h-4 w-4 text-yellow-500" />Savings & Investments:</p>
-                                    <p>{aiReport.savingsAndInvestmentAnalysis.summary}</p>
-                                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-2">
-                                        <span><strong className="text-muted-foreground">Net Savings:</strong> ₹{aiReport.savingsAndInvestmentAnalysis.totalSavings.toLocaleString()}</span>
-                                        <span><strong className="text-muted-foreground">Savings Rate:</strong> {aiReport.savingsAndInvestmentAnalysis.savingsRate.toFixed(1)}%</span>
-                                        <span><strong className="text-muted-foreground">Invested:</strong> ₹{aiReport.savingsAndInvestmentAnalysis.totalInvestments.toLocaleString()}</span>
-                                        <span><strong className="text-muted-foreground">Investment Rate:</strong> {aiReport.savingsAndInvestmentAnalysis.investmentRate.toFixed(1)}%</span>
-                                     </div>
-                                 </div>
-                                {aiReport.spendingAnalysis.notableTransactions && aiReport.spendingAnalysis.notableTransactions.length > 0 && (
-                                     <div className="p-3 border rounded-lg bg-background/50">
-                                        <p className="font-semibold text-primary mb-2 flex items-center gap-1"><Star className="h-4 w-4 text-orange-400"/>Notable Transactions:</p>
-                                        <ul className="space-y-1 list-disc list-inside pl-2 text-foreground/80">
-                                            {aiReport.spendingAnalysis.notableTransactions.map(tx => <li key={tx.description}><strong>{tx.description}</strong> (₹{tx.amount.toLocaleString()}) - <span className="italic">{tx.reason}</span></li>)}
-                                        </ul>
-                                     </div>
-                                 )}
-                                <div className="p-3 border rounded-lg bg-background/50">
-                                    <p className="font-semibold text-primary mb-2 flex items-center gap-1"><Wand2 className="h-4 w-4 text-indigo-400"/>Actionable Insights:</p>
-                                    <ul className="space-y-1 list-disc list-inside pl-2 text-foreground/80">
-                                        {aiReport.actionableInsights.map((insight, i) => <li key={i}>{insight}</li>)}
-                                    </ul>
-                                </div>
-                            </div>
-                        ) : (
-                           <p className="text-center text-muted-foreground p-4">Click below to generate an in-depth report for this month.</p>
-                        )}
-                        <motion.div {...buttonHoverTap}>
-                        <Button onClick={generateAIReport} disabled={isAiLoading || isLoadingReport || filteredTransactionsForPeriod.length === 0} className="w-full mt-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-xs md:text-sm">
-                            {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4" /> }
-                            {isAiLoading ? "Generating..." : (aiReport ? "Regenerate Report" : "Generate AI Report")}
-                        </Button>
-                        </motion.div>
-                    </CardContent>
-                    </Card>
-                </motion.div>
-                )}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <motion.div variants={cardVariants}><IncomeDistributionChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
                     <motion.div variants={cardVariants}><ExpenseTypeSplitChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
@@ -514,18 +368,16 @@ export default function ReportsPage() {
                   </motion.div>
                 </>
               )}
-<<<<<<< HEAD
-=======
 
               <motion.div variants={cardVariants}>
                 <Card className={cn("shadow-lg border-accent/30 bg-accent/10", glowClass)}>
                   <CardHeader>
                     <CardTitle className="text-lg sm:text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-accent" />
-                      AI Insights
+                      AI Monthly Report
                     </CardTitle>
                     <CardDescription className="text-xs sm:text-sm text-accent/80 dark:text-accent-foreground/80">
-                      AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${ reportMonth === 0 ? monthNamesList[11] + ' ' + (reportYear-1) : monthNamesList[reportMonth-1] + ' ' + reportYear}`}.
+                      In-depth AI analysis for {monthNamesList[reportMonth]} {reportYear}.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -539,9 +391,7 @@ export default function ReportsPage() {
                     {aiError && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{aiError}</p>}
                     {aiAnalysis && !isAiLoading && (
                       <div className="text-xs sm:text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
-                        {aiAnalysis.split('\\n').map((line, index) => (
-                          <p key={index}>{line.replace(/^- /, '• ')}</p>
-                        ))}
+                        <p>{aiAnalysis.executiveSummary}</p>
                       </div>
                     )}
                     {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactionsForPeriod.length === 0 && !isLoadingData) && (
@@ -556,7 +406,6 @@ export default function ReportsPage() {
                   </CardContent>
                 </Card>
               </motion.div>
->>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
             </motion.div>
           </CardContent>
         </Card>
@@ -564,3 +413,5 @@ export default function ReportsPage() {
     </main>
   );
 }
+
+    
