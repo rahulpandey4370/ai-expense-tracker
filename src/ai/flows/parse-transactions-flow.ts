@@ -87,6 +87,8 @@ export async function parseTransactionsFromText(
       userFriendlyMessage = `AI model failed to process the text due to an internal or configuration error: ${errorMessage}. Please check server logs or try again later.`;
     } else if (errorMessage.includes("503 Service Unavailable")) {
       userFriendlyMessage = `AI model is currently overloaded: ${errorMessage}. Please try again in a few moments.`;
+    } else if (error.message && error.message.includes("ZodError")) {
+       userFriendlyMessage = `AI model returned an unexpected data structure. Details: ${error.message}`;
     }
     return {
       parsedTransactions: [],
@@ -166,7 +168,7 @@ Input Text:
 {{{naturalLanguageText}}}
 \`\`\`
 
-Return an array of structured transaction objects. Each object MUST correspond to a distinct financial event mentioned in the text. Do not invent or duplicate transactions. If none, return an empty array.
+Return an array of structured transaction objects inside the \`parsedTransactions\` key. Each object MUST correspond to a distinct financial event mentioned in the text. Do not invent or duplicate transactions. If none, return an empty array.
 Provide a very concise \`summaryMessage\` only if necessary (e.g., general parsing issues). Focus on speed and transaction accuracy.
 `;
 
@@ -199,9 +201,18 @@ const parseTransactionsFlow = ai().defineFlow(
       throw new Error(`AI model failed to process the text: ${aiError.message || 'Unknown AI error'}`);
     }
 
-    if (!output) {
-      console.error("AI model returned no output structure for transaction parsing.");
-      throw new Error("AI model failed to return a valid output structure for transaction parsing.");
+    if (!output || !Array.isArray(output.parsedTransactions)) {
+      console.error("AI model returned no or invalid output structure for transaction parsing. Output:", output);
+      // Construct a Zod-like error message for consistency in the UI handler
+      throw new z.ZodError([
+        {
+          code: 'invalid_type',
+          expected: 'array',
+          received: output?.parsedTransactions === undefined ? 'undefined' : 'invalid',
+          path: ['parsedTransactions'],
+          message: 'Required',
+        },
+      ]);
     }
 
     const seen = new Set<string>();
