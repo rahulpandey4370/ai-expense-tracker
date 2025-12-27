@@ -15,6 +15,7 @@ import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAIModel } from '@/contexts/AIModelContext';
+import { ModelInfoBadge } from './model-info-badge';
 
 
 interface FinancialChatbotProps {
@@ -114,7 +115,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
         chatHistory: messages.slice(-5),
         model: selectedModel,
       });
-      const assistantMessage: ChatMessage = { role: 'assistant', content: result.response };
+      const assistantMessage: ChatMessage = { role: 'assistant', content: result.response, model: result.model };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
       console.error("Error with financial chatbot:", err);
@@ -126,8 +127,8 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     }
   };
   
-  const ChatMessageContent = ({ content }: { content: string }) => {
-    const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(content), [content]);
+  const ChatMessageContent = ({ message }: { message: ChatMessage }) => {
+    const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(message.content), [message.content]);
 
     return (
         <div className="flex-1 break-words text-sm whitespace-pre-wrap">
@@ -155,6 +156,11 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                 </div>
             )}
             {outro && <p className="mt-2">{outro}</p>}
+            {message.role === 'assistant' && message.model && (
+                <div className="mt-2 flex justify-end">
+                    <ModelInfoBadge model={message.model} />
+                </div>
+            )}
         </div>
     );
 };
@@ -188,7 +194,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                     <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                   </Avatar>
                   <div className={cn("flex-1", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
-                     <ChatMessageContent content={message.content} />
+                     <ChatMessageContent message={message} />
                   </div>
                 </motion.div>
               ))}
