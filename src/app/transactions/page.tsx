@@ -87,7 +87,13 @@ export default function TransactionsPage() {
   const { toast } = useToast();
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange, handleYearChange } = useDateSelection();
   const [viewMode, setViewMode] = useState<ViewMode>('selected_month');
+  
   const searchParams = useSearchParams();
+  const paramMonth = searchParams.get('month');
+  const paramYear = searchParams.get('year');
+  const paramType = searchParams.get('type');
+  const paramExpenseType = searchParams.get('expenseType');
+
   const hasAppliedInitialParams = useRef(false);
   const { selectedModel } = useAIModel();
 
@@ -120,10 +126,6 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (!isLoading && !hasAppliedInitialParams.current) {
-      const paramMonth = searchParams.get('month');
-      const paramYear = searchParams.get('year');
-      const paramType = searchParams.get('type');
-      const paramExpenseType = searchParams.get('expenseType');
 
       if (paramMonth !== null && paramYear !== null) {
         const monthNum = parseInt(paramMonth, 10);
@@ -141,7 +143,7 @@ export default function TransactionsPage() {
          hasAppliedInitialParams.current = true;
       }
     }
-  }, [searchParams, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear]);
+  }, [paramMonth, paramYear, paramType, paramExpenseType, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
 
 
   useEffect(() => {
@@ -646,3 +648,5 @@ export default function TransactionsPage() {
     </div>
   );
 }
+
+    
