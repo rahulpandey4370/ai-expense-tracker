@@ -143,6 +143,7 @@ export async function parseTransactionsFromText(
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 const parseTransactionsPrompt = ai().definePrompt({
   name: 'parseTransactionsPrompt',
 <<<<<<< HEAD
@@ -178,6 +179,17 @@ const parseTransactionsPromptTemplate = `You are an expert financial assistant. 
 =======
 Your response must be in a valid JSON format.
 >>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
+=======
+const parseTransactionsPromptTemplate = `You are an expert financial assistant. Your task is to parse raw text for financial transactions in Indian Rupees (INR) and convert it into a structured JSON format.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **You MUST return a valid JSON object.**
+2.  The JSON object **MUST** have a key named \`parsedTransactions\`.
+3.  The value of \`parsedTransactions\` **MUST** be an array of transaction objects.
+4.  If no transactions are found, you **MUST** return an empty array: \`"parsedTransactions": []\`.
+5.  Each object in the array must conform to the schema described below.
+
+>>>>>>> 42a5cdc (Still getting this error)
 Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yesterday", "last Tuesday") to YYYY-MM-DD format.
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
