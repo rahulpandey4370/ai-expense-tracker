@@ -1,7 +1,11 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 'use server';
 
 import { AzureOpenAI } from 'openai';
@@ -40,7 +44,11 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
     });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     // Replace {{#each ...}} ... {{/each}}
+=======
+    // Replace {{...}}
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
     output = output.replace(/{{#each\s+([^}]+)}}([\s\S]*?){{\/each}}/g, (match, arrayKey, content) => {
         const array = data[arrayKey.trim()];
         if (!Array.isArray(array)) return '';
@@ -48,9 +56,13 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
             return content.replace(/{{this\.([\w]+)}}/g, (m, prop) => item[prop] || '');
         }).join('');
     });
+<<<<<<< HEAD
     
 =======
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
     // Replace {{{...}}} and {{...}}
     output = output.replace(/{{{\s*([\w.]+)\s*}}}/g, (match, key) => {
         const keys = key.trim().split('.');
@@ -65,6 +77,9 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         return String(current);
     });
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
      output = output.replace(/{{([\w.]+)}}/g, (match, key) => {
         const keys = key.trim().split('.');
         let current: any = data;
@@ -77,8 +92,11 @@ function simpleTemplateRender(template: string, data: Record<string, any>): stri
         }
         return String(current);
     });
+<<<<<<< HEAD
 =======
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
     
     // Replace {{#if ...}} ... {{/if}}
     output = output.replace(/{{#if\s+([^}]+)}}([\s\S]*?){{\/if}}/g, (match, key, content) => {
@@ -159,7 +177,11 @@ export async function callAzureOpenAIChat(
     throw new Error(`Failed to get a valid chat response from Azure OpenAI: ${error.message}`);
   }
 <<<<<<< HEAD
+<<<<<<< HEAD
 }
 =======
 }
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+}
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)

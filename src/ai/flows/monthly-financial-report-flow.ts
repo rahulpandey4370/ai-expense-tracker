@@ -126,6 +126,7 @@ export async function generateMonthlyFinancialReport(input: MonthlyFinancialRepo
 }
 
 const reportPromptTemplate = `You are an expert financial analyst. Your task is to create a detailed monthly financial report in markdown format based on the user's transaction data for {{monthName}} {{year}}.
+Your response MUST be in a valid JSON format.
 
 Transaction Data:
 \`\`\`json
@@ -169,11 +170,11 @@ Transaction Data:
 const monthlyFinancialReportFlow = ai.defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
-    inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
+    inputSchema: MonthlyFinancialReportInputSchema,
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
+    const model = input.model || 'gemini-3-flash-preview';
     
     // Create the prompt input, excluding the model property
     const promptInput = {

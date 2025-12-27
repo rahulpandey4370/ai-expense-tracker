@@ -140,9 +140,13 @@ If income is ₹0 or very low, state that a meaningful budget cannot be created 
 If the savings goal is very aggressive (e.g., making total allocated expenses + savings > income), point this out and suggest a more conservative savings goal or the need for higher income.
 Ensure all monetary values in the output are non-negative.
 <<<<<<< HEAD
+<<<<<<< HEAD
 You must respond in a valid JSON format.
 =======
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+You must respond in a valid JSON format.
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 `;
 
 const budgetingAssistantFlow = ai().defineFlow(

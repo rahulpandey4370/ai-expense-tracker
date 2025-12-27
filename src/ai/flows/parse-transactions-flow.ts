@@ -173,7 +173,11 @@ const parseTransactionsPrompt = ai().definePrompt({
   prompt: `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
 =======
 const parseTransactionsPromptTemplate = `You are an expert financial assistant. Parse the following text for financial transactions in Indian Rupees (INR).
+<<<<<<< HEAD
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
+=======
+Your response must be in a valid JSON format.
+>>>>>>> f6c9b38 (getting this error with gpt 5.2 in several flows so fix it)
 Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yesterday", "last Tuesday") to YYYY-MM-DD format.
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
@@ -298,7 +302,7 @@ const parseTransactionsFlow = ai().defineFlow(
             },
             prompt: parseTransactionsPromptTemplate,
           });
-          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 1500);
+          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
           output = result.output;
       }
 >>>>>>> f4150b2 (Perfect add this model to the list of model as well this is not a gemini)
