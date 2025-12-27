@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI flow for generating an in-depth monthly financial report.
@@ -9,16 +10,16 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import type { AIModel } from '@/lib/types';
 import { 
     MonthlyFinancialReportInputSchema, 
     MonthlyFinancialReportOutputSchema,
     type MonthlyFinancialReportInput,
-    type MonthlyFinancialReportOutput
+    type MonthlyFinancialReportOutput,
+    type AITransactionForAnalysis
 } from '@/lib/types';
 
 
-const reportPrompt = ai.definePrompt({
+const reportPrompt = ai().definePrompt({
   name: 'monthlyFinancialReportPrompt',
   input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
   output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
@@ -63,7 +64,7 @@ const reportPrompt = ai.definePrompt({
 `,
 });
 
-const monthlyFinancialReportFlow = ai.defineFlow(
+const monthlyFinancialReportFlow = ai().defineFlow(
   {
     name: 'monthlyFinancialReportFlow',
     inputSchema: MonthlyFinancialReportInputSchema,
@@ -71,8 +72,12 @@ const monthlyFinancialReportFlow = ai.defineFlow(
   },
   async (input) => {
     const modelToUse = 'gemini-2.5-flash';
+    const llm = ai(modelToUse);
     
-    const { output } = await retryableAIGeneration(() => reportPrompt(input));
+    // We create a temporary prompt instance with the selected LLM
+    const configuredPrompt = llm.definePrompt(reportPrompt.getDefinition());
+
+    const { output } = await retryableAIGeneration(() => configuredPrompt(input));
 
     if (!output) {
       throw new Error("AI failed to generate a valid report structure.");
