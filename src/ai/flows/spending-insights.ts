@@ -6,6 +6,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { modelNames, type AIModel, SpendingInsightsOutputSchema } from '@/lib/types';
+import { callAzureOpenAI } from '@/lib/azure-openai';
 
 
 // --- Input Schema ---
@@ -19,7 +20,7 @@ const SpendingInsightsInputSchema = z.object({
   insightType: z.enum(['default', 'cost_cutter', 'growth_investor']).optional().default('default'),
   selectedMonth: z.number().min(0).max(11).describe("The selected month for analysis (0=Jan, 11=Dec)."),
   selectedYear: z.number().describe("The selected year for analysis."),
-  model: z.enum(modelNames).optional().default('gemini-1.5-flash-latest'),
+  model: z.enum(modelNames).optional().default('gemini-2.5-flash'),
 });
 
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
@@ -32,31 +33,8 @@ const personas = {
   growth_investor: `You are a growth-focused financial advisor. You believe that money should be working for the user. Your goal is to maximize the user's investment potential. You view un-invested savings as a missed opportunity. Your tone is motivating, ambitious, and strategic. You push the user to invest more and cut frivolous spending to fuel their investments.`
 };
 
-// --- Prompt Definition ---
-const spendingInsightsPrompt = ai.definePrompt({
-  name: 'spendingInsightsPrompt',
-  input: {
-    schema: z.object({
-      persona: z.string(),
-      analysisPeriod: z.string(),
-      currentDate: z.string(),
-      jsonInput: z.string(),
-    }),
-  },
-  output: {
-    schema: SpendingInsightsOutputSchema,
-  },
-  config: {
-    temperature: 0.8,
-    maxOutputTokens: 3000,
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-    ],
-  },
-  prompt: `## PERSONALITY
+// --- Prompt Definition (for Gemini) ---
+const spendingInsightsPromptTemplate = `## PERSONALITY
 {{persona}}
 
 ## ROLE
@@ -72,18 +50,17 @@ Use {{currentDate}} to understand *where* in the month the user currently is, an
 - Identify spending anti-patterns, like high discretionary spending right after a salary credit, or a sudden spike in a specific category compared to the previous month.
 
 ## TASK
-Analyze the user's financial data for {{analysisPeriod}}. Generate a structured response with 2-3 points for each section. Your insights should be time-aware, realistic, and focused on practical next steps for an urban Indian user.
+Analyze the user's financial data for {{analysisPeriod}}. Generate a structured response with a single 'insights' key, which should contain a string with 4-6 numbered insights, separated by a newline character (\\n). Your insights should be time-aware, realistic, and focused on practical next steps for an urban Indian user.
 
 ## OUTPUT FORMAT INSTRUCTIONS
-You MUST output a valid JSON object matching this structure. If you have no insights for a particular section, return an empty array [] for it.
+You MUST output a valid JSON object matching this structure. 
 {
-  "positiveObservations": ["..."],
-  "areasForImprovement": ["..."],
-  "keyTakeaway": "..."
+  "insights": "1. First insight...\\n2. Second insight..."
 }
 
 Rules for the output:
 - It must be a single, valid JSON object.
+- The 'insights' value must be a single string with numbered points separated by '\\n'.
 - Use the Rupee symbol (₹).
 - Do NOT include markdown code blocks (like \`\`\`json) in the output, just the raw JSON object.
 - The final output MUST be a valid JSON object.
@@ -92,8 +69,7 @@ Rules for the output:
 \`\`\`json
 {{jsonInput}}
 \`\`\`
-`,
-});
+`;
 
 // --- Flow Definition ---
 const spendingInsightsFlow = ai.defineFlow(
@@ -112,7 +88,6 @@ const spendingInsightsFlow = ai.defineFlow(
     ];
     const analysisPeriod = `${monthNames[input.selectedMonth]} ${input.selectedYear}`;
 
-    // Dynamically compute today's date in India time (Bangalore)
     const currentDate = new Intl.DateTimeFormat('en-IN', {
       day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
     }).format(new Date());
@@ -124,11 +99,43 @@ const spendingInsightsFlow = ai.defineFlow(
       jsonInput: JSON.stringify(input, null, 2),
     };
     
-    const model = input.model;
+    const model = input.model || 'gemini-2.5-flash';
+    let output: SpendingInsightsOutput | undefined;
 
-    const { output } = await retryableAIGeneration(() =>
-      spendingInsightsPrompt(promptInput, { model: googleAI.model(model!) })
-    );
+    if (model === 'gpt-5.2-chat') {
+        output = await callAzureOpenAI(spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }));
+    } else {
+        const prompt = ai.definePrompt({
+          name: 'spendingInsightsPrompt',
+          input: {
+            schema: z.object({
+              persona: z.string(),
+              analysisPeriod: z.string(),
+              currentDate: z.string(),
+              jsonInput: z.string(),
+            }),
+          },
+          output: {
+            schema: SpendingInsightsOutputSchema.omit({ model: true }),
+          },
+          config: {
+            temperature: 0.8,
+            maxOutputTokens: 3000,
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+          prompt: spendingInsightsPromptTemplate,
+        });
+
+        const result = await retryableAIGeneration(() =>
+          prompt(promptInput, { model: googleAI.model(model) })
+        );
+        output = result.output;
+    }
 
     if (!output) {
       console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));
@@ -152,5 +159,3 @@ export async function getSpendingInsights(input: SpendingInsightsInput): Promise
     throw new Error(e.message || "An unexpected error occurred while generating insights.");
   }
 }
-
-    
