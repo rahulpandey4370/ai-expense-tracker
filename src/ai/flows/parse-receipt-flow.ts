@@ -60,7 +60,7 @@ export async function parseReceiptImage(
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
   
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   
   try {
     const result = await parseReceiptImageFlow({ 
@@ -106,7 +106,7 @@ From the receipt image, extract the following:
 - amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
 - paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash", "PayTM UPI"), the best guess for a payment method name from the provided list. Look for card brand names, last 4 digits, or payment app names.
-- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment'.
+- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'.
     Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
     Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions.
     Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.

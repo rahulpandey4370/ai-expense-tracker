@@ -30,7 +30,7 @@ export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpense
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   const result = await comparativeExpenseAnalysisFlow(input, { model: modelToUse });
   return { ...result, model: modelToUse };
 }

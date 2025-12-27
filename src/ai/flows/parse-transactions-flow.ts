@@ -12,7 +12,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -44,9 +44,8 @@ export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInput
 const ParseTransactionTextOutputSchemaInternal = z.object({
   parsedTransactions: z.array(ParsedAITransactionSchema.omit({ model: true })).describe("An array of structured transactions parsed from the input text. Each item should represent one identified transaction."),
   summaryMessage: z.string().optional().describe("A brief overall summary or any general notes about the parsing process (be concise)."),
-  model: z.enum(['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite']).optional(),
 });
-export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchemaInternal>;
+export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutputSchemaInternal> & { model?: AIModel };
 
 export async function parseTransactionsFromText(
   input: {
@@ -57,7 +56,7 @@ export async function parseTransactionsFromText(
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -148,6 +147,12 @@ Available Payment Methods (for expenses):
 For each transaction identified, provide:
 - date: Transaction date (YYYY-MM-DD).
 - description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.") Do this Automatically even if the input is not formatted correctly.
+- amount: The transaction amount.
+- type: 'income' or 'expense'.
+- categoryNameGuess: Your best guess for the category name from the provided lists.
+- paymentMethodNameGuess: (Optional, for expenses) Your best guess for the payment method name.
+- expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment_expense'.
+    Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
     Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
     Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD). Use this for any transaction involving words like 'invested', 'bought stocks', 'SIP', etc.
     If 100% unsure or if it's an income transaction, leave blank.
@@ -169,7 +174,7 @@ const parseTransactionsFlow = ai().defineFlow(
   {
     name: 'parseTransactionsFlow',
     inputSchema: ParseTransactionTextInputSchemaInternal,
-    outputSchema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }),
+    outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
   async (input, options) => {
     const model = options?.model;
