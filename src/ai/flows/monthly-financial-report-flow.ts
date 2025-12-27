@@ -70,7 +70,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     outputSchema: MonthlyFinancialReportOutputSchema,
   },
   async (input) => {
-    const modelToUse = input.model || 'gemini-2.5-flash';
+    const modelToUse = 'gemini-2.5-flash';
     
     const { output } = await retryableAIGeneration(() => reportPrompt(input));
 
