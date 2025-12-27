@@ -12,6 +12,7 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import type { AIModel } from '@/contexts/AIModelContext';
 =======
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { modelNames, type AIModel } from '@/lib/types';
