@@ -29,7 +29,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
+<<<<<<< HEAD
 import { Badge } from '@/components/ui/badge';
+=======
+>>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
 
 const pageVariants = {
@@ -71,6 +74,10 @@ export default function ReportsPage() {
   
   const [categoryExpenseTypeFilter, setCategoryExpenseTypeFilter] = useState<'all' | ExpenseType>('all');
   const { selectedModel } = useAIModel();
+<<<<<<< HEAD
+=======
+
+>>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
 
   const { toast } = useToast();
 
@@ -507,6 +514,49 @@ export default function ReportsPage() {
                   </motion.div>
                 </>
               )}
+<<<<<<< HEAD
+=======
+
+              <motion.div variants={cardVariants}>
+                <Card className={cn("shadow-lg border-accent/30 bg-accent/10", glowClass)}>
+                  <CardHeader>
+                    <CardTitle className="text-lg sm:text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-accent" />
+                      AI Insights
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm text-accent/80 dark:text-accent-foreground/80">
+                      AI-powered comparative spending analysis for {reportMonth === -1 ? `${reportYear} vs ${reportYear-1}` : `${monthNamesList[reportMonth]} ${reportYear} vs ${ reportMonth === 0 ? monthNamesList[11] + ' ' + (reportYear-1) : monthNamesList[reportMonth-1] + ' ' + reportYear}`}.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isAiLoading && (
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full bg-accent/30" />
+                        <Skeleton className="h-4 w-full bg-accent/30" />
+                        <Skeleton className="h-4 w-3/4 bg-accent/30" />
+                      </div>
+                    )}
+                    {aiError && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{aiError}</p>}
+                    {aiAnalysis && !isAiLoading && (
+                      <div className="text-xs sm:text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
+                        {aiAnalysis.split('\\n').map((line, index) => (
+                          <p key={index}>{line.replace(/^- /, '• ')}</p>
+                        ))}
+                      </div>
+                    )}
+                    {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactionsForPeriod.length === 0 && !isLoadingData) && (
+                      <p className="text-xs sm:text-sm text-muted-foreground">Not enough data to generate AI analysis for this period.</p>
+                    )}
+                    <motion.div {...buttonHoverTap}>
+                      <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactionsForPeriod.length === 0 && !isLoadingData)} className="w-full mt-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-xs md:text-sm">
+                        {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
+                        {isAiLoading ? "Generating..." : "Generate AI Analysis"}
+                      </Button>
+                    </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+>>>>>>> 816848e (Do not make any changes just yet. In this application I want to add the)
             </motion.div>
           </CardContent>
         </Card>
