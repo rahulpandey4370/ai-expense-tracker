@@ -178,11 +178,16 @@ const financialChatbotFlow = ai().defineFlow(
     outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     
 =======
   async ({ query, transactions, chatHistory, dataScopeMessage }, { model }) => {
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+  async ({ query, transactions, chatHistory, dataScopeMessage }, options) => {
+    const model = options?.model;
+>>>>>>> 40cdc81 (Still the same error)
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
     
@@ -287,8 +292,12 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 =======
     const llmResponse = await retryableAIGeneration(() => ai.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
+<<<<<<< HEAD
       model: googleAI.model(model),
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+      model: model ? googleAI.model(model as string) : undefined,
+>>>>>>> 40cdc81 (Still the same error)
       config: {
         temperature: 0.1,
         maxOutputTokens: 800,

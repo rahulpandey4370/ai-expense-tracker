@@ -130,9 +130,14 @@ const budgetingAssistantFlow = ai().defineFlow(
     inputSchema: BudgetingAssistantInputSchema,
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 
+=======
+  async (input, options) => {
+    const model = options?.model;
+>>>>>>> 40cdc81 (Still the same error)
     if (input.statedMonthlyIncome <= 0) {
       return {
         recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: 0 },
@@ -144,12 +149,16 @@ const budgetingAssistantFlow = ai().defineFlow(
       };
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(budgetPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
 =======
     const result = await retryableAIGeneration(() => budgetPrompt(input, { model: googleAI.model(model) }));
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+    const result = await retryableAIGeneration(() => budgetPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
+>>>>>>> 40cdc81 (Still the same error)
     return result.output!;
   }
 );

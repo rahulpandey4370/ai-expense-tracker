@@ -53,6 +53,14 @@ const SpendingInsightsOutputSchema = z.object({
   keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
 });
 
+
+// --- Output Schema ---
+const SpendingInsightsOutputSchema = z.object({
+  positiveObservations: z.array(z.string()).optional().describe("A list of 2-3 positive spending habits or trends observed this month."),
+  areasForImprovement: z.array(z.string()).optional().describe("A list of 2-3 specific, actionable areas where spending could be optimized or is a potential risk."),
+  keyTakeaway: z.string().optional().describe("A single, concise 'bottom line' summary of the most important financial insight for the user this month.")
+});
+
 =======
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;

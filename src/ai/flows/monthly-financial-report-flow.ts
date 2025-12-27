@@ -176,7 +176,8 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     inputSchema: MonthlyFinancialReportInputSchema.omit({ model: true }),
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
-  async (input, { model }) => {
+  async (input, options) => {
+    const model = options?.model;
     
     // Create the prompt input, excluding the model property
     const promptInput = {
@@ -185,7 +186,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
       transactions: input.transactions,
     };
     
-    const { output } = await retryableAIGeneration(() => reportPrompt(promptInput, { model: googleAI.model(model) }));
+    const { output } = await retryableAIGeneration(() => reportPrompt(promptInput, { model: model ? googleAI.model(model as string) : undefined }));
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");
     }

@@ -147,6 +147,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
     inputSchema: GoalForecasterInputSchema.omit({model: true}),
     outputSchema: GoalForecasterOutputSchema.omit({model: true}),
   },
+<<<<<<< HEAD
   async (input) => {
     const model = (input as any).model || 'gemini-3-flash-preview';
 =======
@@ -159,6 +160,10 @@ const financialGoalForecasterFlow = ai().defineFlow(
   },
   async (input, { model }) => {
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+  async (input, options) => {
+    const model = options?.model;
+>>>>>>> 40cdc81 (Still the same error)
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
         return {
             feasibilityAssessment: "Insufficient Data for Full Forecast",
@@ -181,6 +186,7 @@ const financialGoalForecasterFlow = ai().defineFlow(
     }
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(financialGoalPrompt.getDefinition());
     const result = await retryableAIGeneration(() => configuredPrompt(input));
@@ -190,6 +196,9 @@ const financialGoalForecasterFlow = ai().defineFlow(
     return result.output!;
 =======
     const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model: googleAI.model(model) }));
+=======
+    const result = await retryableAIGeneration(() => financialGoalPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
+>>>>>>> 40cdc81 (Still the same error)
     if (!result.output) {
       throw new Error("AI analysis failed to produce a valid goal forecast.");
     }

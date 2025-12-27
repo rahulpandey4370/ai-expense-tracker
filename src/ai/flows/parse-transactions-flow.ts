@@ -212,17 +212,23 @@ const parseTransactionsFlow = ai().defineFlow(
     outputSchema: ParseTransactionTextOutputSchemaInternal.omit({ model: true }),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 =======
   async (input, { model }) => {
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+  async (input, options) => {
+    const model = options?.model;
+>>>>>>> 40cdc81 (Still the same error)
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
     try {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
       const llm = ai(input.model as AIModel);
@@ -234,6 +240,9 @@ const parseTransactionsFlow = ai().defineFlow(
 =======
       const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: googleAI.model(model) }), 3, 1500);
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+      const result = await retryableAIGeneration(() => parseTransactionsPrompt(input, { model: model ? googleAI.model(model as string) : undefined }), 3, 1500);
+>>>>>>> 40cdc81 (Still the same error)
       output = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);

@@ -159,11 +159,16 @@ const parseReceiptImageFlow = ai().defineFlow(
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const model = input.model || 'gemini-3-flash-preview';
 =======
   async (input, { model }) => {
 >>>>>>> 97038b0 (What all AI flows is using the dynamic model thing as of now?)
+=======
+  async (input, options) => {
+    const model = options?.model;
+>>>>>>> 40cdc81 (Still the same error)
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }
@@ -175,6 +180,7 @@ const parseReceiptImageFlow = ai().defineFlow(
     try {
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
       const llm = ai(input.model as AIModel);
       const configuredPrompt = llm.definePrompt(parseReceiptImagePrompt.getDefinition());
       const result = await retryableAIGeneration(() => configuredPrompt(input), 3, 2000);
@@ -184,6 +190,9 @@ const parseReceiptImageFlow = ai().defineFlow(
 =======
       const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: googleAI.model(model) }), 3, 2000);
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
+=======
+      const result = await retryableAIGeneration(() => parseReceiptImagePrompt(input, { model: model ? googleAI.model(model as string) : undefined }), 3, 2000);
+>>>>>>> 40cdc81 (Still the same error)
       outputFromAI = result.output;
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);

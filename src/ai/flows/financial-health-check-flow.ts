@@ -116,6 +116,7 @@ const financialHealthCheckFlow = ai().defineFlow(
     outputSchema: FinancialHealthCheckOutputSchema.omit({model: true}),
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(healthCheckPrompt.getDefinition());
@@ -124,6 +125,11 @@ const financialHealthCheckFlow = ai().defineFlow(
 =======
   async (input, { model }) => {
     const result = await retryableAIGeneration(() => healthCheckPrompt(input, { model: googleAI.model(model) }));
+=======
+  async (input, options) => {
+    const model = options?.model;
+    const result = await retryableAIGeneration(() => healthCheckPrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
+>>>>>>> 40cdc81 (Still the same error)
     if (!result.output) {
       throw new Error("AI analysis failed to produce a valid health check summary.");
     }

@@ -146,6 +146,7 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
 >>>>>>> 27182ce (And for transparency throughout the application whenever an AI response)
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
   async (input) => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(fixedExpensePrompt.getDefinition());
@@ -158,6 +159,11 @@ const fixedExpenseAnalyzerFlow = ai().defineFlow(
     return result.output!;
 =======
     const result = await retryableAIGeneration(() => fixedExpensePrompt(input, { model: googleAI.model(model) }));
+=======
+  async (input, options) => {
+    const model = options?.model;
+    const result = await retryableAIGeneration(() => fixedExpensePrompt(input, { model: model ? googleAI.model(model as string) : undefined }));
+>>>>>>> 40cdc81 (Still the same error)
     if (!result.output) {
       throw new Error("AI analysis failed to produce a valid fixed expense analysis.");
     }

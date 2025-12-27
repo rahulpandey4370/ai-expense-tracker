@@ -100,6 +100,7 @@ const comparativeExpenseAnalysisFlow = ai().defineFlow(
   },
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   async input => {
     const llm = ai(input.model as AIModel);
     const configuredPrompt = llm.definePrompt(prompt.getDefinition());
@@ -113,6 +114,11 @@ const comparativeExpenseAnalysisFlow = ai().defineFlow(
 =======
   async (input, { model }) => {
     const { output } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+=======
+  async (input, options) => {
+    const model = options?.model;
+    const { output } = await retryableAIGeneration(() => prompt(input, { model: model ? googleAI.model(model as string) : undefined }));
+>>>>>>> 40cdc81 (Still the same error)
     if (!output) {
       throw new Error("AI analysis failed to produce a valid output structure.");
     }
