@@ -111,7 +111,20 @@ Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yester
 
 **Handle imperfect input:** Be robust to common typographical errors (misspellings, grammatical errors). Focus on understanding the user's intent. Try to map misspelled categories or payment methods to the closest items from the provided lists.
 
-**Make Sure to Auto Capitalize the first Letter in each Field**
+📝 TEXT FORMATTING RULE (IMPORTANT):
+- Capitalize the first letter **ONLY** for human-readable text fields:
+  - "description"
+  - "summaryMessage"
+  - "sourceGuess"
+  - "error"
+- ❌ DO NOT capitalize enum fields or identifiers
+
+🔒 ENUM FIELDS (MUST BE LOWERCASE, EXACT MATCH):
+- "type": "income" | "expense"
+- "expenseTypeNameGuess": "need" | "want" | "investment" | "investment_expense"
+- "categoryNameGuess": must exactly match provided category names
+- "paymentMethodNameGuess": must exactly match provided payment method names
+
 
 Available Expense Categories:
 {{#each expenseCategories}}
