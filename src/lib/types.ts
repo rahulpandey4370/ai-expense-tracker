@@ -31,6 +31,7 @@ export interface RawTransaction {
   paymentMethodId?: string;
   source?: string;
   expenseType?: 'need' | 'want' | 'investment' | 'investment_expense';
+  isSplit?: boolean; // New field for split indicator
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // For cosmos DB
@@ -62,6 +63,7 @@ export const TransactionInputSchema = z.object({
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
   expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
+  isSplit: z.boolean().optional(), // New field for split indicator
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -419,6 +421,7 @@ export const InvestmentSummaryInputSchema = z.object({
     amount: z.number(),
     category: z.string(),
   })),
+  model: z.enum(modelNames).optional(),
 });
 export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;
 export const ComparativeExpenseAnalysisInputSchema = z.object({

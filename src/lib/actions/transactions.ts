@@ -297,6 +297,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     ...validation.data,
     date: validation.data.date.toISOString(), 
     description: validation.data.description || '', 
+    isSplit: validation.data.isSplit || false,
     createdAt: now,
     updatedAt: now,
   };
@@ -376,6 +377,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     ...data,
     date: data.date ? data.date.toISOString() : existingItem.date, 
     description: data.description !== undefined ? data.description : existingItem.description,
+    isSplit: data.isSplit !== undefined ? data.isSplit : (existingItem.isSplit || false),
     updatedAt: new Date().toISOString(),
   };
 
@@ -388,6 +390,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: updatedRawData.paymentMethodId,
     source: updatedRawData.source,
     expenseType: updatedRawData.expenseType,
+    isSplit: updatedRawData.isSplit,
   };
 
   const validation = TransactionInputSchema.safeParse(transactionInputForValidation);
@@ -408,6 +411,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
+    isSplit: validation.data.isSplit,
     createdAt: existingItem.createdAt, 
     updatedAt: new Date().toISOString(),
     _rid: existingItem._rid,

@@ -1,7 +1,5 @@
 
 
-"use client";
-
 import { useState, type FormEvent, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -16,8 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins } from "lucide-react";
+import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins, Users } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
@@ -73,6 +72,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | undefined>(undefined);
   const [expenseType, setExpenseType] = useState<AppExpenseTypeEnum | undefined>('need');
   const [source, setSource] = useState<string | undefined>(undefined);
+  const [isSplit, setIsSplit] = useState<boolean>(false);
   const [formId, setFormId] = useState<string | null>(null);
 
   // Dropdown Data State
@@ -149,6 +149,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setDate(new Date(initialTransactionData.date));
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description || '');
+      setIsSplit(initialTransactionData.isSplit || false);
       if (initialTransactionData.type === 'expense') {
         setSelectedCategoryId(initialTransactionData.category?.id || undefined);
         setSelectedPaymentMethodId(initialTransactionData.paymentMethod?.id || undefined);
@@ -166,6 +167,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setDate(new Date());
         setAmount('');
         setDescription('');
+        setIsSplit(false);
 
         if (type === 'expense') {
             setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
@@ -202,6 +204,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setDate(new Date());
     setAmount('');
     setDescription('');
+    setIsSplit(false);
     if (type === 'expense') {
         setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
         setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
@@ -225,6 +228,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       date,
       amount: parseFloat(amount),
       description: description || undefined,
+      isSplit,
     };
     if (type === 'expense') {
       transactionPayload.categoryId = selectedCategoryId;
@@ -910,6 +914,15 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <Label htmlFor={`source-${formId || 'new'}`} className={labelClasses}>Source (Optional)</Label>
             <Input id={`source-${formId || 'new'}`} placeholder="e.g., Client Project X, Bonus Q2" value={source} onChange={(e) => setSource(e.target.value)} className={cn("mt-1", inputClasses)} disabled={isFetchingDropdowns} />
           </div>
+        </div>
+      )}
+       {type === 'expense' && (
+          <div className="flex items-center space-x-2 pt-2">
+            <Switch id="is-split" checked={isSplit} onCheckedChange={setIsSplit} disabled={isFetchingDropdowns} />
+            <Label htmlFor="is-split" className="flex items-center gap-2 text-sm text-foreground/90">
+                <Users className="h-4 w-4 text-accent" />
+                Mark as a split transaction
+            </Label>
         </div>
       )}
       {isFetchingDropdowns && (<div className="flex items-center justify-center space-x-2 text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Loading options...</span></div>)}

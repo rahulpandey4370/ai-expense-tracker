@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, ListChecks } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ListChecks, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface RecentTransactionsListProps {
@@ -78,7 +78,10 @@ export function RecentTransactionsList({ transactions, count = 5 }: RecentTransa
                         <ArrowDownCircle className="h-6 w-6 text-red-500" />
                       )}
                       <div>
-                        <p className="font-medium text-sm text-foreground">{transaction.description}</p>
+                        <div className="flex items-center gap-2">
+                           {transaction.isSplit && <Users className="h-4 w-4 text-accent" />}
+                           <p className="font-medium text-sm text-foreground">{transaction.description}</p>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {format(new Date(transaction.date), "MMM d, yyyy")}
                           {transaction.type === 'expense' && transaction.category && ` • ${transaction.category.name}`} 

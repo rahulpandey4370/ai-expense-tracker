@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions } from '@/lib/actions/transactions';
 import { format } from "date-fns";
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
@@ -63,6 +63,7 @@ const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]
 
 type ViewMode = 'selected_month' | 'full_year';
 type SortableKeys = keyof AppTransaction | 'categoryName' | 'paymentMethodName';
+type SplitFilter = 'all' | 'split' | 'not_split';
 
 export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
@@ -75,6 +76,7 @@ export default function TransactionsPage() {
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
   const [filterPaymentMethodId, setFilterPaymentMethodId] = useState<string | 'all'>('all');
   const [filterExpenseType, setFilterExpenseType] = useState<string | 'all'>('all');
+  const [filterSplit, setFilterSplit] = useState<SplitFilter>('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
   
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
@@ -184,6 +186,14 @@ export default function TransactionsPage() {
     if (filterPaymentMethodId !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.paymentMethod?.id === filterPaymentMethodId);
     }
+    
+    if (filterSplit !== 'all') {
+        if (filterSplit === 'split') {
+            tempTransactions = tempTransactions.filter(t => t.isSplit);
+        } else { // not_split
+            tempTransactions = tempTransactions.filter(t => !t.isSplit);
+        }
+    }
 
     if (sortConfig.key) {
       tempTransactions.sort((a, b) => {
@@ -212,7 +222,7 @@ export default function TransactionsPage() {
       });
     }
     setFilteredTransactions(tempTransactions);
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, sortConfig, selectedMonth, selectedYear, viewMode]);
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterSplit, sortConfig, selectedMonth, selectedYear, viewMode]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -303,7 +313,7 @@ export default function TransactionsPage() {
       toast({ title: "No Data to Export", description: "There are no transactions matching your current filters.", variant: "default"});
       return;
     }
-    const headers = ["ID", "Type", "Date", "Amount (₹)", "Description", "Category/Source", "Payment Method", "Expense Type"];
+    const headers = ["ID", "Type", "Date", "Amount (₹)", "Description", "Category/Source", "Payment Method", "Expense Type", "Is Split"];
     const rows = filteredTransactions.map(t => [
       t.id,
       t.type,
@@ -312,7 +322,8 @@ export default function TransactionsPage() {
       `"${(t.description || '').replace(/"/g, '""')}"`,
       t.category?.name || t.source || '',
       t.paymentMethod?.name || '',
-      t.expenseType || ''
+      t.expenseType || '',
+      t.isSplit ? 'Yes' : 'No'
     ].join(','));
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
@@ -370,7 +381,7 @@ export default function TransactionsPage() {
                       </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 md:gap-4">
                       <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
                         <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Period" /></SelectTrigger>
                         <SelectContent className="bg-card border-primary/60 text-foreground">
@@ -407,6 +418,14 @@ export default function TransactionsPage() {
                         <SelectContent className="bg-card border-primary/60 text-foreground">
                           <SelectItem value="all" className="text-xs md:text-sm">All Payment Methods</SelectItem>
                           {allPaymentMethodsState.map(pm => <SelectItem key={pm.id} value={pm.id} className="text-xs md:text-sm">{pm.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                       <Select value={filterSplit} onValueChange={(value) => setFilterSplit(value as SplitFilter)}>
+                        <SelectTrigger className="bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground text-xs md:text-sm"><SelectValue placeholder="Filter by Split Status" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="all" className="text-xs md:text-sm">All Transactions</SelectItem>
+                          <SelectItem value="split" className="text-xs md:text-sm">Only Split</SelectItem>
+                          <SelectItem value="not_split" className="text-xs md:text-sm">Only Non-Split</SelectItem>
                         </SelectContent>
                       </Select>
                       <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
@@ -476,7 +495,7 @@ export default function TransactionsPage() {
                           className="mt-1"
                         />
                         <div className="flex-1">
-                          <p className="font-semibold text-foreground">{t.description}</p>
+                          <p className="font-semibold text-foreground flex items-center gap-1.5">{t.isSplit && <Users className="h-4 w-4 text-accent"/>}{t.description}</p>
                           <p className="text-xs text-muted-foreground">{format(new Date(t.date), "dd MMM, yyyy")}</p>
                         </div>
                         <p className={cn("text-lg font-bold", t.type === 'income' ? 'text-green-500' : 'text-red-500')}>
@@ -541,7 +560,7 @@ export default function TransactionsPage() {
                             />
                           </TableCell>
                           <TableCell className="text-foreground/90 whitespace-nowrap">{format(new Date(transaction.date), "dd MMM, yy")}</TableCell>
-                          <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
+                          <TableCell className="font-medium text-foreground min-w-[150px] flex items-center gap-1.5">{transaction.isSplit && <Users className="h-4 w-4 text-accent"/>}{transaction.description}</TableCell>
                           <TableCell>
                             <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
                                   className={cn(
@@ -648,5 +667,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-
-    
