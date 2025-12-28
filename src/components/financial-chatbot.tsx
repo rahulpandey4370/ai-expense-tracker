@@ -176,8 +176,8 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
           <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 pr-4 w-full" ref={scrollAreaRef}>
+            <div className="space-y-4 w-full max-w-full overflow-hidden">
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
@@ -216,13 +216,13 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                 </div>
               )}
               {messages.length === 0 && !isLoading && !error && (
-                <div className="text-center text-muted-foreground text-sm py-4 space-y-3">
+                <div className="text-center text-muted-foreground text-sm py-4 space-y-3 w-full">
                     <p>Ask me anything! Or try one of these examples:</p>
-                    <div className="flex flex-wrap justify-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2 w-full">
                         {examplePrompts.map((prompt, i) => (
-                            <Button key={i} variant="outline" size="sm" className="text-xs" onClick={() => handleSubmit(prompt)}>
-                                <Sparkles className="mr-1.5 h-3 w-3" />
-                                {prompt}
+                            <Button key={i} variant="outline" size="sm" className="text-xs h-auto py-1 px-2 flex-shrink-0 whitespace-normal break-words max-w-full" onClick={() => handleSubmit(prompt)}>
+                                <Sparkles className="mr-1.5 h-3 w-3 flex-shrink-0" />
+                                <span className="inline-block">{prompt}</span>
                             </Button>
                         ))}
                     </div>
@@ -230,7 +230,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               )}
             </div>
           </ScrollArea>
-          <div className="pt-4 border-t">
+          <div className="pt-4 border-t mt-auto">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea
                 value={inputValue}
