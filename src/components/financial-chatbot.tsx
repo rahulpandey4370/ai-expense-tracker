@@ -175,9 +175,9 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
           </CardTitle>
           <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-          <ScrollArea className="flex-1 p-4 pr-2" ref={scrollAreaRef}>
-            <div className="space-y-4">
+        <CardContent className="flex-1 flex flex-col min-h-0">
+          <ScrollArea className="flex-1 -mx-6 px-6" ref={scrollAreaRef}>
+            <div className="space-y-4 pr-6">
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
@@ -185,35 +185,34 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   initial="hidden"
                   animate="visible"
                   className={cn(
-                    "flex items-start gap-3 p-3 rounded-lg",
-                    message.role === 'user' ? "bg-primary/5" : "bg-accent/5"
+                    "flex items-start gap-3"
                   )}
                 >
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
+                  <Avatar className="h-8 w-8 border">
+                    <AvatarFallback className="bg-transparent text-primary">{message.role === 'user' ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 text-foreground">
+                  <div className="flex-1 text-foreground pt-1">
                      <ChatMessageContent message={message} />
                   </div>
                 </motion.div>
               ))}
               {isLoading && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/5">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback><Bot className="h-4 w-4 animate-pulse" /></AvatarFallback>
+                <div className="flex items-start gap-3">
+                  <Avatar className="h-8 w-8 border">
+                    <AvatarFallback className="bg-transparent text-primary"><Bot className="h-5 w-5 animate-pulse" /></AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 space-y-2 py-1">
+                  <div className="flex-1 space-y-2 py-2">
                     <Skeleton className="h-3 w-4/5" />
                     <Skeleton className="h-3 w-3/5" />
                   </div>
                 </div>
               )}
               {error && !isLoading && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 text-destructive">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
+                <div className="flex items-start gap-3 text-destructive">
+                   <Avatar className="h-8 w-8 border border-destructive">
+                    <AvatarFallback className="bg-transparent"><Bot className="h-5 w-5" /></AvatarFallback>
                   </Avatar>
-                  <p className="flex-1 break-words text-sm">{error}</p>
+                  <p className="flex-1 break-words text-sm pt-1">{error}</p>
                 </div>
               )}
               {messages.length === 0 && !isLoading && !error && (
@@ -231,7 +230,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               )}
             </div>
           </ScrollArea>
-          <div className="border-t p-4">
+          <div className="pt-4 border-t">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea
                 value={inputValue}
