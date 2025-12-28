@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
-import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions } from '@/lib/actions/transactions';
+import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -85,6 +85,7 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false); // For single delete
+  const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
 
   const { toast } = useToast();
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange, handleYearChange } = useDateSelection();
@@ -248,6 +249,22 @@ export default function TransactionsPage() {
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleSplit = async (transaction: AppTransaction) => {
+    setIsTogglingSplit(transaction.id);
+    try {
+      await updateTransaction(transaction.id, { isSplit: !transaction.isSplit });
+      toast({
+        title: `Transaction ${!transaction.isSplit ? 'marked' : 'unmarked'} as split.`,
+      });
+      fetchData(); // This will re-fetch and re-filter
+    } catch (error) {
+      console.error("Failed to toggle split status:", error);
+      toast({ title: "Update Failed", description: "Could not update the split status.", variant: "destructive" });
+    } finally {
+      setIsTogglingSplit(null);
     }
   };
 
@@ -495,7 +512,7 @@ export default function TransactionsPage() {
                           className="mt-1"
                         />
                         <div className="flex-1">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">{t.isSplit && <Users className="h-4 w-4 text-accent"/>}{t.description}</p>
+                          <p className="font-semibold text-foreground flex items-center gap-1.5">{t.description}</p>
                           <p className="text-xs text-muted-foreground">{format(new Date(t.date), "dd MMM, yyyy")}</p>
                         </div>
                         <p className={cn("text-lg font-bold", t.type === 'income' ? 'text-green-500' : 'text-red-500')}>
@@ -508,6 +525,24 @@ export default function TransactionsPage() {
                          {t.expenseType && <Badge variant="default" className={cn('capitalize', t.expenseType === 'need' ? 'bg-blue-500/80' : t.expenseType === 'want' ? 'bg-purple-500/80' : 'bg-indigo-500/80', 'text-white')}>{t.expenseType.replace('_expense','')}</Badge>}
                       </div>
                       <div className="flex justify-end gap-1 pt-2">
+                         {t.type === 'expense' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-7 w-7 text-muted-foreground hover:text-accent",
+                              t.isSplit && "text-accent bg-accent/10"
+                            )}
+                            onClick={() => handleToggleSplit(t)}
+                            disabled={isTogglingSplit === t.id}
+                          >
+                            {isTogglingSplit === t.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Users className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
                          <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(t)} className="text-accent h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
                          <AlertDialog>
                            <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive h-7 w-7"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
@@ -560,7 +595,7 @@ export default function TransactionsPage() {
                             />
                           </TableCell>
                           <TableCell className="text-foreground/90 whitespace-nowrap">{format(new Date(transaction.date), "dd MMM, yy")}</TableCell>
-                          <TableCell className="font-medium text-foreground min-w-[150px] flex items-center gap-1.5">{transaction.isSplit && <Users className="h-4 w-4 text-accent"/>}{transaction.description}</TableCell>
+                          <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
                           <TableCell>
                             <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
                                   className={cn(
@@ -595,6 +630,25 @@ export default function TransactionsPage() {
                             )}
                           </TableCell>
                           <TableCell className="space-x-0.5 sm:space-x-1 whitespace-nowrap">
+                            {transaction.type === 'expense' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-accent",
+                                  transaction.isSplit && "text-accent bg-accent/10"
+                                )}
+                                onClick={() => handleToggleSplit(transaction)}
+                                disabled={isTogglingSplit === transaction.id}
+                              >
+                                {isTogglingSplit === transaction.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                                ) : (
+                                  <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                )}
+                                <span className="sr-only">Toggle Split Status</span>
+                              </Button>
+                            )}
                             <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
                               <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(transaction)} className="text-accent hover:text-accent/80 hover:bg-accent/10 h-7 w-7 sm:h-8 sm:w-8">
                                 <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />

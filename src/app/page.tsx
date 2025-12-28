@@ -11,7 +11,7 @@ import { FinancialChatbot } from "@/components/financial-chatbot";
 import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-trend-chart";
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
-import type { AppTransaction, Category, Budget } from '@/lib/types';
+import type { AppTransaction, Category, Budget, AIModel } from '@/lib/types';
 import { getTransactions, getCategories } from '@/lib/actions/transactions';
 import { getBudgets } from '@/lib/actions/budgets';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff, MoreVertical, Check } from 'lucide-react';
@@ -28,7 +28,7 @@ import { subMonths } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 import { InvestmentTracker } from '@/components/investment-tracker';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { useAIModel, type AIModel } from '@/contexts/AIModelContext';
+import { useAIModel } from '@/contexts/AIModelContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -433,7 +433,11 @@ export default function DashboardPage() {
         </motion.div>
 
         <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-          <RecentTransactionsList transactions={currentMonthTransactions} count={15} />
+          <RecentTransactionsList 
+            transactions={currentMonthTransactions} 
+            count={15} 
+            onDataChange={handleDataRefresh} 
+          />
         </motion.div>
 
         <motion.div variants={sectionVariants} initial="hidden" animate="visible">
