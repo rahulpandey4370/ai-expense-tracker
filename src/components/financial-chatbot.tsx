@@ -131,10 +131,10 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(message.content), [message.content]);
 
     return (
-        <div className="flex-1 text-sm whitespace-pre-wrap">
+        <div className="w-full text-sm whitespace-pre-wrap">
             {intro && <p className="mb-2 break-words [overflow-wrap:anywhere]">{intro}</p>}
             {tableData && (
-                <div className="my-2 overflow-x-auto rounded-md border bg-background/50">
+                <div className="my-2 w-full overflow-x-auto rounded-md border bg-background/50">
                     <Table className="text-xs min-w-max">
                         <TableHeader>
                             <TableRow>
@@ -185,20 +185,20 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   initial="hidden"
                   animate="visible"
                   className={cn(
-                    "flex items-start gap-3"
+                    "flex items-start gap-3 w-full"
                   )}
                 >
-                  <Avatar className="h-8 w-8 border">
+                  <Avatar className="h-8 w-8 border flex-shrink-0">
                     <AvatarFallback className="bg-transparent text-primary">{message.role === 'user' ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 text-foreground pt-1">
+                  <div className="flex-1 text-foreground pt-1 min-w-0 overflow-hidden">
                      <ChatMessageContent message={message} />
                   </div>
                 </motion.div>
               ))}
               {isLoading && (
                 <div className="flex items-start gap-3">
-                  <Avatar className="h-8 w-8 border">
+                  <Avatar className="h-8 w-8 border flex-shrink-0">
                     <AvatarFallback className="bg-transparent text-primary"><Bot className="h-5 w-5 animate-pulse" /></AvatarFallback>
                   </Avatar>
                   <div className="flex-1 space-y-2 py-2">
@@ -209,10 +209,10 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               )}
               {error && !isLoading && (
                 <div className="flex items-start gap-3 text-destructive">
-                   <Avatar className="h-8 w-8 border border-destructive">
+                   <Avatar className="h-8 w-8 border border-destructive flex-shrink-0">
                     <AvatarFallback className="bg-transparent"><Bot className="h-5 w-5" /></AvatarFallback>
                   </Avatar>
-                  <p className="flex-1 break-words text-sm pt-1">{error}</p>
+                  <p className="flex-1 break-words text-sm pt-1 min-w-0">{error}</p>
                 </div>
               )}
               {messages.length === 0 && !isLoading && !error && (
