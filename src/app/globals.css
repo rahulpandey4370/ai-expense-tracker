@@ -100,5 +100,10 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  [data-radix-scroll-area-viewport] {
+    overflow: auto !important;
+  }
 }
 
+
+    

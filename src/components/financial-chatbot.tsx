@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -131,15 +130,15 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(message.content), [message.content]);
 
     return (
-        <div className="w-full text-sm whitespace-pre-wrap">
+        <div className="w-full min-w-0 text-sm break-words overflow-x-auto">
             {intro && <p className="mb-2 break-words overflow-wrap-anywhere">{intro}</p>}
             {tableData && (
-                <div className="my-2 w-full overflow-x-auto rounded-md border bg-background/50">
-                    <Table className="text-xs min-w-max">
+                <div className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
+                    <Table className="text-xs min-w-[600px]">
                         <TableHeader>
                             <TableRow>
                                 {tableData.headers.map((header, i) => (
-                                    <TableHead key={i} className="font-semibold text-foreground whitespace-nowrap">{header}</TableHead>
+                                    <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>
                                 ))}
                             </TableRow>
                         </TableHeader>
@@ -185,7 +184,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                   initial="hidden"
                   animate="visible"
                   className={cn(
-                    "flex items-start gap-3 w-full"
+                    "flex items-start gap-3 w-full min-w-0 overflow-hidden"
                   )}
                 >
                   <Avatar className="h-8 w-8 border flex-shrink-0">
@@ -263,3 +262,5 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     </motion.div>
   );
 }
+
+    
