@@ -28,8 +28,8 @@ const cardVariants = {
 };
 
 const messageVariants = {
-  hidden: { opacity: 0, x: (message: ChatMessage) => (message.role === 'user' ? 20 : -20) },
-  visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
@@ -181,25 +181,24 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
-                  custom={message}
                   variants={messageVariants}
                   initial="hidden"
                   animate="visible"
                   className={cn(
-                    "flex items-start gap-3 p-3 rounded-lg max-w-[85%]",
-                    message.role === 'user' ? "ml-auto bg-primary/10" : "mr-auto bg-accent/10"
+                    "flex items-start gap-3 p-3 rounded-lg",
+                    message.role === 'user' ? "bg-primary/5" : "bg-accent/5"
                   )}
                 >
-                  <Avatar className={cn("h-8 w-8", message.role === 'user' ? 'order-2' : 'order-1')}>
+                  <Avatar className="h-8 w-8">
                     <AvatarFallback>{message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</AvatarFallback>
                   </Avatar>
-                  <div className={cn("flex-1", message.role === 'user' ? 'order-1 text-right text-foreground' : 'order-2 text-foreground')}>
+                  <div className="flex-1 text-foreground">
                      <ChatMessageContent message={message} />
                   </div>
                 </motion.div>
               ))}
               {isLoading && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/10 mr-auto max-w-[85%]">
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/5">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback><Bot className="h-4 w-4 animate-pulse" /></AvatarFallback>
                   </Avatar>
@@ -210,7 +209,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                 </div>
               )}
               {error && !isLoading && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 text-destructive mr-auto max-w-[85%]">
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 text-destructive">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
                   </Avatar>
