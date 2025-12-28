@@ -131,15 +131,15 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(message.content), [message.content]);
 
     return (
-        <div className="flex-1 break-words text-sm whitespace-pre-wrap">
-            {intro && <p className="mb-2">{intro}</p>}
+        <div className="flex-1 text-sm whitespace-pre-wrap">
+            {intro && <p className="mb-2 break-words [overflow-wrap:anywhere]">{intro}</p>}
             {tableData && (
                 <div className="my-2 overflow-x-auto rounded-md border bg-background/50">
-                    <Table className="text-xs">
+                    <Table className="text-xs min-w-max">
                         <TableHeader>
                             <TableRow>
                                 {tableData.headers.map((header, i) => (
-                                    <TableHead key={i} className="font-semibold text-foreground">{header}</TableHead>
+                                    <TableHead key={i} className="font-semibold text-foreground whitespace-nowrap">{header}</TableHead>
                                 ))}
                             </TableRow>
                         </TableHeader>
@@ -147,7 +147,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                             {tableData.rows.map((row, i) => (
                                 <TableRow key={i}>
                                     {row.map((cell, j) => (
-                                        <TableCell key={j}>{cell}</TableCell>
+                                        <TableCell key={j} className="whitespace-nowrap">{cell}</TableCell>
                                     ))}
                                 </TableRow>
                             ))}
@@ -155,7 +155,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                     </Table>
                 </div>
             )}
-            {outro && <p className="mt-2">{outro}</p>}
+            {outro && <p className="mt-2 break-words [overflow-wrap:anywhere]">{outro}</p>}
             {message.role === 'assistant' && message.model && (
                 <div className="mt-2 flex justify-end">
                     <ModelInfoBadge model={message.model} />
