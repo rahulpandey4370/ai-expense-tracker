@@ -184,14 +184,11 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
       variants={cardVariants} 
       initial="hidden" 
       animate="visible"
-      className={cn(
-        isFullScreen && "fixed inset-0 z-50 flex"
-      )}
     >
       <Card className={cn(
         "shadow-lg flex flex-col h-[500px]",
         glowClass,
-        isFullScreen && "h-full w-full rounded-none border-none"
+        isFullScreen && "fixed inset-0 z-50 h-full w-full rounded-none border-none"
       )}>
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="space-y-1.5">
