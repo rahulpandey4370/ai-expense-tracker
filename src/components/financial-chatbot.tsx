@@ -175,9 +175,9 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
           </CardTitle>
           <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col min-h-0">
-          <ScrollArea className="flex-1 -mx-6 px-6" ref={scrollAreaRef}>
-            <div className="space-y-4 pr-6">
+        <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
+            <div className="space-y-4">
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
