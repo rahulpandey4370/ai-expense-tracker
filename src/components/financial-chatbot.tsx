@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -7,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, User, SendHorizonal, Zap, Sparkles } from "lucide-react";
+import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
@@ -78,6 +79,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { selectedModel } = useAIModel();
 
@@ -92,7 +94,19 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isFullScreen]);
+  
+  // Prevent body scroll when in fullscreen
+  useEffect(() => {
+    if (isFullScreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isFullScreen]);
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | string) => {
     if (e && typeof e !== 'string') {
@@ -166,13 +180,30 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
 
 
   return (
-    <motion.div variants={cardVariants} initial="hidden" animate="visible">
-      <Card className={cn("shadow-lg flex flex-col h-[500px]", glowClass)}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant
-          </CardTitle>
-          <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
+    <motion.div 
+      variants={cardVariants} 
+      initial="hidden" 
+      animate="visible"
+      className={cn(
+        isFullScreen && "fixed inset-0 z-50 flex"
+      )}
+    >
+      <Card className={cn(
+        "shadow-lg flex flex-col h-[500px]",
+        glowClass,
+        isFullScreen && "h-full w-full rounded-none border-none"
+      )}>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div className="space-y-1.5">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                    <Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant
+                </CardTitle>
+                <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
+            </div>
+             <Button variant="ghost" size="icon" onClick={() => setIsFullScreen(!isFullScreen)}>
+                {isFullScreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}
+                <span className="sr-only">{isFullScreen ? 'Exit full screen' : 'Enter full screen'}</span>
+            </Button>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <ScrollArea className="flex-1 pr-4 w-full" ref={scrollAreaRef}>
@@ -229,7 +260,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
               )}
             </div>
           </ScrollArea>
-          <div className="pt-4 border-t mt-auto">
+          <div className={cn("pt-4 border-t mt-auto", isFullScreen && "px-4 pb-4")}>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea
                 value={inputValue}
@@ -262,5 +293,3 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
     </motion.div>
   );
 }
-
-    
