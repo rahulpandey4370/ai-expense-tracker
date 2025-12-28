@@ -132,7 +132,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
 
     return (
         <div className="w-full text-sm whitespace-pre-wrap">
-            {intro && <p className="mb-2 break-words [overflow-wrap:anywhere]">{intro}</p>}
+            {intro && <p className="mb-2 break-words overflow-wrap-anywhere">{intro}</p>}
             {tableData && (
                 <div className="my-2 w-full overflow-x-auto rounded-md border bg-background/50">
                     <Table className="text-xs min-w-max">
@@ -155,7 +155,7 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
                     </Table>
                 </div>
             )}
-            {outro && <p className="mt-2 break-words [overflow-wrap:anywhere]">{outro}</p>}
+            {outro && <p className="mt-2 break-words overflow-wrap-anywhere">{outro}</p>}
             {message.role === 'assistant' && message.model && (
                 <div className="mt-2 flex justify-end">
                     <ModelInfoBadge model={message.model} />
