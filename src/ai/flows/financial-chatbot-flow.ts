@@ -44,7 +44,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   query: z.string().describe("The user's current financial question or request."),
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
-  dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'most recent transactions'."),
+  dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'all available transactions'."),
   model: z.enum(modelNames).optional(),
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
@@ -87,7 +87,7 @@ export async function askFinancialBot(input: {
   const queryYear = getYearFromQuery(input.query);
   const queryMonth = getMonthFromQuery(input.query);
   let filteredUserTransactions = [...input.transactions];
-  let dataScopeMessage = "most recent transactions (up to 250)";
+  let dataScopeMessage = "all available transactions";
 
   if (queryYear !== null) {
     if (queryMonth !== null) {
@@ -150,14 +150,13 @@ export async function askFinancialBot(input: {
       paymentMethodName: t.paymentMethod?.name,
       expenseType: t.expenseType,
       source: t.source,
-    }))
-    .slice(0, 250); // Limit to 250 transactions after filtering
+    }));
 
   const flowInput: FinancialChatbotInputInternal = {
     query: input.query,
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
-    dataScopeMessage: dataScopeMessage + (aiTransactions.length < filteredUserTransactions.length ? `, showing the latest ${aiTransactions.length}` : ''),
+    dataScopeMessage: dataScopeMessage,
     model: input.model
   };
   
@@ -191,7 +190,7 @@ You are the AI Financial Assistant for FinWise AI, specializing in personal fina
 
 ## CONTEXT
 - Current Date: ${currentDate}
-- Transaction Data Scope: ${dataScopeMessage || 'the most recent period (up to 250 transactions)'}
+- Transaction Data Scope: ${dataScopeMessage || 'all available transactions for the relevant period'}
 - Currency: All amounts are in Indian Rupees (INR)
 
 ## TASK
@@ -238,7 +237,7 @@ The following transaction data is available for analysis:
 \`\`\`json
 ${JSON.stringify(transactions, null, 2)}
 \`\`\`
-${transactions.length >= 250 ? `\n...(Note: Displaying up to 250 transactions. The actual data for the queried period might be larger if not fully shown here)` : ''}
+${transactions.length >= 250 ? `\n...(Note: A large number of transactions were provided)` : ''}
 
 ## RESPONSE GUIDELINES
 - If the user asks for comprehensive yearly summaries or trends, suggest they visit the 'Yearly Overview' page.
@@ -299,4 +298,3 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
   }
 );
 
-    
