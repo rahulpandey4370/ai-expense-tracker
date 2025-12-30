@@ -220,12 +220,10 @@ async function getCosmosDBTransactionsContainer(): Promise<CosmosContainer> {
 }
 
 const toISODateString = (date: Date) => {
-    // This function correctly formats a JavaScript Date object into a YYYY-MM-DD string
-    // that represents the "local" date, regardless of the server's timezone.
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}T00:00:00.000Z`; // Store as UTC midnight of that date
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T00:00:00.000Z`;
 };
 
 
