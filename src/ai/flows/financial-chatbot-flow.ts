@@ -84,62 +84,21 @@ export async function askFinancialBot(input: {
   model?: AIModel; // Add model parameter
 }): Promise<FinancialChatbotOutput> {
 
-  const queryYear = getYearFromQuery(input.query);
-  const queryMonth = getMonthFromQuery(input.query);
-  let filteredUserTransactions = [...input.transactions];
+  // The transactions are now pre-filtered by the dashboard page.
+  // We can derive the data scope from the first transaction if available.
   let dataScopeMessage = "all available transactions";
-
-  if (queryYear !== null) {
-    if (queryMonth !== null) {
-      // Filter by specific month and year
-      const targetDate = new Date(queryYear, queryMonth, 1);
-      if (isValid(targetDate)) {
-        const periodStart = startOfMonth(targetDate);
-        const periodEnd = endOfMonth(targetDate);
-        filteredUserTransactions = input.transactions.filter(t => {
-          const transactionDate = new Date(t.date);
-          return transactionDate >= periodStart && transactionDate <= periodEnd;
-        });
-        dataScopeMessage = `transactions for ${monthNamesForParsing[queryMonth]} ${queryYear}`;
+  if (input.transactions.length > 0) {
+      const firstTransactionDate = new Date(input.transactions[0].date);
+      if(isValid(firstTransactionDate)) {
+          dataScopeMessage = `transactions for ${monthNamesForParsing[getMonth(firstTransactionDate)]} ${getYear(firstTransactionDate)}`;
+      } else {
+          dataScopeMessage = "transactions for the currently selected period."
       }
-    } else {
-      // Filter by entire year
-      const targetDate = new Date(queryYear, 0, 1);
-       if (isValid(targetDate)) {
-        const periodStart = startOfYear(targetDate);
-        const periodEnd = endOfYear(targetDate);
-        filteredUserTransactions = input.transactions.filter(t => {
-          const transactionDate = new Date(t.date);
-          return transactionDate >= periodStart && transactionDate <= periodEnd;
-        });
-        dataScopeMessage = `transactions for the year ${queryYear}`;
-      }
-    }
-  } else if (queryMonth !== null) {
-    // Filter by month in current year if only month is specified
-    const currentYear = getYear(new Date());
-    const targetDate = new Date(currentYear, queryMonth, 1);
-    if (isValid(targetDate)) {
-        const periodStart = startOfMonth(targetDate);
-        const periodEnd = endOfMonth(targetDate);
-        filteredUserTransactions = input.transactions.filter(t => {
-          const transactionDate = new Date(t.date);
-          return transactionDate >= periodStart && transactionDate <= periodEnd;
-        });
-        dataScopeMessage = `transactions for ${monthNamesForParsing[queryMonth]} ${currentYear}`;
-    }
-  } else if (input.query.toLowerCase().includes('this month')) {
-    const today = new Date();
-    const periodStart = startOfMonth(today);
-    const periodEnd = endOfMonth(today);
-    filteredUserTransactions = input.transactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      return transactionDate >= periodStart && transactionDate <= periodEnd;
-    });
-    dataScopeMessage = `transactions for this current month`;
+  } else {
+      dataScopeMessage = "no transactions for the selected period."
   }
 
-  const aiTransactions: AITransaction[] = filteredUserTransactions
+  const aiTransactions: AITransaction[] = input.transactions
     .map(t => ({
       id: t.id,
       type: t.type,
@@ -190,13 +149,13 @@ You are the AI Financial Assistant for FinWise AI, specializing in personal fina
 
 ## CONTEXT
 - Current Date: ${currentDate}
-- Transaction Data Scope: ${dataScopeMessage || 'all available transactions for the relevant period'}
+- Transaction Data Scope: You have been provided with transactions for a specific period: **${dataScopeMessage || 'the currently selected month'}**. Your analysis and answers MUST be strictly based on this data set only.
 - Currency: All amounts are in Indian Rupees (INR)
 
 ## TASK
 Your primary tasks include:
 1. Analyze the user's financial transaction data with 100% accuracy
-2. Answer questions about expenses, income, categories, and spending patterns
+2. Answer questions about expenses, income, categories, and spending patterns WITHIN THE PROVIDED DATA SCOPE.
 3. Provide insights based on the transaction data provided
 4. Maintain conversation context and refer to previous discussions when relevant
 5. Perform precise calculations for totals, averages, and comparisons
@@ -233,18 +192,16 @@ Use this context to provide relevant follow-up responses and maintain conversati
 'This is the start of our conversation.'}
 
 ## AVAILABLE TRANSACTION DATA
-The following transaction data is available for analysis:
+The following transaction data is available for your analysis for the period of **${dataScopeMessage}**:
 \`\`\`json
 ${JSON.stringify(transactions, null, 2)}
 \`\`\`
 ${transactions.length >= 250 ? `\n...(Note: A large number of transactions were provided)` : ''}
 
 ## RESPONSE GUIDELINES
-- If the user asks for comprehensive yearly summaries or trends, suggest they visit the 'Yearly Overview' page.
-- If data is insufficient for a specific query, clearly state the limitations.
+- If the user asks for yearly summaries, trends across multiple months, or data outside the provided scope, **politely inform them that your current view is limited to ${dataScopeMessage}** and suggest they use the app's 'Yearly Overview' or 'Reports' pages for broader analysis. Do NOT attempt to answer questions outside your data scope.
 - Always specify the time period your analysis covers.
 - Provide actionable insights when possible.
-- If asked about periods not covered in the data, clearly state this limitation.
 
 ## EXAMPLES OF GOOD RESPONSES
 - "Based on your transactions for January 2024, your total food expenses were ₹8,500.00 across 15 transactions."
@@ -254,8 +211,9 @@ ${transactions.length >= 250 ? `\n...(Note: A large number of transactions were 
 2024-01-15|₹1,200.00|Lunch at restaurant|Food and Dining
 2024-01-16|₹500.00|Uber ride|Transport
 [END_TABLE]"
+- "I can only see data for ${dataScopeMessage}. For a comparison across multiple months, please use the 'Reports' page."
 
-Remember: Accuracy is paramount. Always verify calculations and provide precise, helpful financial insights based strictly on the provided transaction data.`;
+Remember: Accuracy is paramount. Always verify calculations and provide precise, helpful financial insights based strictly on the provided transaction data. Do not analyze data you don't have.`;
 
     const messages: { role: 'user' | 'assistant' | 'system', content: string }[] = [];
     messages.push({ role: 'system', content: systemPrompt });

@@ -428,7 +428,7 @@ export default function DashboardPage() {
             />
           </motion.div>
           <motion.div variants={itemVariants}>
-            <FinancialChatbot allTransactions={transactions} />
+            <FinancialChatbot allTransactions={currentMonthTransactions} />
           </motion.div>
         </motion.div>
 
