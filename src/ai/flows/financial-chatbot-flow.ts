@@ -297,4 +297,3 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     return { response: responseText };
   }
 );
-
