@@ -219,6 +219,15 @@ async function getCosmosDBTransactionsContainer(): Promise<CosmosContainer> {
   return cosmosTransactionsContainerInstance;
 }
 
+const toISODateString = (date: Date) => {
+    // This function correctly formats a JavaScript Date object into a YYYY-MM-DD string
+    // that represents the "local" date, regardless of the server's timezone.
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T00:00:00.000Z`; // Store as UTC midnight of that date
+};
+
 
 // --- Transaction Functions (Using Cosmos DB for transactions, Blob for lookups) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
@@ -295,7 +304,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: validation.data.date.toISOString(), 
+    date: toISODateString(validation.data.date), // Use the new timezone-safe function
     description: validation.data.description || '', 
     isSplit: validation.data.isSplit || false,
     createdAt: now,
@@ -375,7 +384,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? data.date.toISOString() : existingItem.date, 
+    date: data.date ? toISODateString(data.date) : existingItem.date, // Use the new timezone-safe function
     description: data.description !== undefined ? data.description : existingItem.description,
     isSplit: data.isSplit !== undefined ? data.isSplit : (existingItem.isSplit || false),
     updatedAt: new Date().toISOString(),
@@ -404,7 +413,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
    const finalItemToUpdate: RawTransaction = { 
     id: existingItem.id, 
     type: validation.data.type,
-    date: validation.data.date.toISOString(),
+    date: toISODateString(validation.data.date), // Use the new timezone-safe function
     amount: validation.data.amount,
     description: validation.data.description || '',
     categoryId: validation.data.categoryId,
