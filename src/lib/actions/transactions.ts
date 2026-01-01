@@ -447,8 +447,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     return {
       ...updatedItem,
       date: new Date(updatedItem.date), 
-      createdAt: new Date(updatedItem.createdAt),
-      updatedAt: new Date(updatedItem. updatedAt),
+      createdAt: new Date(createdItem.createdAt),
+      updatedAt: new Date(createdItem.updatedAt),
       category,
       paymentMethod,
     } as AppTransaction;
@@ -580,3 +580,5 @@ export async function ensureCoreCosmosDBContainersExist() {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
+
+    
