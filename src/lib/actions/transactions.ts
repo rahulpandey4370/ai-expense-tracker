@@ -8,8 +8,6 @@ import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
-import { format } from 'date-fns';
-
 
 let cosmosTransactionsContainerInstance: CosmosContainer;
 let blobContainerClientInstance: BlobContainerClient;
@@ -257,12 +255,9 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
     processedItemCount = items.length;
 
     const transactions: AppTransaction[] = items.map((rawTx: any) => {
-        // Parse date string as UTC to avoid timezone shifts
-        const [year, month, day] = rawTx.date.split('-').map(Number);
-        const dateObj = new Date(Date.UTC(year, month - 1, day));
       return {
         ...rawTx,
-        date: dateObj,
+        date: new Date(rawTx.date),
         createdAt: new Date(rawTx.createdAt),
         updatedAt: new Date(rawTx.updatedAt),
         category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
@@ -300,7 +295,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: format(validation.data.date, 'yyyy-MM-dd'),
+    date: validation.data.date.toISOString(), 
     description: validation.data.description || '', 
     createdAt: now,
     updatedAt: now,
@@ -379,7 +374,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? format(data.date, 'yyyy-MM-dd') : existingItem.date,
+    date: data.date ? data.date.toISOString() : existingItem.date, 
     description: data.description !== undefined ? data.description : existingItem.description,
     isSplit: data.isSplit !== undefined ? data.isSplit : existingItem.isSplit,
     updatedAt: new Date().toISOString(),
@@ -408,7 +403,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
    const finalItemToUpdate: RawTransaction = { 
     id: existingItem.id, 
     type: validation.data.type,
-    date: format(validation.data.date, 'yyyy-MM-dd'),
+    date: validation.data.date.toISOString(),
     amount: validation.data.amount,
     description: validation.data.description || '',
     categoryId: validation.data.categoryId,
@@ -447,8 +442,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     return {
       ...updatedItem,
       date: new Date(updatedItem.date), 
-      createdAt: new Date(createdItem.createdAt),
-      updatedAt: new Date(createdItem.updatedAt),
+      createdAt: new Date(updatedItem.createdAt),
+      updatedAt: new Date(updatedItem. updatedAt),
       category,
       paymentMethod,
     } as AppTransaction;
@@ -580,5 +575,3 @@ export async function ensureCoreCosmosDBContainersExist() {
         console.error("CosmosDB Error: Failed to ensure core containers exist.", error.message, error.stack);
     }
 }
-
-    
