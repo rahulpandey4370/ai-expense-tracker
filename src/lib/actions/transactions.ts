@@ -219,20 +219,6 @@ async function getCosmosDBTransactionsContainer(): Promise<CosmosContainer> {
   return cosmosTransactionsContainerInstance;
 }
 
-/**
- * Converts a JavaScript Date object to a 'YYYY-MM-DDTHH:mm:ss.sssZ' string,
- * but based on the date's local components, effectively neutralizing timezone
- * shifts during storage.
- * @param date The local date object from the client.
- * @returns A string like '2025-12-01T00:00:00.000Z'.
- */
-const toISODateString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}T00:00:00.000Z`;
-};
-
 
 // --- Transaction Functions (Using Cosmos DB for transactions, Blob for lookups) ---
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
@@ -309,9 +295,8 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: toISODateString(validation.data.date), // Use the new timezone-safe function
+    date: validation.data.date.toISOString(), 
     description: validation.data.description || '', 
-    isSplit: validation.data.isSplit || false,
     createdAt: now,
     updatedAt: now,
   };
@@ -389,9 +374,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? toISODateString(data.date) : existingItem.date, // Use the new timezone-safe function
+    date: data.date ? data.date.toISOString() : existingItem.date, 
     description: data.description !== undefined ? data.description : existingItem.description,
-    isSplit: data.isSplit !== undefined ? data.isSplit : (existingItem.isSplit || false),
     updatedAt: new Date().toISOString(),
   };
 
@@ -404,7 +388,6 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: updatedRawData.paymentMethodId,
     source: updatedRawData.source,
     expenseType: updatedRawData.expenseType,
-    isSplit: updatedRawData.isSplit,
   };
 
   const validation = TransactionInputSchema.safeParse(transactionInputForValidation);
@@ -418,14 +401,13 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
    const finalItemToUpdate: RawTransaction = { 
     id: existingItem.id, 
     type: validation.data.type,
-    date: toISODateString(validation.data.date), // Use the new timezone-safe function
+    date: validation.data.date.toISOString(),
     amount: validation.data.amount,
     description: validation.data.description || '',
     categoryId: validation.data.categoryId,
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
-    isSplit: validation.data.isSplit,
     createdAt: existingItem.createdAt, 
     updatedAt: new Date().toISOString(),
     _rid: existingItem._rid,
