@@ -8,6 +8,8 @@ import { TransactionInputSchema } from '@/lib/types';
 import { defaultCategories, defaultPaymentMethods } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
+import { format } from 'date-fns';
+
 
 let cosmosTransactionsContainerInstance: CosmosContainer;
 let blobContainerClientInstance: BlobContainerClient;
@@ -255,9 +257,12 @@ export async function getTransactions(options?: { limit?: number }): Promise<App
     processedItemCount = items.length;
 
     const transactions: AppTransaction[] = items.map((rawTx: any) => {
+        // Parse date string as UTC to avoid timezone shifts
+        const [year, month, day] = rawTx.date.split('-').map(Number);
+        const dateObj = new Date(Date.UTC(year, month - 1, day));
       return {
         ...rawTx,
-        date: new Date(rawTx.date),
+        date: dateObj,
         createdAt: new Date(rawTx.createdAt),
         updatedAt: new Date(rawTx.updatedAt),
         category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
@@ -295,7 +300,7 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id: id,
     ...validation.data,
-    date: validation.data.date.toISOString(), 
+    date: format(validation.data.date, 'yyyy-MM-dd'),
     description: validation.data.description || '', 
     createdAt: now,
     updatedAt: now,
@@ -374,8 +379,9 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const updatedRawData = {
     ...existingItem,
     ...data,
-    date: data.date ? data.date.toISOString() : existingItem.date, 
+    date: data.date ? format(data.date, 'yyyy-MM-dd') : existingItem.date,
     description: data.description !== undefined ? data.description : existingItem.description,
+    isSplit: data.isSplit !== undefined ? data.isSplit : existingItem.isSplit,
     updatedAt: new Date().toISOString(),
   };
 
@@ -388,6 +394,7 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: updatedRawData.paymentMethodId,
     source: updatedRawData.source,
     expenseType: updatedRawData.expenseType,
+    isSplit: updatedRawData.isSplit,
   };
 
   const validation = TransactionInputSchema.safeParse(transactionInputForValidation);
@@ -401,13 +408,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
    const finalItemToUpdate: RawTransaction = { 
     id: existingItem.id, 
     type: validation.data.type,
-    date: validation.data.date.toISOString(),
+    date: format(validation.data.date, 'yyyy-MM-dd'),
     amount: validation.data.amount,
     description: validation.data.description || '',
     categoryId: validation.data.categoryId,
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
+    isSplit: validation.data.isSplit,
     createdAt: existingItem.createdAt, 
     updatedAt: new Date().toISOString(),
     _rid: existingItem._rid,

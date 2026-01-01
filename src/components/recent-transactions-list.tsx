@@ -126,7 +126,7 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                             size="icon"
                             className={cn(
                               "h-7 w-7 text-muted-foreground hover:text-accent",
-                              transaction.isSplit && "text-accent bg-accent/10"
+                              transaction.isSplit && "text-yellow-400 bg-yellow-500/20 hover:bg-yellow-500/30 hover:text-yellow-300"
                             )}
                             onClick={() => handleToggleSplit(transaction)}
                             disabled={isTogglingSplit === transaction.id}

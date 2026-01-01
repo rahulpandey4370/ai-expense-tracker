@@ -155,12 +155,12 @@ export default function TransactionsPage() {
     if (viewMode === 'selected_month') {
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = new Date(t.date);
-        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
+        return transactionDate.getUTCMonth() === selectedMonth && transactionDate.getUTCFullYear() === selectedYear;
       });
     } else { 
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = new Date(t.date);
-        return transactionDate.getFullYear() === selectedYear;
+        return transactionDate.getUTCFullYear() === selectedYear;
       });
     }
 
@@ -531,7 +531,7 @@ export default function TransactionsPage() {
                             size="icon"
                             className={cn(
                               "h-7 w-7 text-muted-foreground hover:text-accent",
-                              t.isSplit && "text-accent bg-accent/10"
+                              t.isSplit && "text-yellow-400 bg-yellow-500/20 hover:bg-yellow-500/30 hover:text-yellow-300"
                             )}
                             onClick={() => handleToggleSplit(t)}
                             disabled={isTogglingSplit === t.id}
@@ -636,7 +636,7 @@ export default function TransactionsPage() {
                                 size="icon"
                                 className={cn(
                                   "h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-accent",
-                                  transaction.isSplit && "text-accent bg-accent/10"
+                                  transaction.isSplit && "text-yellow-400 bg-yellow-500/20 hover:bg-yellow-500/30 hover:text-yellow-300"
                                 )}
                                 onClick={() => handleToggleSplit(transaction)}
                                 disabled={isTogglingSplit === transaction.id}
