@@ -123,7 +123,7 @@ Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yester
 
 🔒 ENUM FIELDS (MUST BE LOWERCASE, EXACT MATCH):
 - "type": "income" | "expense"
-- "expenseTypeNameGuess": "need" | "want" | "investment" | "investment_expense"
+- "expenseTypeNameGuess": "need" | "want" | "investment"
 - "categoryNameGuess": must exactly match provided category names
 - "paymentMethodNameGuess": must exactly match provided payment method names
 
@@ -144,8 +144,8 @@ Available Payment Methods (for expenses):
 {{/each}}
 
 For each transaction identified, provide:
-- date: Transaction date (YYYY-MM-DD).
-- description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.") Do this Automatically even if the input is not formatted correctly.
+- date: Transaction date (YYYY-MM-DD). In case it is not provided, use the current date.
+- description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.") Do this Automatically even if the input is not formatted correctly. And also use the capitalisation and punctuations as provided in the example. Keep it short and to the point not too elaborate for common inputs. It should only be descriptive when dealing with listing items, Or Funds names in an investment transaction and so on.
 - amount: The transaction amount.
 - type: 'income' or 'expense'.
 - categoryNameGuess: Your best guess for the category name from the provided lists.
