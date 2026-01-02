@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -590,6 +590,15 @@ export default function AIPlaygroundPage() {
     }
   };
 
+  const totalGoalsProgress = useMemo(() => {
+    if (!savedGoals || savedGoals.length === 0) {
+      return { totalSaved: 0, totalTarget: 0 };
+    }
+    const totalSaved = savedGoals.reduce((sum, goal) => sum + goal.amountSavedSoFar, 0);
+    const totalTarget = savedGoals.reduce((sum, goal) => sum + goal.targetAmount, 0);
+    return { totalSaved, totalTarget };
+  }, [savedGoals]);
+
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
@@ -725,13 +734,25 @@ export default function AIPlaygroundPage() {
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
           <CardHeader>
-            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
-              <Target className="w-7 h-7 md:w-8 md:h-8 text-accent" />
-              Your Saved Goals & Funds
-            </CardTitle>
-            <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Track your progress and allocate savings to your financial goals and funds.
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                <div>
+                    <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+                        <Target className="w-7 h-7 md:w-8 md:h-8 text-accent" />
+                        Your Saved Goals & Funds
+                    </CardTitle>
+                    <CardDescription className="text-sm md:text-base text-muted-foreground mt-1">
+                        Track your progress and allocate savings to your financial goals and funds.
+                    </CardDescription>
+                </div>
+                {totalGoalsProgress.totalTarget > 0 && (
+                    <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-primary">Total Progress</p>
+                        <p className="text-xs text-muted-foreground">
+                            ₹{totalGoalsProgress.totalSaved.toLocaleString()} / ₹{totalGoalsProgress.totalTarget.toLocaleString()}
+                        </p>
+                    </div>
+                )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {isLoadingGoals && !savedGoals.length && (
