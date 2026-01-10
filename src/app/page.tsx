@@ -83,7 +83,7 @@ export default function DashboardPage() {
     setIsLoadingData(true);
     try {
       const [fetchedTransactions, fetchedCategories, fetchedBudgets] = await Promise.all([
-        getTransactions({ limit: 5000 }),
+        getTransactions({ limit: 10000 }),
         getCategories(),
         getBudgets(),
       ]);
