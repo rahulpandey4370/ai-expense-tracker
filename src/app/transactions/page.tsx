@@ -155,12 +155,12 @@ export default function TransactionsPage() {
     if (viewMode === 'selected_month') {
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = t.date;
-        return transactionDate.getUTCMonth() === selectedMonth && transactionDate.getUTCFullYear() === selectedYear;
+        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
       });
     } else { 
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = t.date;
-        return transactionDate.getUTCFullYear() === selectedYear;
+        return transactionDate.getFullYear() === selectedYear;
       });
     }
 
