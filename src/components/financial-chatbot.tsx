@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,31 +46,51 @@ interface ParsedTable {
     rows: string[][];
 }
 
-const parseTableFromResponse = (text: string): { intro: string; tableData: ParsedTable | null; outro: string } => {
-    const tableStartToken = '[START_TABLE]';
-    const tableEndToken = '[END_TABLE]';
+// A simple component to render markdown content
+const MarkdownContent = ({ content }: { content: string }) => {
+    const parts = content.split(/(\[START_TABLE\][\s\S]*?\[END_TABLE\]|\*\*.*?\*\*|- .*)/g).filter(Boolean);
 
-    const startIdx = text.indexOf(tableStartToken);
-    const endIdx = text.indexOf(tableEndToken);
-
-    if (startIdx === -1 || endIdx === -1) {
-        return { intro: text, tableData: null, outro: '' };
-    }
-
-    const intro = text.substring(0, startIdx).trim();
-    const outro = text.substring(endIdx + tableEndToken.length).trim();
-    
-    const tableContent = text.substring(startIdx + tableStartToken.length, endIdx).trim();
-    const rows = tableContent.split('\n').map(row => row.split('|').map(cell => cell.trim()));
-    
-    if (rows.length === 0) {
-        return { intro, tableData: null, outro };
-    }
-
-    // Since we now have a fixed format from the prompt, we can hardcode headers.
-    const headers = ['Date', 'Amount', 'Description', 'Category'];
-
-    return { intro, tableData: { headers, rows }, outro };
+    return (
+        <>
+            {parts.map((part, index) => {
+                // Render Tables
+                if (part.startsWith('[START_TABLE]') && part.endsWith('[END_TABLE]')) {
+                    const tableContent = part.replace('[START_TABLE]', '').replace('[END_TABLE]', '').trim();
+                    const rows = tableContent.split('\n').map(row => row.split('|').map(cell => cell.trim()));
+                    const headers = ['Date', 'Amount', 'Description', 'Category']; // From prompt
+                    
+                    return (
+                         <div key={index} className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
+                            <Table className="text-xs min-w-[500px] sm:min-w-0">
+                                <TableHeader>
+                                    <TableRow>
+                                        {headers.map((header, i) => <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>)}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {rows.map((row, i) => (
+                                        <TableRow key={i}>
+                                            {row.map((cell, j) => <TableCell key={j} className="whitespace-nowrap">{cell}</TableCell>)}
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    );
+                }
+                // Render Bold Text
+                if (part.startsWith('**') && part.endsWith('**')) {
+                    return <strong key={index}>{part.substring(2, part.length - 2)}</strong>;
+                }
+                // Render List Items
+                if (part.startsWith('- ')) {
+                    return <li key={index} className="ml-4 list-disc">{part.substring(2)}</li>
+                }
+                // Render plain text
+                return <span key={index}>{part}</span>;
+            })}
+        </>
+    );
 };
 
 
@@ -141,34 +161,9 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   };
   
   const ChatMessageContent = ({ message }: { message: ChatMessage }) => {
-    const { intro, tableData, outro } = useMemo(() => parseTableFromResponse(message.content), [message.content]);
-
     return (
-        <div className="w-full min-w-0 text-sm break-words overflow-x-auto">
-            {intro && <p className="mb-2 break-words overflow-wrap-anywhere">{intro}</p>}
-            {tableData && (
-                <div className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
-                    <Table className="text-xs min-w-[600px]">
-                        <TableHeader>
-                            <TableRow>
-                                {tableData.headers.map((header, i) => (
-                                    <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>
-                                ))}
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {tableData.rows.map((row, i) => (
-                                <TableRow key={i}>
-                                    {row.map((cell, j) => (
-                                        <TableCell key={j} className="whitespace-nowrap">{cell}</TableCell>
-                                    ))}
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            )}
-            {outro && <p className="mt-2 break-words overflow-wrap-anywhere">{outro}</p>}
+        <div className="w-full min-w-0 text-sm break-words overflow-x-auto whitespace-pre-wrap">
+            <MarkdownContent content={message.content} />
             {message.role === 'assistant' && message.model && (
                 <div className="mt-2 flex justify-end">
                     <ModelInfoBadge model={message.model} />

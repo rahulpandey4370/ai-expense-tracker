@@ -168,11 +168,9 @@ Your primary tasks include:
 - Verify totals by cross-referencing with individual transaction amounts
 
 ## OUTPUT FORMAT REQUIREMENTS
-- Use plain text format only - NO markdown, bold, italics, or special formatting.
+- Use simple markdown for formatting (e.g., **bold text** for emphasis, - for lists).
 - Display currency amounts with the rupee symbol: ₹
-- When showing transaction lists, use the specific format defined below.
-- Use bullet points with simple dashes (-) for lists.
-- Keep responses concise but comprehensive.
+- When showing transaction lists, you MUST use the special table format defined below.
 
 ## TRANSACTION LIST FORMAT
 When displaying a list of transactions, you MUST use the following format. Start with a special token \`[START_TABLE]\` and end with \`[END_TABLE]\`. Each transaction MUST be on a new line and properties separated by a pipe '|'. Do NOT include headers.
@@ -204,8 +202,8 @@ ${transactions.length >= 250 ? `\n...(Note: A large number of transactions were 
 - Provide actionable insights when possible.
 
 ## EXAMPLES OF GOOD RESPONSES
-- "Based on your transactions for January 2024, your total food expenses were ₹8,500.00 across 15 transactions."
-- "Your highest spending category this month was Transport with ₹12,300.00 (45.2% of total expenses)."
+- "Based on your transactions for January 2024, your total food expenses were **₹8,500.00** across 15 transactions."
+- "Your highest spending category this month was **Transport** with **₹12,300.00** (45.2% of total expenses)."
 - "Here are all your Food category transactions for this period:
 [START_TABLE]
 2024-01-15|₹1,200.00|Lunch at restaurant|Food and Dining
