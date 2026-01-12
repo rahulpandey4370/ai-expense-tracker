@@ -41,24 +41,23 @@ const examplePrompts = [
   "What are my top 3 spending categories this month?",
 ];
 
-interface ParsedTable {
-    headers: string[];
-    rows: string[][];
-}
-
-// A simple component to render markdown content
+// More robust markdown and table renderer
 const MarkdownContent = ({ content }: { content: string }) => {
-    const parts = content.split(/(\[START_TABLE\][\s\S]*?\[END_TABLE\]|\*\*.*?\*\*|- .*)/g).filter(Boolean);
+    // 1. Split content by the table delimiter
+    const parts = content.split(/(\[START_TABLE\][\s\S]*?\[END_TABLE\])/g);
 
+    // 2. Map over the parts and render them
     return (
         <>
             {parts.map((part, index) => {
-                // Render Tables
                 if (part.startsWith('[START_TABLE]') && part.endsWith('[END_TABLE]')) {
+                    // Render Table
                     const tableContent = part.replace('[START_TABLE]', '').replace('[END_TABLE]', '').trim();
+                    if (!tableContent) return null;
+
                     const rows = tableContent.split('\n').map(row => row.split('|').map(cell => cell.trim()));
-                    const headers = ['Date', 'Amount', 'Description', 'Category']; // From prompt
-                    
+                    const headers = ['Date', 'Amount', 'Description', 'Category']; // Defined in prompt
+
                     return (
                          <div key={index} className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
                             <Table className="text-xs min-w-[500px] sm:min-w-0">
@@ -77,17 +76,41 @@ const MarkdownContent = ({ content }: { content: string }) => {
                             </Table>
                         </div>
                     );
+                } else if (part.trim()) {
+                    // Render Text content with markdown
+                    const lines = part.trim().split('\n');
+                    return (
+                        <div key={index} className="space-y-1">
+                            {lines.map((line, lineIndex) => {
+                                // Headings
+                                if (line.startsWith('### ')) {
+                                    return <h3 key={lineIndex} className="text-lg font-semibold mt-2">{line.substring(4)}</h3>;
+                                }
+                                // List items
+                                if (line.trim().startsWith('• ') || line.trim().startsWith('- ')) {
+                                    const listItemContent = line.trim().substring(2);
+                                    const boldedContent = listItemContent.split(/(\*\*.*?\*\*)/g).map((segment, segIndex) => {
+                                        if (segment.startsWith('**') && segment.endsWith('**')) {
+                                            return <strong key={segIndex}>{segment.substring(2, segment.length - 2)}</strong>;
+                                        }
+                                        return <span key={segIndex}>{segment}</span>;
+                                    });
+                                    return <div key={lineIndex} className="flex items-start gap-2 ml-2"><span className="mt-1"> •</span><p>{boldedContent}</p></div>;
+                                }
+                                
+                                // Regular text with bolding
+                                const boldedLine = line.split(/(\*\*.*?\*\*)/g).map((segment, segIndex) => {
+                                    if (segment.startsWith('**') && segment.endsWith('**')) {
+                                        return <strong key={segIndex}>{segment.substring(2, segment.length - 2)}</strong>;
+                                    }
+                                    return <span key={segIndex}>{segment}</span>;
+                                });
+                                return <p key={lineIndex}>{boldedLine}</p>;
+                            })}
+                        </div>
+                    );
                 }
-                // Render Bold Text
-                if (part.startsWith('**') && part.endsWith('**')) {
-                    return <strong key={index}>{part.substring(2, part.length - 2)}</strong>;
-                }
-                // Render List Items
-                if (part.startsWith('- ')) {
-                    return <li key={index} className="ml-4 list-disc">{part.substring(2)}</li>
-                }
-                // Render plain text
-                return <span key={index}>{part}</span>;
+                return null;
             })}
         </>
     );
