@@ -26,7 +26,7 @@ import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
-import { InvestmentTracker } from '@/components/investment-tracker';
+import { OpportunityCostAnalyzer } from '@/components/opportunity-cost-analyzer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAIModel } from '@/contexts/AIModelContext';
 
@@ -441,7 +441,7 @@ export default function DashboardPage() {
         </motion.div>
 
         <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-          <InvestmentTracker onDataChanged={handleDataRefresh} />
+          <OpportunityCostAnalyzer averageMonthlyIncome={monthlyMetrics.income > 0 ? monthlyMetrics.income : undefined} />
         </motion.div>
         
         <motion.div

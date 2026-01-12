@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // AI Model Selection
-export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
+export const modelNames = ['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
 export type AIModel = (typeof modelNames)[number];
 
 
@@ -24,7 +24,7 @@ export interface PaymentMethod {
 export interface RawTransaction {
   id: string;
   type: 'income' | 'expense';
-  date: string; // ISO string
+  date: string; // YYYY-MM-DD string format
   amount: number;
   description: string;
   categoryId?: string;
@@ -364,66 +364,26 @@ export interface Budget extends BudgetInput {
 }
 
 
-// --- Investment Tracker Types (New Simplified Structure) ---
-
-export const InvestmentCategoryEnum = z.enum(["Equity", "Debt", "Gold/Silver", "US Stocks", "Crypto", "Other"]);
-export type InvestmentCategory = z.infer<typeof InvestmentCategoryEnum>;
-
-export const FundTargetSchema = z.object({
-    id: z.string(),
-    name: z.string().min(1, "Fund name is required."),
-    category: InvestmentCategoryEnum,
-    targetAmount: z.number().min(0, "Target amount cannot be negative."),
-});
-export type FundTarget = z.infer<typeof FundTargetSchema>;
-
-export const InvestmentSettingsSchema = z.object({
-    monthlyTarget: z.number().min(0, "Monthly target cannot be negative."),
-    fundTargets: z.array(FundTargetSchema),
-});
-export type InvestmentSettings = z.infer<typeof InvestmentSettingsSchema>;
-
-export const FundEntryInputSchema = z.object({
-    monthYear: z.string().regex(/^\d{4}-\d{2}$/, "Month/Year format must be YYYY-MM"),
-    fundTargetId: z.string().min(1, "Fund Target ID is required."),
-    amount: z.number().gt(0, "Amount must be a positive number."),
-    date: z.date(),
-});
-export type FundEntryInput = z.infer<typeof FundEntryInputSchema>;
-
-export interface FundEntry {
-  id: string;
-  fundTargetId: string;
-  amount: number;
-  date: string; // Stored as ISO String
-  createdAt: string; // ISO String
-}
-
-// This object represents the data for a single month, stored in one JSON file.
-export interface MonthlyInvestmentData {
-    monthYear: string; // Format: "YYYY-MM"
-    entries: FundEntry[];
-    aiSummary?: string;
-    updatedAt: string; // ISO String
-}
-
-export const InvestmentSummaryInputSchema = z.object({
-  monthYear: z.string(),
-  totalInvested: z.number(),
-  monthlyTarget: z.number(),
-  categoryBreakdown: z.array(z.object({
-    name: z.string(), // Category Name like "Equity"
-    targetAmount: z.number(),
-    actualAmount: z.number(),
-  })),
-  fundEntries: z.array(z.object({
-    fundName: z.string(),
-    amount: z.number(),
-    category: z.string(),
-  })),
+// --- Opportunity Cost Analyzer Types ---
+export const OpportunityCostInputSchema = z.object({
+  itemName: z.string().describe("The name of the item the user wants to buy."),
+  itemCost: z.number().min(1).describe("The cost of the item in INR."),
+  userIncome: z.number().min(1).describe("The user's monthly income in INR."),
+  workingHoursPerDay: z.number().min(1).max(24).default(8).describe("The number of hours the user works per day."),
+  workingDaysPerMonth: z.number().min(1).max(31).default(22).describe("The number of days the user works per month."),
   model: z.enum(modelNames).optional(),
 });
-export type InvestmentSummaryInput = z.infer<typeof InvestmentSummaryInputSchema>;
+export type OpportunityCostInput = z.infer<typeof OpportunityCostInputSchema>;
+
+export const OpportunityCostOutputSchema = z.object({
+  timeCost: z.string().describe("A human-readable string representing the cost in terms of work time (e.g., 'approx. 2.5 days of work', 'about 6 hours of work')."),
+  investmentAlternative: z.string().describe("A sentence describing the potential future value if the money were invested instead. E.g., 'If invested, this amount could grow to approximately ₹X in 10 years at a 10% annual return.'"),
+  alternativeUses: z.array(z.string()).describe("A list of 3-4 alternative, productive, or enriching ways the money could be spent (e.g., 'A weekend trip to a nearby city', 'An online course on a new skill', 'A high-quality set of professional clothes')."),
+  summary: z.string().describe("A concluding, thought-provoking summary to help the user make a decision."),
+  model: z.enum(modelNames).optional(),
+});
+export type OpportunityCostOutput = z.infer<typeof OpportunityCostOutputSchema>;
+
 export const ComparativeExpenseAnalysisInputSchema = z.object({
   currentMonth: z.string().describe('The current month for expense analysis (e.g., "January").'),
   previousMonth: z.string().describe('The previous month for expense comparison (e.g., "December").'),
