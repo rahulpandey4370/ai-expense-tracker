@@ -49,9 +49,12 @@ Structure your output precisely according to the defined JSON schema. The values
     - Focus on experiences, self-improvement, or upgrading essentials.
     - Examples for the array: "A weekend trip to a nearby city", "An online course for a new skill", "A high-quality mattress for better sleep".
 
-4.  **Write a Summary:**
-    - For the 'summary' field, conclude with a brief, thought-provoking summary that reframes the purchase decision without being preachy. It should empower the user to make a conscious choice.
-    - Example for 'summary' field: "Thinking about a purchase in terms of your life's time and potential future growth helps in making choices that truly align with your long-term goals."
+4.  **Write a Summary (FinWise Verdict):**
+    - For the 'summary' field, provide a concluding verdict.
+    - First, reframe the decision by comparing the time cost and investment potential.
+    - Then, give a clear recommendation. If the purchase seems reasonable relative to their income and offers good value, explicitly state that it's a reasonable purchase and they can go ahead. If it's too expensive or seems frivolous, advise against it and reinforce the alternatives.
+    - **Example (Positive Verdict):** "Seeing this as X hours of your work, and knowing its potential future value, helps put the cost in perspective. Given its utility and your income, this seems like a reasonable purchase. You can go ahead with it."
+    - **Example (Negative Verdict):** "This purchase represents nearly X days of your work. Considering that, and the fact that this money could grow significantly if invested, you might want to reconsider. Exploring one of the alternatives could offer more long-term value."
 
 Ensure all monetary values are in INR (₹).
 `;

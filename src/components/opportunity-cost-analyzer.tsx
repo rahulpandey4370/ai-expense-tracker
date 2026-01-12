@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Loader2, Wand2, AlertTriangle, Lightbulb, Briefcase, TrendingUp, Sparkles } from "lucide-react";
+import { BrainCircuit, Loader2, Wand2, AlertTriangle, Lightbulb, Briefcase, TrendingUp, Sparkles, Info } from "lucide-react";
 import { Skeleton } from './ui/skeleton';
 import { OpportunityCostInput, OpportunityCostOutput } from '@/lib/types';
 import { analyzeOpportunityCost } from '@/ai/flows/opportunity-cost-analysis-flow';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -138,7 +139,19 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
               </div>
              
               <div className="p-3 rounded-md bg-background/70 shadow-inner">
-                <h4 className="font-semibold text-primary flex items-center gap-2"><Briefcase className="h-4 w-4" /> Time Cost</h4>
+                 <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-primary flex items-center gap-2"><Briefcase className="h-4 w-4" /> Time Cost</h4>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground"><Info className="h-3.5 w-3.5" /></Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Based on income of ₹{parseFloat(userIncome).toLocaleString()} and a standard 22-day, 8-hour work schedule.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 <p className="text-foreground/90">{analysis.timeCost}</p>
               </div>
 
