@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI-powered chatbot for answering financial questions.
@@ -99,6 +98,7 @@ export async function askFinancialBot(input: {
   }
 
   const aiTransactions: AITransaction[] = input.transactions
+    .filter(t => t.date && isValid(new Date(t.date))) // Ensure date is valid before processing
     .map(t => ({
       id: t.id,
       type: t.type,
@@ -120,7 +120,7 @@ export async function askFinancialBot(input: {
   };
   
   const result = await financialChatbotFlow(flowInput);
-  return { ...result, model: input.model };
+  return result;
 }
 
 
@@ -128,12 +128,13 @@ const financialChatbotFlow = ai.defineFlow(
   {
     name: 'financialChatbotFlow',
     inputSchema: FinancialChatbotInputSchemaInternal,
-    outputSchema: FinancialChatbotOutputSchema.omit({model: true}),
+    outputSchema: FinancialChatbotOutputSchema,
   },
   async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
     
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
+    const modelToUse = model || 'gemini-1.5-flash-latest';
     
     const systemPrompt = `## PERSONALITY
 You are a professional, knowledgeable, and helpful AI Financial Assistant who communicates in a friendly yet authoritative manner. You are patient, detail-oriented, and always prioritize accuracy in financial calculations and analysis.
@@ -224,7 +225,6 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
     messages.push({ role: 'user', content: query });
     
     let responseText = '';
-    const modelToUse = model || 'gemini-1.5-flash-latest';
 
     if (modelToUse === 'gpt-5.2-chat') {
         responseText = await callAzureOpenAIChat(messages);
@@ -248,8 +248,11 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);
-      return { response: "I'm sorry, I encountered an issue generating a response. Please try again." };
+      return { 
+          response: "I'm sorry, I encountered an issue generating a response. Please try again.",
+          model: modelToUse
+      };
     }
-    return { response: responseText };
+    return { response: responseText, model: modelToUse };
   }
 );
