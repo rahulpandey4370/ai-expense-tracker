@@ -74,9 +74,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { selectedModel, setSelectedModel, modelNames } = useAIModel();
 
-  const handleScrollToForm = () => {
-    addTransactionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const handleScrollToForm = useCallback(() => {
+    addTransactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   const fetchAndSetData = useCallback(async () => {
     setIsLoadingData(true);
@@ -86,7 +86,13 @@ export default function DashboardPage() {
         getCategories(),
         getBudgets(),
       ]);
-      setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
+      setTransactions(fetchedTransactions.map(t => {
+        // Handle both string and Date object formats
+        if (t.date instanceof Date) {
+          return t; // Already a Date object
+        }
+        return { ...t, date: new Date(t.date) };
+      }));
       setAllCategories(fetchedCategories);
       setBudgets(fetchedBudgets);
     } catch (error) {
@@ -116,7 +122,7 @@ export default function DashboardPage() {
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
       t => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = t.date; // Already a Date object
         return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
       }
     );
@@ -176,7 +182,7 @@ export default function DashboardPage() {
     const yearForLastMonth = prevMonthDate.getFullYear();
 
     const lastMonthTransactions = transactions.filter(t => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = t.date;
         return transactionDate.getMonth() === lastMonth && transactionDate.getFullYear() === yearForLastMonth;
     });
 
@@ -243,9 +249,14 @@ export default function DashboardPage() {
                 investments={monthlyMetrics.totalInvestments}
             />
              <div className="flex justify-end">
-                <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
+                <Button 
+                  onClick={() => setKpisVisible(!kpisVisible)} 
+                  variant="outline" 
+                  size="icon" 
+                  withMotion
+                  aria-label={kpisVisible ? 'Hide financial balances' : 'Show financial balances'}
+                >
                     {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
                 </Button>
             </div>
         </motion.div>
@@ -378,7 +389,7 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
-         {(kpisVisible && monthlyMetrics.totalOutgoings) > monthlyMetrics.income && (
+         {(kpisVisible && monthlyMetrics.totalOutgoings > monthlyMetrics.income) && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Alert 
               variant="destructive" 
@@ -427,7 +438,7 @@ export default function DashboardPage() {
             />
           </motion.div>
           <motion.div variants={itemVariants}>
-            <FinancialChatbot allTransactions={currentMonthTransactions} />
+            <FinancialChatbot allTransactions={transactions} />
           </motion.div>
         </motion.div>
 
@@ -478,11 +489,10 @@ export default function DashboardPage() {
         </motion.div>
       </main>
       
-      {/* Floating Add Transaction Button - Mobile Only */}
       <div className="md:hidden fixed bottom-6 right-6 z-40 flex flex-col items-center gap-2">
         <Button 
           onClick={handleScrollToForm}
-          className="h-14 w-14 rounded-full bg-accent shadow-lg text-accent-foreground"
+          className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"
           size="icon"
           aria-label="Add Transaction"
         >
