@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -44,4 +45,8 @@ export default function ChatbotPage() {
   }
   
   return (
-    <div className="h-[calc(100vh-
+    <div className="h-[calc(100vh-4rem)] w-full">
+        <FinancialChatbot allTransactions={transactions} isPage={true} />
+    </div>
+  );
+}
