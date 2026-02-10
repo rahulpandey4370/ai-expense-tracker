@@ -45,6 +45,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'all available transactions'."),
   model: z.enum(modelNames).optional(),
+  isVerbose: z.boolean().optional().describe("If true, AI should provide a more detailed and elaborate response."),
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -81,6 +82,7 @@ export async function askFinancialBot(input: {
   transactions: AppTransaction[];
   chatHistory?: ChatMessage[];
   model?: AIModel; // Add model parameter
+  isVerbose?: boolean;
 }): Promise<FinancialChatbotOutput> {
 
   // The transactions are now pre-filtered by the dashboard page.
@@ -116,7 +118,8 @@ export async function askFinancialBot(input: {
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage,
-    model: input.model
+    model: input.model,
+    isVerbose: input.isVerbose,
   };
   
   const result = await financialChatbotFlow(flowInput);
@@ -130,7 +133,7 @@ const financialChatbotFlow = ai.defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema,
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
+  async ({ query, transactions, chatHistory, dataScopeMessage, model, isVerbose }) => {
     
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
@@ -151,6 +154,9 @@ You are the AI Financial Assistant for FinWise AI, specializing in personal fina
 - Financial insights and recommendations
 - Indian financial context and currency (INR)
 - Application Features: This expense tracker includes a 'Yearly Overview' page for comprehensive yearly summaries
+
+## RESPONSE STYLE
+- Verbose Mode: ${isVerbose ? 'ON (Provide detailed, elaborate, and comprehensive answers, using multiple paragraphs if necessary.)' : 'OFF (Be concise and get straight to the point. Use short sentences and bullet points where possible.)'}
 
 ## CONTEXT
 - Current Date: ${currentDate}

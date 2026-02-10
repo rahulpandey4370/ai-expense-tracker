@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
 import Link from 'next/link';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 interface FinancialChatbotProps {
   allTransactions: AppTransaction[];
@@ -102,6 +104,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVerbose, setIsVerbose] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { selectedModel } = useAIModel();
 
@@ -137,6 +140,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
         transactions: allTransactions,
         chatHistory: messages.slice(-5),
         model: selectedModel,
+        isVerbose: isVerbose,
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response, model: result.model };
       setMessages(prev => [...prev, assistantMessage]);
@@ -202,6 +206,10 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
             </div>
           </ScrollArea>
           <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
+            <div className="flex justify-end items-center space-x-2 mb-2">
+                <Label htmlFor="verbose-mode" className="text-xs text-muted-foreground">Verbose Mode</Label>
+                <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} disabled={isLoading} />
+            </div>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => {if (e.key === 'Enter' && !e.shiftKey) {e.preventDefault();handleSubmit();}}} disabled={isLoading} />
               <Button type="submit" disabled={isLoading || !inputValue.trim()} size="icon" className="bg-primary hover:bg-primary/90" withMotion>{isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}<span className="sr-only">Send</span></Button>
