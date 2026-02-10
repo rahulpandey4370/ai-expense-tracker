@@ -175,14 +175,20 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
             <CardTitle className="flex items-center gap-2 text-xl"><Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant</CardTitle>
             <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
           </div>
-          {!isPage && (
-            <Button asChild variant="ghost" size="icon">
-              <Link href="/chatbot">
-                <Expand className="h-5 w-5" />
-                <span className="sr-only">Expand Chatbot</span>
-              </Link>
-            </Button>
-          )}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center space-x-2">
+                <Label htmlFor="verbose-mode" className="text-xs text-muted-foreground">Verbose</Label>
+                <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} disabled={isLoading} />
+            </div>
+            {!isPage && (
+                <Button asChild variant="ghost" size="icon">
+                  <Link href="/chatbot">
+                    <Expand className="h-5 w-5" />
+                    <span className="sr-only">Expand Chatbot</span>
+                  </Link>
+                </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <ScrollArea className="flex-1 pr-4 w-full" ref={scrollAreaRef}>
@@ -206,10 +212,6 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
             </div>
           </ScrollArea>
           <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
-            <div className="flex justify-end items-center space-x-2 mb-2">
-                <Label htmlFor="verbose-mode" className="text-xs text-muted-foreground">Verbose Mode</Label>
-                <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} disabled={isLoading} />
-            </div>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => {if (e.key === 'Enter' && !e.shiftKey) {e.preventDefault();handleSubmit();}}} disabled={isLoading} />
               <Button type="submit" disabled={isLoading || !inputValue.trim()} size="icon" className="bg-primary hover:bg-primary/90" withMotion>{isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}<span className="sr-only">Send</span></Button>
