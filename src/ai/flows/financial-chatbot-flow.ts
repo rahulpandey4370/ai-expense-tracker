@@ -77,21 +77,6 @@ function getMonthFromQuery(query: string): number | null {
   return null;
 }
 
-function safeToISOString(date: any): string {
-    if (!date) return '';
-    try {
-        const d = new Date(date);
-        // Check if the date is valid before calling toISOString()
-        if (isNaN(d.getTime())) {
-            return '';
-        }
-        return d.toISOString();
-    } catch (e) {
-        return '';
-    }
-}
-
-
 export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];
@@ -117,15 +102,14 @@ export async function askFinancialBot(input: {
     .map(t => ({
       id: t.id,
       type: t.type,
-      date: safeToISOString(t.date),
+      date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
       amount: t.amount,
       description: t.description,
       categoryName: t.category?.name,
       paymentMethodName: t.paymentMethod?.name,
       expenseType: t.expenseType,
       source: t.source,
-    }))
-    .filter(t => t.date); // Filter out any transactions that ended up with an empty/invalid date
+    }));
 
   const flowInput: FinancialChatbotInputInternal = {
     query: input.query,
