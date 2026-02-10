@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -155,12 +154,12 @@ export default function TransactionsPage() {
     if (viewMode === 'selected_month') {
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = t.date;
-        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
+        return transactionDate && transactionDate.getUTCMonth() === selectedMonth && transactionDate.getUTCFullYear() === selectedYear;
       });
     } else { 
       tempTransactions = tempTransactions.filter(t => {
         const transactionDate = t.date;
-        return transactionDate.getFullYear() === selectedYear;
+        return transactionDate && transactionDate.getUTCFullYear() === selectedYear;
       });
     }
 
@@ -721,5 +720,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-
-    
