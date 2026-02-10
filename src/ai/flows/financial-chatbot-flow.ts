@@ -136,6 +136,10 @@ const financialChatbotFlow = ai.defineFlow(
     const currentDate = new Date().toISOString().split('T')[0];
     const modelToUse = model || 'gemini-1.5-flash-latest';
     
+    const MAX_TRANSACTIONS_IN_PROMPT = 150;
+    const transactionsForPrompt = transactions.slice(0, MAX_TRANSACTIONS_IN_PROMPT);
+    const transactionsTruncated = transactions.length > MAX_TRANSACTIONS_IN_PROMPT;
+
     const systemPrompt = `## PERSONALITY
 You are a professional, knowledgeable, and helpful AI Financial Assistant who communicates in a friendly yet authoritative manner. You are patient, detail-oriented, and always prioritize accuracy in financial calculations and analysis.
 
@@ -193,9 +197,9 @@ Use this context to provide relevant follow-up responses and maintain conversati
 ## AVAILABLE TRANSACTION DATA
 The following transaction data is available for your analysis for the period of **${dataScopeMessage}**:
 \`\`\`json
-${JSON.stringify(transactions, null, 2)}
+${JSON.stringify(transactionsForPrompt, null, 2)}
 \`\`\`
-${transactions.length >= 250 ? `\n...(Note: A large number of transactions were provided)` : ''}
+${transactionsTruncated ? `\n...(Note: The transaction list was truncated to the most recent ${MAX_TRANSACTIONS_IN_PROMPT} items to fit within the context window. Your analysis is limited to this subset.)` : ''}
 
 ## RESPONSE GUIDELINES
 - If the user asks for yearly summaries, trends across multiple months, or data outside the provided scope, **politely inform them that your current view is limited to ${dataScopeMessage}** and suggest they use the app's 'Yearly Overview' or 'Reports' pages for broader analysis. Do NOT attempt to answer questions outside your data scope.
