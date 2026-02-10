@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for generating a weekly/monthly financial health check summary.
@@ -18,7 +17,7 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 export async function getFinancialHealthCheck(
   input: z.infer<typeof FinancialHealthCheckInputSchema>
 ): Promise<FinancialHealthCheckOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
     const result = await financialHealthCheckFlow(input);
@@ -71,7 +70,7 @@ const financialHealthCheckFlow = ai.defineFlow(
     outputSchema: FinancialHealthCheckOutputSchema.omit({model: true}),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-1.5-flash-latest';
+    const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
     if (model === 'gpt-5.2-chat') {

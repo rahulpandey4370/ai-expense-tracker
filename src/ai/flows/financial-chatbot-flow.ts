@@ -137,7 +137,7 @@ const financialChatbotFlow = ai.defineFlow(
     
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
-    const modelToUse = model || 'gemini-1.5-flash-latest';
+    const modelToUse = model || 'gemini-3-flash-preview';
     
     const MAX_TRANSACTIONS_IN_PROMPT = 150;
     const transactionsForPrompt = transactions.slice(0, MAX_TRANSACTIONS_IN_PROMPT);

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -15,7 +14,7 @@ export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpense
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   const result = await comparativeExpenseAnalysisFlow(input);
   return { ...result, model: modelToUse };
 }
@@ -41,7 +40,7 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
     outputSchema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-1.5-flash-latest';
+    const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
     if (model === 'gpt-5.2-chat') {

@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for parsing receipt images into structured transaction data.
@@ -61,7 +60,7 @@ export async function parseReceiptImage(
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
   
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   
   try {
     const result = await parseReceiptImageFlow({ 
@@ -130,7 +129,7 @@ const parseReceiptImageFlow = ai.defineFlow(
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gemini-3-flash-preview';
     if (!input.receiptImageUri) {
         return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }

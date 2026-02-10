@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -10,7 +9,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const result = await monthlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -69,7 +68,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gemini-3-flash-preview';
     
     // Create the prompt input, excluding the model property
     const promptInput = {

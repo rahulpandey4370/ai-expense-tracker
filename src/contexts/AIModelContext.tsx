@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode } from 'react';
@@ -15,7 +14,7 @@ interface AIModelContextType {
 const AIModelContext = createContext<AIModelContextType | undefined>(undefined);
 
 const AI_MODEL_STORAGE_KEY = "finwiseAIModel";
-const DEFAULT_MODEL: AIModel = 'gemini-2.5-flash';
+const DEFAULT_MODEL: AIModel = 'gemini-3-flash-preview';
 
 export function AIModelProvider({ children }: { children: ReactNode }) {
   const [selectedModel, setSelectedModel] = useState<AIModel>(DEFAULT_MODEL);

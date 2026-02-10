@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for analyzing and identifying fixed/recurring monthly expenses.
@@ -25,7 +24,7 @@ export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInput
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput
 ): Promise<FixedExpenseAnalyzerOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const validatedInput = FixedExpenseAnalyzerInputSchema.omit({model: true}).parse(input);
     if (validatedInput.transactions.length === 0) {
@@ -99,7 +98,7 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
     outputSchema: FixedExpenseAnalyzerOutputSchema.omit({model: true}),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-1.5-flash-latest';
+    const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
     if (model === 'gpt-5.2-chat') {

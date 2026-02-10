@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI-powered budgeting assistant.
@@ -18,7 +17,7 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 export async function suggestBudgetPlan(
   input: z.infer<typeof BudgetingAssistantInputSchema>
 ): Promise<BudgetingAssistantOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
@@ -81,7 +80,7 @@ const budgetingAssistantFlow = ai.defineFlow(
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gemini-3-flash-preview';
 
     if (input.statedMonthlyIncome <= 0) {
       return {

@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for parsing natural language text into structured transaction data.
@@ -57,7 +56,7 @@ export async function parseTransactionsFromText(
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -175,7 +174,7 @@ const parseTransactionsFlow = ai.defineFlow(
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gemini-3-flash-preview';
     if (!input.naturalLanguageText.trim()) {
         return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
