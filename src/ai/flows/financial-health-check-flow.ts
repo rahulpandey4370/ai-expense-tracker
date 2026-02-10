@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for generating a weekly/monthly financial health check summary.
@@ -71,7 +70,7 @@ const financialHealthCheckFlow = ai.defineFlow(
     outputSchema: FinancialHealthCheckOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-1.5-flash-latest';
+    const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
     if (model === 'gpt-5.2-chat') {

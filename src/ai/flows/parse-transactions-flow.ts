@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for parsing natural language text into structured transaction data.
@@ -175,7 +174,7 @@ const parseTransactionsFlow = ai.defineFlow(
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gemini-3-flash-preview';
     if (!input.naturalLanguageText.trim()) {
       return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }

@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for forecasting financial goals and providing a plan.
@@ -92,7 +91,7 @@ const financialGoalForecasterFlow = ai.defineFlow(
     outputSchema: GoalForecasterOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-1.5-flash-latest';
+    const model = (input as any).model || 'gemini-3-flash-preview';
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
       return {
         feasibilityAssessment: "Insufficient Data for Full Forecast",
