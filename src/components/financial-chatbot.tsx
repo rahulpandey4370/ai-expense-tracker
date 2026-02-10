@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize, X } from "lucide-react";
+import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types"; // Using AppTransaction
@@ -29,12 +29,6 @@ const cardVariants = {
 const messageVariants = {
     hidden: { opacity: 0, y: 10 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
-};
-
-const fullscreenVariants = {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.2, ease: "easeOut" } },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: "easeIn" } }
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
@@ -129,40 +123,30 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
   const [error, setError] = useState<string | null>(null);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { selectedModel } = useAIModel();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
-      const scrollViewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      const scrollViewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
       if (scrollViewport) {
-        requestAnimationFrame(() => {
-          scrollViewport.scrollTop = scrollViewport.scrollHeight;
-        });
+        scrollViewport.scrollTop = scrollViewport.scrollHeight;
       }
     }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isFullScreen]);
   
-  // Prevent body scroll when in fullscreen and handle focus
+  // Prevent body scroll when in fullscreen
   useEffect(() => {
     if (isFullScreen) {
       document.body.style.overflow = 'hidden';
-      document.body.style.paddingRight = '0px';
-      // Focus textarea when opening fullscreen
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 100);
     } else {
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
+      document.body.style.overflow = 'auto';
     }
     return () => {
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
+      document.body.style.overflow = 'auto';
     };
   }, [isFullScreen]);
 
@@ -209,194 +193,117 @@ export function FinancialChatbot({ allTransactions }: FinancialChatbotProps) {
             )}
         </div>
     );
-  };
+};
 
-  const ChatContent = () => (
-    <>
-      <CardHeader className="flex flex-row items-center justify-between pb-4 border-b flex-shrink-0">
-        <div className="space-y-1.5">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant
-          </CardTitle>
-          <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsFullScreen(!isFullScreen)}
-            className="flex-shrink-0"
-          >
-            {isFullScreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}
-            <span className="sr-only">{isFullScreen ? 'Exit full screen' : 'Enter full screen'}</span>
-          </Button>
-          {isFullScreen && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setIsFullScreen(false)}
-              className="flex-shrink-0"
-            >
-              <X className="h-5 w-5" />
-              <span className="sr-only">Close</span>
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden p-0">
-        <ScrollArea className="flex-1 px-6 py-4 w-full" ref={scrollAreaRef}>
-          <div className="space-y-4 w-full max-w-full overflow-hidden">
-            {messages.map((message, index) => (
-              <motion.div
-                key={index}
-                variants={messageVariants}
-                initial="hidden"
-                animate="visible"
-                className={cn(
-                  "flex items-start gap-3 w-full min-w-0 overflow-hidden"
-                )}
-              >
-                <Avatar className="h-8 w-8 border flex-shrink-0">
-                  <AvatarFallback className="bg-transparent text-primary">
-                    {message.role === 'user' ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 text-foreground pt-1 min-w-0 overflow-hidden">
-                  <ChatMessageContent message={message} />
-                </div>
-              </motion.div>
-            ))}
-            {isLoading && (
-              <div className="flex items-start gap-3">
-                <Avatar className="h-8 w-8 border flex-shrink-0">
-                  <AvatarFallback className="bg-transparent text-primary">
-                    <Bot className="h-5 w-5 animate-pulse" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-2 py-2">
-                  <Skeleton className="h-3 w-4/5" />
-                  <Skeleton className="h-3 w-3/5" />
-                </div>
-              </div>
-            )}
-            {error && !isLoading && (
-              <div className="flex items-start gap-3 text-destructive">
-                <Avatar className="h-8 w-8 border border-destructive flex-shrink-0">
-                  <AvatarFallback className="bg-transparent">
-                    <Bot className="h-5 w-5" />
-                  </AvatarFallback>
-                </Avatar>
-                <p className="flex-1 break-words text-sm pt-1 min-w-0">{error}</p>
-              </div>
-            )}
-            {messages.length === 0 && !isLoading && !error && (
-              <div className="text-center text-muted-foreground text-sm py-4 space-y-3 w-full">
-                <p>Ask me anything! Or try one of these examples:</p>
-                <div className="flex flex-wrap justify-center gap-2 w-full">
-                  {examplePrompts.map((prompt, i) => (
-                    <Button 
-                      key={i} 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-xs h-auto py-1 px-2 flex-shrink-0 whitespace-normal break-words max-w-full" 
-                      onClick={() => handleSubmit(prompt)}
-                    >
-                      <Sparkles className="mr-1.5 h-3 w-3 flex-shrink-0" />
-                      <span className="inline-block">{prompt}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-        <div className="border-t px-6 py-4 flex-shrink-0 bg-background">
-          <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            <Textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask a financial question..."
-              className="flex-1 resize-none min-h-[40px] max-h-[120px]"
-              rows={1}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              disabled={isLoading}
-            />
-            <Button 
-              type="submit" 
-              disabled={isLoading || !inputValue.trim()} 
-              size="icon" 
-              className="bg-primary hover:bg-primary/90 flex-shrink-0"
-              withMotion 
-            >
-              {isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}
-              <span className="sr-only">Send</span>
-            </Button>
-          </form>
-        </div>
-      </CardContent>
-    </>
-  );
 
-  // Normal card view
-  if (!isFullScreen) {
-    return (
-      <motion.div 
-        variants={cardVariants} 
-        initial="hidden" 
-        animate="visible"
-        className="h-[500px]"
-      >
-        <Card className={cn(
-          "shadow-lg flex flex-col h-full",
-          glowClass
-        )}>
-          <ChatContent />
-        </Card>
-      </motion.div>
-    );
-  }
-
-  // Fullscreen view - rendered as portal-like overlay
   return (
-    <>
-      {/* Placeholder in normal position */}
-      <motion.div 
-        variants={cardVariants} 
-        initial="hidden" 
-        animate="visible"
-        className="h-[500px]"
-      >
-        <Card className={cn(
-          "shadow-lg flex flex-col h-full",
-          glowClass
-        )}>
-          <ChatContent />
-        </Card>
-      </motion.div>
-
-      {/* Fullscreen overlay */}
-      <AnimatePresence>
-        {isFullScreen && (
-          <motion.div
-            variants={fullscreenVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="fixed inset-0 z-[9999] bg-background"
-            style={{ margin: 0, padding: 0 }}
-          >
-            <Card className="h-full w-full flex flex-col rounded-none border-none shadow-none">
-              <ChatContent />
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    <motion.div 
+      variants={cardVariants} 
+      initial="hidden" 
+      animate="visible"
+    >
+      <Card className={cn(
+        "shadow-lg flex flex-col h-[500px]",
+        glowClass,
+        isFullScreen && "fixed inset-0 z-50 h-full w-full rounded-none border-none"
+      )}>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div className="space-y-1.5">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                    <Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant
+                </CardTitle>
+                <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
+            </div>
+             <Button variant="ghost" size="icon" onClick={() => setIsFullScreen(!isFullScreen)}>
+                {isFullScreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}
+                <span className="sr-only">{isFullScreen ? 'Exit full screen' : 'Enter full screen'}</span>
+            </Button>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ScrollArea className="flex-1 pr-4 w-full" ref={scrollAreaRef}>
+            <div className="space-y-4 w-full max-w-full overflow-hidden">
+              {messages.map((message, index) => (
+                <motion.div
+                  key={index}
+                  variants={messageVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className={cn(
+                    "flex items-start gap-3 w-full min-w-0 overflow-hidden"
+                  )}
+                >
+                  <Avatar className="h-8 w-8 border flex-shrink-0">
+                    <AvatarFallback className="bg-transparent text-primary">{message.role === 'user' ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 text-foreground pt-1 min-w-0 overflow-hidden">
+                     <ChatMessageContent message={message} />
+                  </div>
+                </motion.div>
+              ))}
+              {isLoading && (
+                <div className="flex items-start gap-3">
+                  <Avatar className="h-8 w-8 border flex-shrink-0">
+                    <AvatarFallback className="bg-transparent text-primary"><Bot className="h-5 w-5 animate-pulse" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-2 py-2">
+                    <Skeleton className="h-3 w-4/5" />
+                    <Skeleton className="h-3 w-3/5" />
+                  </div>
+                </div>
+              )}
+              {error && !isLoading && (
+                <div className="flex items-start gap-3 text-destructive">
+                   <Avatar className="h-8 w-8 border border-destructive flex-shrink-0">
+                    <AvatarFallback className="bg-transparent"><Bot className="h-5 w-5" /></AvatarFallback>
+                  </Avatar>
+                  <p className="flex-1 break-words text-sm pt-1 min-w-0">{error}</p>
+                </div>
+              )}
+              {messages.length === 0 && !isLoading && !error && (
+                <div className="text-center text-muted-foreground text-sm py-4 space-y-3 w-full">
+                    <p>Ask me anything! Or try one of these examples:</p>
+                    <div className="flex flex-wrap justify-center gap-2 w-full">
+                        {examplePrompts.map((prompt, i) => (
+                            <Button key={i} variant="outline" size="sm" className="text-xs h-auto py-1 px-2 flex-shrink-0 whitespace-normal break-words max-w-full" onClick={() => handleSubmit(prompt)}>
+                                <Sparkles className="mr-1.5 h-3 w-3 flex-shrink-0" />
+                                <span className="inline-block">{prompt}</span>
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          <div className={cn("pt-4 border-t mt-auto", isFullScreen && "px-4 pb-4")}>
+            <form onSubmit={handleSubmit} className="flex items-center gap-2">
+              <Textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Ask a financial question..."
+                className="flex-1 resize-none min-h-[40px]"
+                rows={1}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                disabled={isLoading}
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoading || !inputValue.trim()} 
+                size="icon" 
+                className="bg-primary hover:bg-primary/90"
+                withMotion 
+              >
+                {isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}
+                <span className="sr-only">Send</span>
+              </Button>
+            </form>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
