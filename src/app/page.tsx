@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -24,7 +23,7 @@ import { IncomeDistributionChart } from '@/components/charts/income-distribution
 import { BudgetTrackerCard } from '@/components/budget-tracker-card';
 import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
-import { subMonths } from 'date-fns';
+import { subMonths, format } from 'date-fns';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 import { OpportunityCostAnalyzer } from '@/components/opportunity-cost-analyzer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -75,9 +74,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { selectedModel, setSelectedModel, modelNames } = useAIModel();
 
-  const handleScrollToForm = () => {
-    addTransactionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const handleScrollToForm = useCallback(() => {
+    addTransactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   const fetchAndSetData = useCallback(async () => {
     setIsLoadingData(true);
@@ -87,7 +86,11 @@ export default function DashboardPage() {
         getCategories(),
         getBudgets(),
       ]);
-      setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
+      setTransactions(fetchedTransactions.map(t => {
+        // UTC date parsing fix
+        const [year, month, day] = t.date.split('-').map(Number);
+        return { ...t, date: new Date(Date.UTC(year, month - 1, day)) };
+      }));
       setAllCategories(fetchedCategories);
       setBudgets(fetchedBudgets);
     } catch (error) {
@@ -117,8 +120,8 @@ export default function DashboardPage() {
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
       t => {
-        const transactionDate = new Date(t.date);
-        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
+        const transactionDate = t.date; // Already a Date object
+        return transactionDate.getUTCMonth() === selectedMonth && transactionDate.getUTCFullYear() === selectedYear;
       }
     );
   }, [transactions, selectedMonth, selectedYear]);
@@ -173,12 +176,12 @@ export default function DashboardPage() {
 
   const previousMonthMetrics = useMemo(() => {
     const prevMonthDate = subMonths(selectedDate, 1);
-    const lastMonth = prevMonthDate.getMonth();
-    const yearForLastMonth = prevMonthDate.getFullYear();
+    const lastMonth = prevMonthDate.getUTCMonth();
+    const yearForLastMonth = prevMonthDate.getUTCFullYear();
 
     const lastMonthTransactions = transactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return transactionDate.getMonth() === lastMonth && transactionDate.getFullYear() === yearForLastMonth;
+        const transactionDate = t.date;
+        return transactionDate.getUTCMonth() === lastMonth && transactionDate.getUTCFullYear() === yearForLastMonth;
     });
 
     const lastMonthCoreExpenses = lastMonthTransactions
@@ -217,12 +220,13 @@ export default function DashboardPage() {
 
     useBudgetAlerts(budgetData);
 
+  // Show loading state
   if (!isClient || isLoadingData) {
     return (
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 animate-pulse bg-background/30 backdrop-blur-sm">
-        <div className="flex justify-center items-center h-screen">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
+        <div className="flex flex-col justify-center items-center h-screen gap-4">
           <Loader2 className="h-16 w-16 text-primary animate-spin" />
-          <p className="ml-4 text-lg text-primary">Loading FinWise AI dashboard...</p>
+          <p className="text-lg text-primary font-medium">Loading FinWise AI dashboard...</p>
         </div>
       </main>
     );
@@ -244,9 +248,14 @@ export default function DashboardPage() {
                 investments={monthlyMetrics.totalInvestments}
             />
              <div className="flex justify-end">
-                <Button onClick={() => setKpisVisible(!kpisVisible)} variant="outline" size="icon" withMotion>
+                <Button 
+                  onClick={() => setKpisVisible(!kpisVisible)} 
+                  variant="outline" 
+                  size="icon" 
+                  withMotion
+                  aria-label={kpisVisible ? 'Hide financial balances' : 'Show financial balances'}
+                >
                     {kpisVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    <span className="sr-only">{kpisVisible ? 'Hide Balances' : 'Show Balances'}</span>
                 </Button>
             </div>
         </motion.div>
@@ -369,7 +378,7 @@ export default function DashboardPage() {
               isVisible={kpisVisible}
               icon={Wallet} 
               description="Actual cash saved after all outgoings"
-              valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
+              valueClassName={monthlyMetrics.netMonthlyCashflow >= 0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
               className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
               kpiKey="cashSavings" 
               insightText="Actual cash saved after all income and all outgoings (including investments)."
@@ -379,8 +388,12 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
-         {(kpisVisible && monthlyMetrics.totalOutgoings) > monthlyMetrics.income && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+         {(kpisVisible && monthlyMetrics.totalOutgoings > monthlyMetrics.income) && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ duration: 0.3 }}
+          >
             <Alert 
               variant="destructive" 
               className={cn(
@@ -479,10 +492,11 @@ export default function DashboardPage() {
         </motion.div>
       </main>
       
+      {/* Floating Add Transaction Button - Mobile Only */}
       <div className="md:hidden fixed bottom-6 right-6 z-40 flex flex-col items-center gap-2">
         <Button 
           onClick={handleScrollToForm}
-          className="h-14 w-14 rounded-full bg-accent shadow-lg text-accent-foreground"
+          className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"
           size="icon"
           aria-label="Add Transaction"
         >
