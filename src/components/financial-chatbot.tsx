@@ -160,7 +160,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   );
 
   return (
-    <motion.div variants={cardVariants} initial="hidden" animate="visible">
+    <motion.div variants={cardVariants} initial="hidden" animate="visible" className={cn(isPage && "h-full")}>
       <Card className={cn(
         "flex flex-col",
         isPage ? "h-full w-full rounded-none border-none" : "h-[500px] shadow-lg",
@@ -200,7 +200,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
               )}
             </div>
           </ScrollArea>
-          <div className={cn("pt-4 border-t mt-auto", isPage && "px-4 pb-4")}>
+          <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => {if (e.key === 'Enter' && !e.shiftKey) {e.preventDefault();handleSubmit();}}} disabled={isLoading} />
               <Button type="submit" disabled={isLoading || !inputValue.trim()} size="icon" className="bg-primary hover:bg-primary/90" withMotion>{isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}<span className="sr-only">Send</span></Button>
