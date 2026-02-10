@@ -87,7 +87,11 @@ export default function DashboardPage() {
         getBudgets(),
       ]);
       setTransactions(fetchedTransactions.map(t => {
-        // UTC date parsing fix
+        // Handle both string and Date object formats
+        if (t.date instanceof Date) {
+          return t; // Already a Date object
+        }
+        // Parse string date to UTC Date object
         const [year, month, day] = t.date.split('-').map(Number);
         return { ...t, date: new Date(Date.UTC(year, month - 1, day)) };
       }));
