@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // AI Model Selection
-export const modelNames = ['gemini-1.5-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
+export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
 export type AIModel = (typeof modelNames)[number];
 
 
@@ -14,7 +14,7 @@ export interface Category {
 }
 
 export interface PaymentMethod {
-  id:string;
+  id: string;
   name: string;
   type: string; // e.g., 'Credit Card', 'UPI', 'Cash'
 }
@@ -102,8 +102,8 @@ export const ParsedAITransactionSchema = z.object({
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
   splitDetails: z.object({
-      participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
-      splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
+    participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
+    splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
   }).optional().describe("If the text mentions splitting the bill, populate this object."),
   model: z.enum(modelNames).optional(),
 });
@@ -239,8 +239,8 @@ export interface SplitUser extends SplitUserInput {
 }
 
 export const SplitExpenseParticipantInputSchema = z.object({
-    userId: z.string(),
-    customShare: z.number().min(0).optional(),
+  userId: z.string(),
+  customShare: z.number().min(0).optional(),
 });
 export type SplitExpenseParticipantInput = z.infer<typeof SplitExpenseParticipantInputSchema>;
 
@@ -252,18 +252,18 @@ export const SplitExpenseInputSchema = z.object({
   splitMethod: z.enum(['equally', 'custom'], { description: "How the bill was split" }),
   participants: z.array(SplitExpenseParticipantInputSchema).min(1, "At least one participant is required for a split."),
   personalExpenseDetails: z.object({
-      categoryId: z.string(),
-      paymentMethodId: z.string(),
+    categoryId: z.string(),
+    paymentMethodId: z.string(),
   }).optional(),
 }).refine(data => {
-    if (data.splitMethod === 'custom') {
-        const totalCustomShares = data.participants.reduce((sum, p) => sum + (p.customShare || 0), 0);
-        return Math.abs(totalCustomShares - data.totalAmount) < 0.01;
-    }
-    return true;
+  if (data.splitMethod === 'custom') {
+    const totalCustomShares = data.participants.reduce((sum, p) => sum + (p.customShare || 0), 0);
+    return Math.abs(totalCustomShares - data.totalAmount) < 0.01;
+  }
+  return true;
 }, {
-    message: "The sum of custom shares must equal the total amount.",
-    path: ['participants'],
+  message: "The sum of custom shares must equal the total amount.",
+  path: ['participants'],
 });
 export type SplitExpenseInput = z.infer<typeof SplitExpenseInputSchema>;
 

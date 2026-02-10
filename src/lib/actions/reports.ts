@@ -8,7 +8,7 @@ import { getTransactions } from "./transactions";
 export async function getMonthlyReport(month: number, year: number, model: AIModel): Promise<MonthlyFinancialReportOutput> {
   const allTransactions = await getTransactions();
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  
+
   const relevantTransactions = allTransactions
     .filter(t => {
       const transactionDate = new Date(t.date);
@@ -25,7 +25,7 @@ export async function getMonthlyReport(month: number, year: number, model: AIMod
         expenseType: t.expenseType,
       });
 
-      if(validatedData.success) {
+      if (validatedData.success) {
         return validatedData.data;
       }
       console.warn(`Skipping invalid transaction for AI report: ${t.description}`, validatedData.error.flatten().fieldErrors);
@@ -41,10 +41,9 @@ export async function getMonthlyReport(month: number, year: number, model: AIMod
     monthName: monthNames[month],
     year: year,
     transactions: relevantTransactions,
-    model: model || 'gemini-1.5-flash-latest',
+    model: model || 'gemini-3-flash-preview',
   };
 
   return await generateMonthlyFinancialReport(input);
 }
 
-    

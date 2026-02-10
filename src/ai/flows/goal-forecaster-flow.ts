@@ -20,10 +20,10 @@ export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 export async function forecastFinancialGoal(
   input: GoalForecasterInput
 ): Promise<GoalForecasterOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against the main schema before passing to AI
-    const validatedInput = GoalForecasterInputSchema.omit({model: true}).parse(input);
+    const validatedInput = GoalForecasterInputSchema.omit({ model: true }).parse(input);
     const result = await financialGoalForecasterFlow(input);
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
@@ -40,7 +40,7 @@ export async function forecastFinancialGoal(
     };
     // Check if it's a Zod validation error from our explicit parse
     if (flowError instanceof z.ZodError) {
-       return {
+      return {
         ...baseErrorReturn,
         feasibilityAssessment: "Input Error",
         suggestedActions: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`],
@@ -88,56 +88,56 @@ If goalAmount *was* provided but income is ₹0, calculate required monthly savi
 const financialGoalForecasterFlow = ai.defineFlow(
   {
     name: 'financialGoalForecasterFlow',
-    inputSchema: GoalForecasterInputSchema.omit({model: true}),
-    outputSchema: GoalForecasterOutputSchema.omit({model: true}),
+    inputSchema: GoalForecasterInputSchema.omit({ model: true }),
+    outputSchema: GoalForecasterOutputSchema.omit({ model: true }),
   },
   async (input) => {
     const model = (input as any).model || 'gemini-1.5-flash-latest';
     if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
-        return {
-            feasibilityAssessment: "Insufficient Data for Full Forecast",
-            estimatedOrProvidedGoalAmount: 0,
-            wasAmountEstimatedByAI: true, // Attempted estimation but failed due to no income
-            requiredMonthlySavings: 0,
-            suggestedActions: ["Average monthly income is zero or negative. A goal cannot be estimated or planned without positive income data. Please ensure you have recent income transactions recorded."],
-            motivationalMessage: "Update your transaction history for a more accurate forecast."
-        };
+      return {
+        feasibilityAssessment: "Insufficient Data for Full Forecast",
+        estimatedOrProvidedGoalAmount: 0,
+        wasAmountEstimatedByAI: true, // Attempted estimation but failed due to no income
+        requiredMonthlySavings: 0,
+        suggestedActions: ["Average monthly income is zero or negative. A goal cannot be estimated or planned without positive income data. Please ensure you have recent income transactions recorded."],
+        motivationalMessage: "Update your transaction history for a more accurate forecast."
+      };
     }
-     if (input.averageMonthlyIncome <= 0 && input.goalAmount && input.goalAmount > 0) {
-        return {
-            feasibilityAssessment: "Insufficient Data for Full Forecast",
-            estimatedOrProvidedGoalAmount: input.goalAmount,
-            wasAmountEstimatedByAI: false,
-            requiredMonthlySavings: input.goalAmount / input.goalDurationMonths,
-            suggestedActions: ["Average monthly income is zero or negative. While we can calculate required monthly savings for the goal, a full feasibility assessment isn't possible without positive income data."],
-            motivationalMessage: "Update your transaction history for a more accurate forecast."
-        };
+    if (input.averageMonthlyIncome <= 0 && input.goalAmount && input.goalAmount > 0) {
+      return {
+        feasibilityAssessment: "Insufficient Data for Full Forecast",
+        estimatedOrProvidedGoalAmount: input.goalAmount,
+        wasAmountEstimatedByAI: false,
+        requiredMonthlySavings: input.goalAmount / input.goalDurationMonths,
+        suggestedActions: ["Average monthly income is zero or negative. While we can calculate required monthly savings for the goal, a full feasibility assessment isn't possible without positive income data."],
+        motivationalMessage: "Update your transaction history for a more accurate forecast."
+      };
     }
 
     let output;
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(financialGoalPromptTemplate, input, GoalForecasterOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(financialGoalPromptTemplate, input, GoalForecasterOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-          name: 'financialGoalPrompt',
-          input: { schema: GoalForecasterInputSchema.omit({model: true}) },
-          output: { schema: GoalForecasterOutputSchema.omit({model: true}) },
-          config: {
-            temperature: 0.5, // Allow for some creative yet grounded advice
-            maxOutputTokens: 800,
-             safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: financialGoalPromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result.output;
+      const prompt = ai.definePrompt({
+        name: 'financialGoalPrompt',
+        input: { schema: GoalForecasterInputSchema.omit({ model: true }) },
+        output: { schema: GoalForecasterOutputSchema.omit({ model: true }) },
+        config: {
+          temperature: 0.5, // Allow for some creative yet grounded advice
+          maxOutputTokens: 800,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          ],
+        },
+        prompt: financialGoalPromptTemplate,
+      });
+      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result.output;
     }
-    
+
     if (!output) {
       throw new Error("AI analysis failed to produce a valid goal forecast.");
     }
@@ -145,4 +145,3 @@ const financialGoalForecasterFlow = ai.defineFlow(
   }
 );
 
-    

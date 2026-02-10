@@ -51,8 +51,8 @@ export type ParseReceiptImageOutput = {
 export async function parseReceiptImage(
   input: {
     receiptImageUri: string;
-    categories: {id: string; name: string; type: 'income' | 'expense'}[];
-    paymentMethods: {id: string; name: string;}[];
+    categories: { id: string; name: string; type: 'income' | 'expense' }[];
+    paymentMethods: { id: string; name: string; }[];
     model: AIModel;
   }
 ): Promise<ParseReceiptImageOutput> {
@@ -60,16 +60,16 @@ export async function parseReceiptImage(
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
-  
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
-  
+
+  const modelToUse = input.model || 'gemini-3-flash-preview';
+
   try {
-    const result = await parseReceiptImageFlow({ 
-        receiptImageUri: input.receiptImageUri,
-        categories: expenseCategoriesForAI, // Only pass expense categories
-        paymentMethods: input.paymentMethods,
-        currentDate,
-        model: modelToUse
+    const result = await parseReceiptImageFlow({
+      receiptImageUri: input.receiptImageUri,
+      categories: expenseCategoriesForAI, // Only pass expense categories
+      paymentMethods: input.paymentMethods,
+      currentDate,
+      model: modelToUse
     });
 
     // Add model name to the successful response
@@ -132,26 +132,26 @@ const parseReceiptImageFlow = ai.defineFlow(
   async (input) => {
     const model = input.model || 'gemini-1.5-flash-latest';
     if (!input.receiptImageUri) {
-        return { parsedTransaction: { error: "Receipt image URI was empty." } };
+      return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }
     if (input.categories.length === 0) {
-        console.warn("parseReceiptImageFlow: Category list was empty. AI may struggle to map categories.");
+      console.warn("parseReceiptImageFlow: Category list was empty. AI may struggle to map categories.");
     }
 
     let outputFromAI;
     try {
       if (model === 'gpt-5.2-chat') {
-          const result = await callAzureOpenAI(receiptPromptTemplate, input, z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }));
-          outputFromAI = result;
+        const result = await callAzureOpenAI(receiptPromptTemplate, input, z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }));
+        outputFromAI = result;
       } else {
-          const prompt = ai.definePrompt({
-            name: 'parseReceiptImagePrompt',
-            input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true}) },
-            output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) },
-            prompt: receiptPromptTemplate,
-          });
-          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 2000);
-          outputFromAI = result.output;
+        const prompt = ai.definePrompt({
+          name: 'parseReceiptImagePrompt',
+          input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true }) },
+          output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) },
+          prompt: receiptPromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 2000);
+        outputFromAI = result.output;
       }
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);
@@ -162,37 +162,36 @@ const parseReceiptImageFlow = ai.defineFlow(
       console.error("AI model returned no or invalid output structure for receipt parsing. Output:", outputFromAI);
       return { parsedTransaction: { error: "AI model failed to return a valid output structure for receipt parsing." } };
     }
-    
+
     // If parsedTransaction is null, it means AI decided it's unparseable, which is a valid output.
     if (outputFromAI.parsedTransaction === null) {
-        return { parsedTransaction: null };
+      return { parsedTransaction: null };
     }
 
 
     let finalDate = outputFromAI.parsedTransaction.date;
     if (outputFromAI.parsedTransaction.date) {
-        try {
-            const parsedD = parseDateFns(outputFromAI.parsedTransaction.date, 'yyyy-MM-dd', new Date());
-            if (isNaN(parsedD.getTime())) {
-                finalDate = format(new Date(), 'yyyy-MM-dd');
-            } else {
-                finalDate = outputFromAI.parsedTransaction.date;
-            }
-        } catch (e) {
-            finalDate = format(new Date(), 'yyyy-MM-dd');
+      try {
+        const parsedD = parseDateFns(outputFromAI.parsedTransaction.date, 'yyyy-MM-dd', new Date());
+        if (isNaN(parsedD.getTime())) {
+          finalDate = format(new Date(), 'yyyy-MM-dd');
+        } else {
+          finalDate = outputFromAI.parsedTransaction.date;
         }
-    } else {
+      } catch (e) {
         finalDate = format(new Date(), 'yyyy-MM-dd');
+      }
+    } else {
+      finalDate = format(new Date(), 'yyyy-MM-dd');
     }
 
     return {
-        parsedTransaction: {
-            ...outputFromAI.parsedTransaction,
-            date: finalDate,
-            amount: outputFromAI.parsedTransaction.amount && outputFromAI.parsedTransaction.amount > 0 ? outputFromAI.parsedTransaction.amount : undefined,
-        }
+      parsedTransaction: {
+        ...outputFromAI.parsedTransaction,
+        date: finalDate,
+        amount: outputFromAI.parsedTransaction.amount && outputFromAI.parsedTransaction.amount > 0 ? outputFromAI.parsedTransaction.amount : undefined,
+      }
     };
   }
 );
 
-    

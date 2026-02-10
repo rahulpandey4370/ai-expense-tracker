@@ -7,9 +7,9 @@
  * - ChatMessage - Type for chat history messages.
  */
 
-import {ai} from '@/ai/genkit';
+import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import {z}from 'genkit';
+import { z } from 'genkit';
 import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
@@ -38,6 +38,8 @@ const ChatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 
+// ... (existing imports)
+
 // Not exported - internal to the flow
 const FinancialChatbotInputSchemaInternal = z.object({
   query: z.string().describe("The user's current financial question or request."),
@@ -45,6 +47,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'all available transactions'."),
   model: z.enum(modelNames).optional(),
+  verbose: z.boolean().optional().describe("If true, the AI should provide detailed, elaborate responses. If false, concise responses."), // Add verbose
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -61,40 +64,29 @@ const monthNamesForParsing = [
   "july", "august", "september", "october", "november", "december"
 ];
 
-function getYearFromQuery(query: string): number | null {
-  const yearMatch = query.match(/\b(20[2-9][0-9])\b/); // Matches 2020-2099
-  return yearMatch ? parseInt(yearMatch[1], 10) : null;
-}
-
-function getMonthFromQuery(query: string): number | null {
-  const lowerQuery = query.toLowerCase();
-  for (let i = 0; i < monthNamesForParsing.length; i++) {
-    if (lowerQuery.includes(monthNamesForParsing[i])) {
-      return i; // 0 for January, 11 for December
-    }
-  }
-  return null;
-}
-
 export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];
   chatHistory?: ChatMessage[];
   model?: AIModel; // Add model parameter
+  verbose?: boolean; // Add verbose parameter
 }): Promise<FinancialChatbotOutput> {
+  // ... (console logs)
+
+  // ... (data scope logic)
 
   // The transactions are now pre-filtered by the dashboard page.
   // We can derive the data scope from the first transaction if available.
   let dataScopeMessage = "all available transactions";
   if (input.transactions.length > 0) {
-      const firstTransactionDate = new Date(input.transactions[0].date);
-      if(isValid(firstTransactionDate)) {
-          dataScopeMessage = `transactions for ${monthNamesForParsing[getMonth(firstTransactionDate)]} ${getYear(firstTransactionDate)}`;
-      } else {
-          dataScopeMessage = "transactions for the currently selected period."
-      }
+    const firstTransactionDate = new Date(input.transactions[0].date);
+    if (isValid(firstTransactionDate)) {
+      dataScopeMessage = `transactions for ${monthNamesForParsing[getMonth(firstTransactionDate)]} ${getYear(firstTransactionDate)}`;
+    } else {
+      dataScopeMessage = "transactions for the currently selected period."
+    }
   } else {
-      dataScopeMessage = "no transactions for the selected period."
+    dataScopeMessage = "no transactions for the selected period."
   }
 
   const aiTransactions: AITransaction[] = input.transactions
@@ -116,9 +108,10 @@ export async function askFinancialBot(input: {
     transactions: aiTransactions,
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage,
-    model: input.model
+    model: input.model,
+    verbose: input.verbose, // Pass verbose
   };
-  
+
   const result = await financialChatbotFlow(flowInput);
   return result;
 }
@@ -130,12 +123,17 @@ const financialChatbotFlow = ai.defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema,
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage, model }) => {
-    
+  async ({ query, transactions, chatHistory, dataScopeMessage, model, verbose }) => {
+
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
-    const modelToUse = model || 'gemini-1.5-flash-latest';
-    
+    const modelToUse = model || 'gemini-3-flash-preview';
+
+    // RESPONSE STYLE based on verbose flag
+    const responseStyleInstruction = verbose
+      ? "Provide comprehensive, detailed explanations. Elaborate on your analysis, explain your reasoning step-by-step, and provide additional context or tips where relevant. Do not hold back on details."
+      : "Be concise and to the point. Answer the user's question directly with minimal fluff. Only provide elaborate details if explicitly asked. Focus on the key numbers and facts.";
+
     const systemPrompt = `## PERSONALITY
 You are a professional, knowledgeable, and helpful AI Financial Assistant who communicates in a friendly yet authoritative manner. You are patient, detail-oriented, and always prioritize accuracy in financial calculations and analysis.
 
@@ -152,6 +150,7 @@ You are the AI Financial Assistant for FinWise AI, specializing in personal fina
 - Current Date: ${currentDate}
 - Transaction Data Scope: You have been provided with transactions for a specific period: **${dataScopeMessage || 'the currently selected month'}**. Your analysis and answers MUST be strictly based on this data set only.
 - Currency: All amounts are in Indian Rupees (INR)
+- **Response Style**: ${responseStyleInstruction}
 
 ## TASK
 Your primary tasks include:
@@ -183,12 +182,12 @@ Example:
 [END_TABLE]
 
 ## CONVERSATION HISTORY CONTEXT
-${chatHistory && chatHistory.length > 0 ? 
-`Previous conversation context:
+${chatHistory && chatHistory.length > 0 ?
+        `Previous conversation context:
 ${chatHistory.slice(-5).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
 
-Use this context to provide relevant follow-up responses and maintain conversation flow.` : 
-'This is the start of our conversation.'}
+Use this context to provide relevant follow-up responses and maintain conversation flow.` :
+        'This is the start of our conversation.'}
 
 ## AVAILABLE TRANSACTION DATA
 The following transaction data is available for your analysis for the period of **${dataScopeMessage}**:
@@ -201,6 +200,7 @@ ${transactions.length >= 250 ? `\n...(Note: A large number of transactions were 
 - If the user asks for yearly summaries, trends across multiple months, or data outside the provided scope, **politely inform them that your current view is limited to ${dataScopeMessage}** and suggest they use the app's 'Yearly Overview' or 'Reports' pages for broader analysis. Do NOT attempt to answer questions outside your data scope.
 - Always specify the time period your analysis covers.
 - Provide actionable insights when possible.
+- **Adhere strictly to the response style: ${verbose ? "Detailed/Verbose" : "Concise"}.**
 
 ## EXAMPLES OF GOOD RESPONSES
 - "Based on your transactions for January 2024, your total food expenses were **₹8,500.00** across 15 transactions."
@@ -223,34 +223,34 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
       });
     }
     messages.push({ role: 'user', content: query });
-    
+
     let responseText = '';
 
     if (modelToUse === 'gpt-5.2-chat') {
-        responseText = await callAzureOpenAIChat(messages);
+      responseText = await callAzureOpenAIChat(messages);
     } else {
-        const llmResponse = await retryableAIGeneration(() => ai.generate({
-          prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-          model: googleAI.model(modelToUse),
-          config: {
-            temperature: 0.1, // Lower temperature for more consistent and accurate responses
-            maxOutputTokens: 800, // Increased token limit for detailed responses
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-        }));
-        responseText = llmResponse.text;
+      const llmResponse = await retryableAIGeneration(() => ai.generate({
+        prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
+        model: googleAI.model(modelToUse),
+        config: {
+          temperature: 0.1, // Lower temperature for more consistent and accurate responses
+          maxOutputTokens: verbose ? 2000 : 800, // Increased token limit for verbose responses
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          ],
+        },
+      }));
+      responseText = llmResponse.text;
     }
 
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);
-      return { 
-          response: "I'm sorry, I encountered an issue generating a response. Please try again.",
-          model: modelToUse
+      return {
+        response: "I'm sorry, I encountered an issue generating a response. Please try again.",
+        model: modelToUse
       };
     }
     return { response: responseText, model: modelToUse };

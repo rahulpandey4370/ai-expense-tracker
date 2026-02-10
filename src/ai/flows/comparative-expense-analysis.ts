@@ -15,7 +15,7 @@ export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpense
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   const result = await comparativeExpenseAnalysisFlow(input);
   return { ...result, model: modelToUse };
 }
@@ -45,16 +45,16 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
     let output;
 
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-          name: 'comparativeExpenseAnalysisPrompt',
-          input: { schema: ComparativeExpenseAnalysisInputSchema.omit({ model: true }) },
-          output: { schema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }) },
-          prompt: universalPromptTemplate,
-        });
-        const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result;
+      const prompt = ai.definePrompt({
+        name: 'comparativeExpenseAnalysisPrompt',
+        input: { schema: ComparativeExpenseAnalysisInputSchema.omit({ model: true }) },
+        output: { schema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }) },
+        prompt: universalPromptTemplate,
+      });
+      const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result;
     }
 
     if (!output) {
@@ -64,4 +64,3 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
   }
 );
 
-    

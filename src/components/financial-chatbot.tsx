@@ -16,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
 import Link from 'next/link';
+import { useDateSelection } from '@/contexts/DateSelectionContext';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface FinancialChatbotProps {
   allTransactions: AppTransaction[];
@@ -102,8 +105,10 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVerbose, setIsVerbose] = useState<boolean>(false); // Add verbose state
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { selectedModel } = useAIModel();
+  const { selectedMonth, selectedYear } = useDateSelection();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -125,6 +130,12 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     const query = (typeof e === 'string' ? e : inputValue).trim();
     if (!query) return;
 
+    // Filter transactions based on selected month and year
+    const filteredTransactions = allTransactions.filter(t => {
+      const date = new Date(t.date);
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+    });
+
     const userMessage: ChatMessage = { role: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
@@ -134,9 +145,10 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     try {
       const result = await askFinancialBot({
         query: userMessage.content,
-        transactions: allTransactions,
+        transactions: filteredTransactions,
         chatHistory: messages.slice(-5),
         model: selectedModel,
+        verbose: isVerbose, // Pass verbose flag
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response, model: result.model };
       setMessages(prev => [...prev, assistantMessage]);
@@ -166,22 +178,30 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
         isPage ? "h-full w-full rounded-none border-none" : "h-[500px] shadow-lg",
         glowClass
       )}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="space-y-1.5">
-            <CardTitle className="flex items-center gap-2 text-xl"><Bot className="h-6 w-6 text-primary" /> FinWise AI Financial Assistant</CardTitle>
-            <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 space-y-0">
+          <div className="space-y-1">
+            <CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 text-primary" /> FinWise AI</CardTitle>
+            <CardDescription className="text-xs">Financial Assistant</CardDescription>
           </div>
-          {!isPage && (
-            <Button asChild variant="ghost" size="icon">
-              <Link href="/chatbot">
-                <Expand className="h-5 w-5" />
-                <span className="sr-only">Expand Chatbot</span>
-              </Link>
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center space-x-2">
+              <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} />
+              <Label htmlFor="verbose-mode" className="text-xs font-normal cursor-pointer">Verbose</Label>
+            </div>
+            {!isPage && (
+              <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                <Link href="/chatbot">
+                  <Expand className="h-4 w-4" />
+                  <span className="sr-only">Expand Chatbot</span>
+                </Link>
+              </Button>
+            )}
+          </div>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ScrollArea className="flex-1 pr-4 w-full" ref={scrollAreaRef}>
+        <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden p-0">
+          <ScrollArea className="flex-1 px-4 py-4 w-full" ref={scrollAreaRef}>
+            {/* ... (rest of the content) */}
+
             <div className="space-y-4 w-full max-w-full overflow-hidden">
               {messages.map((message, index) => (
                 <motion.div key={index} variants={messageVariants} initial="hidden" animate="visible" className={cn("flex items-start gap-3 w-full min-w-0 overflow-hidden")}>
@@ -203,7 +223,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
           </ScrollArea>
           <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
-              <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => {if (e.key === 'Enter' && !e.shiftKey) {e.preventDefault();handleSubmit();}}} disabled={isLoading} />
+              <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} disabled={isLoading} />
               <Button type="submit" disabled={isLoading || !inputValue.trim()} size="icon" className="bg-primary hover:bg-primary/90" withMotion>{isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}<span className="sr-only">Send</span></Button>
             </form>
           </div>

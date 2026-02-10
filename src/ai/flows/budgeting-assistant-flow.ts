@@ -18,7 +18,7 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 export async function suggestBudgetPlan(
   input: z.infer<typeof BudgetingAssistantInputSchema>
 ): Promise<BudgetingAssistantOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
@@ -28,14 +28,14 @@ export async function suggestBudgetPlan(
     console.error("Error executing budgetingAssistantFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
     const baseErrorReturn = {
-        recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: input.statedMonthlyIncome || 0 },
-        detailedSuggestions: { categoryAdjustments: [], generalTips: [] },
-        analysisSummary: `An unexpected error occurred while generating the budget: ${errorMessage}`,
-        model: modelToUse,
+      recommendedMonthlyBudget: { needs: 0, wants: 0, investmentsAsSpending: 0, targetSavings: 0, discretionarySpendingOrExtraSavings: input.statedMonthlyIncome || 0 },
+      detailedSuggestions: { categoryAdjustments: [], generalTips: [] },
+      analysisSummary: `An unexpected error occurred while generating the budget: ${errorMessage}`,
+      model: modelToUse,
     };
     if (flowError instanceof z.ZodError) {
-      return { 
-        ...baseErrorReturn, 
+      return {
+        ...baseErrorReturn,
         detailedSuggestions: { categoryAdjustments: [`Invalid input for AI: ${JSON.stringify(flowError.flatten().fieldErrors)}`], generalTips: [] },
         analysisSummary: "Could not generate budget due to input errors. Please check your income and savings goal.",
       };
@@ -96,28 +96,28 @@ const budgetingAssistantFlow = ai.defineFlow(
 
     let output;
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-            name: 'budgetingAssistantPrompt',
-            input: { schema: BudgetingAssistantInputSchema },
-            output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
-            config: {
-                temperature: 0.6,
-                maxOutputTokens: 1000,
-                 safetySettings: [
-                  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                ],
-            },
-            prompt: budgetPromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result.output;
+      const prompt = ai.definePrompt({
+        name: 'budgetingAssistantPrompt',
+        input: { schema: BudgetingAssistantInputSchema },
+        output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
+        config: {
+          temperature: 0.6,
+          maxOutputTokens: 1000,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          ],
+        },
+        prompt: budgetPromptTemplate,
+      });
+      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result.output;
     }
-    
+
     if (!output) {
       throw new Error("AI analysis failed to produce a valid budget plan.");
     }
@@ -125,4 +125,3 @@ const budgetingAssistantFlow = ai.defineFlow(
   }
 );
 
-    

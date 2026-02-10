@@ -51,13 +51,13 @@ export type ParseTransactionTextOutput = z.infer<typeof ParseTransactionTextOutp
 export async function parseTransactionsFromText(
   input: {
     naturalLanguageText: string;
-    categories: {id: string; name: string; type: 'income' | 'expense'}[]; // Combined categories from client
+    categories: { id: string; name: string; type: 'income' | 'expense' }[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
     model: AIModel;
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -68,16 +68,16 @@ export async function parseTransactionsFromText(
     .map(({ type, ...rest }) => rest);
 
   if (input.categories.length === 0) {
-      console.warn("parseTransactionsFromText called with an empty category list. AI may struggle to map categories correctly. This might indicate an upstream data loading issue for categories.");
+    console.warn("parseTransactionsFromText called with an empty category list. AI may struggle to map categories correctly. This might indicate an upstream data loading issue for categories.");
   }
   try {
     const result = await parseTransactionsFlow({
-        naturalLanguageText: input.naturalLanguageText,
-        expenseCategories: expenseCategoriesForAI,
-        incomeCategories: incomeCategoriesForAI,
-        paymentMethods: input.paymentMethods,
-        currentDate,
-        model: modelToUse,
+      naturalLanguageText: input.naturalLanguageText,
+      expenseCategories: expenseCategoriesForAI,
+      incomeCategories: incomeCategoriesForAI,
+      paymentMethods: input.paymentMethods,
+      currentDate,
+      model: modelToUse,
     });
 
     return { ...result, model: modelToUse };
@@ -90,7 +90,7 @@ export async function parseTransactionsFromText(
     } else if (errorMessage.includes("503 Service Unavailable")) {
       userFriendlyMessage = `AI model is currently overloaded: ${errorMessage}. Please try again in a few moments.`;
     } else if (error.message && error.message.includes("ZodError")) {
-       userFriendlyMessage = `AI model returned an unexpected data structure. Details: ${error.message}`;
+      userFriendlyMessage = `AI model returned an unexpected data structure. Details: ${error.message}`;
     }
     return {
       parsedTransactions: [],
@@ -177,7 +177,7 @@ const parseTransactionsFlow = ai.defineFlow(
   async (input) => {
     const model = input.model || 'gemini-1.5-flash-latest';
     if (!input.naturalLanguageText.trim()) {
-        return { parsedTransactions: [], summaryMessage: "Input text was empty." };
+      return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
@@ -185,24 +185,24 @@ const parseTransactionsFlow = ai.defineFlow(
       if (model === 'gpt-5.2-chat') {
         output = await callAzureOpenAI(parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal);
       } else {
-          const prompt = ai.definePrompt({
-            name: 'parseTransactionsPrompt',
-            input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) },
-            output: { schema: ParseTransactionTextOutputSchemaInternal },
-            config: {
-              temperature: 0.2, 
-              maxOutputTokens: 1500, 
-              safetySettings: [ 
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              ],
-            },
-            prompt: parseTransactionsPromptTemplate,
-          });
-          const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-          output = result.output;
+        const prompt = ai.definePrompt({
+          name: 'parseTransactionsPrompt',
+          input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) },
+          output: { schema: ParseTransactionTextOutputSchemaInternal },
+          config: {
+            temperature: 0.2,
+            maxOutputTokens: 1500,
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            ],
+          },
+          prompt: parseTransactionsPromptTemplate,
+        });
+        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+        output = result.output;
       }
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
@@ -210,7 +210,7 @@ const parseTransactionsFlow = ai.defineFlow(
         throw new Error(`AI model failed to process the text due to a template or schema error: ${aiError.message}. Please check server logs for AI prompt issues.`);
       }
       if (aiError.message && (aiError.message.includes("The model is overloaded") || aiError.message.includes("503 Service Unavailable"))) {
-          throw new Error(`AI model is currently overloaded: ${aiError.message}. Please try again in a few moments.`);
+        throw new Error(`AI model is currently overloaded: ${aiError.message}. Please try again in a few moments.`);
       }
       throw new Error(`AI model failed to process the text: ${aiError.message || 'Unknown AI error'}`);
     }
@@ -236,39 +236,38 @@ const parseTransactionsFlow = ai.defineFlow(
         if (tx.date) {
           const parsedD = parseDateFns(tx.date, 'yyyy-MM-dd', new Date());
           if (isNaN(parsedD.getTime())) {
-            finalDate = format(new Date(), 'yyyy-MM-dd'); 
+            finalDate = format(new Date(), 'yyyy-MM-dd');
           } else {
-            finalDate = tx.date; 
+            finalDate = tx.date;
           }
         } else {
-           finalDate = format(new Date(), 'yyyy-MM-dd'); 
+          finalDate = format(new Date(), 'yyyy-MM-dd');
         }
       } catch (e) {
-        finalDate = format(new Date(), 'yyyy-MM-dd'); 
+        finalDate = format(new Date(), 'yyyy-MM-dd');
       }
       return {
         ...tx,
         date: finalDate,
-        amount: tx.amount && tx.amount > 0 ? tx.amount : 0, 
+        amount: tx.amount && tx.amount > 0 ? tx.amount : 0,
       };
     }).filter(tx => {
-        if (!tx.amount || tx.amount <= 0 || !tx.description) {
-            return false;
-        }
-        // Create a unique key for each transaction to filter out exact duplicates
-        const uniqueKey = `${tx.date}-${tx.description}-${tx.amount}-${tx.type}`;
-        if (seen.has(uniqueKey)) {
-            return false;
-        }
-        seen.add(uniqueKey);
-        return true;
+      if (!tx.amount || tx.amount <= 0 || !tx.description) {
+        return false;
+      }
+      // Create a unique key for each transaction to filter out exact duplicates
+      const uniqueKey = `${tx.date}-${tx.description}-${tx.amount}-${tx.type}`;
+      if (seen.has(uniqueKey)) {
+        return false;
+      }
+      seen.add(uniqueKey);
+      return true;
     });
 
     return {
-        parsedTransactions: validatedTransactions,
-        summaryMessage: output.summaryMessage || (validatedTransactions.length > 0 ? "Processing complete." : "AI could not identify any valid transactions in the text.")
+      parsedTransactions: validatedTransactions,
+      summaryMessage: output.summaryMessage || (validatedTransactions.length > 0 ? "Processing complete." : "AI could not identify any valid transactions in the text.")
     };
   }
 );
 
-    

@@ -12,11 +12,11 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { 
-    FixedExpenseAnalyzerInputSchema, 
-    FixedExpenseAnalyzerOutputSchema, 
-    type FixedExpenseAnalyzerOutput,
-    type AIModel
+import {
+  FixedExpenseAnalyzerInputSchema,
+  FixedExpenseAnalyzerOutputSchema,
+  type FixedExpenseAnalyzerOutput,
+  type AIModel
 } from '@/lib/types';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
@@ -25,9 +25,9 @@ export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInput
 export async function analyzeFixedExpenses(
   input: FixedExpenseAnalyzerInput
 ): Promise<FixedExpenseAnalyzerOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
-    const validatedInput = FixedExpenseAnalyzerInputSchema.omit({model: true}).parse(input);
+    const validatedInput = FixedExpenseAnalyzerInputSchema.omit({ model: true }).parse(input);
     if (validatedInput.transactions.length === 0) {
       return {
         identifiedExpenses: [],
@@ -42,10 +42,10 @@ export async function analyzeFixedExpenses(
     console.error("Error executing fixedExpenseAnalyzerFlow in wrapper:", flowError);
     const errorMessage = flowError.message || 'Unknown error during AI processing.';
     const baseErrorReturn = {
-        identifiedExpenses: [],
-        totalFixedExpenses: 0,
-        summary: `An unexpected error occurred while analyzing fixed expenses: ${errorMessage}`,
-        model: modelToUse,
+      identifiedExpenses: [],
+      totalFixedExpenses: 0,
+      summary: `An unexpected error occurred while analyzing fixed expenses: ${errorMessage}`,
+      model: modelToUse,
     };
     if (flowError instanceof z.ZodError) {
       return {
@@ -95,36 +95,36 @@ IMPORTANT:
 const fixedExpenseAnalyzerFlow = ai.defineFlow(
   {
     name: 'fixedExpenseAnalyzerFlow',
-    inputSchema: FixedExpenseAnalyzerInputSchema.omit({model: true}),
-    outputSchema: FixedExpenseAnalyzerOutputSchema.omit({model: true}),
+    inputSchema: FixedExpenseAnalyzerInputSchema.omit({ model: true }),
+    outputSchema: FixedExpenseAnalyzerOutputSchema.omit({ model: true }),
   },
   async (input) => {
     const model = (input as any).model || 'gemini-1.5-flash-latest';
     let output;
 
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({model: true}));
+      output = await callAzureOpenAI(fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-          name: 'fixedExpenseAnalyzerPrompt',
-          input: { schema: FixedExpenseAnalyzerInputSchema.omit({model: true}) },
-          output: { schema: FixedExpenseAnalyzerOutputSchema.omit({model: true}) },
-          config: {
-            temperature: 0.2, // Low temperature for factual analysis
-            maxOutputTokens: 1000,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: fixedExpensePromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result.output;
+      const prompt = ai.definePrompt({
+        name: 'fixedExpenseAnalyzerPrompt',
+        input: { schema: FixedExpenseAnalyzerInputSchema.omit({ model: true }) },
+        output: { schema: FixedExpenseAnalyzerOutputSchema.omit({ model: true }) },
+        config: {
+          temperature: 0.2, // Low temperature for factual analysis
+          maxOutputTokens: 1000,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          ],
+        },
+        prompt: fixedExpensePromptTemplate,
+      });
+      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result.output;
     }
-    
+
     if (!output) {
       throw new Error("AI analysis failed to produce a valid fixed expense analysis.");
     }
@@ -132,4 +132,3 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
   }
 );
 
-    

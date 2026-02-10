@@ -18,9 +18,9 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 export async function getFinancialHealthCheck(
   input: z.infer<typeof FinancialHealthCheckInputSchema>
 ): Promise<FinancialHealthCheckOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
-    const validatedInput = FinancialHealthCheckInputSchema.omit({model: true}).parse(input);
+    const validatedInput = FinancialHealthCheckInputSchema.omit({ model: true }).parse(input);
     const result = await financialHealthCheckFlow(input);
     return { ...result, model: modelToUse };
   } catch (flowError: any) {
@@ -67,36 +67,36 @@ Your Task:
 const financialHealthCheckFlow = ai.defineFlow(
   {
     name: 'financialHealthCheckFlow',
-    inputSchema: FinancialHealthCheckInputSchema.omit({model: true}),
-    outputSchema: FinancialHealthCheckOutputSchema.omit({model: true}),
+    inputSchema: FinancialHealthCheckInputSchema.omit({ model: true }),
+    outputSchema: FinancialHealthCheckOutputSchema.omit({ model: true }),
   },
   async (input) => {
     const model = (input as any).model || 'gemini-1.5-flash-latest';
     let output;
 
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(healthCheckPromptTemplate, input, FinancialHealthCheckOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(healthCheckPromptTemplate, input, FinancialHealthCheckOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-          name: 'financialHealthCheckPrompt',
-          input: { schema: FinancialHealthCheckInputSchema.omit({model: true}) },
-          output: { schema: FinancialHealthCheckOutputSchema.omit({model: true}) },
-          config: {
-            temperature: 0.4,
-            maxOutputTokens: 400,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: healthCheckPromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result.output;
+      const prompt = ai.definePrompt({
+        name: 'financialHealthCheckPrompt',
+        input: { schema: FinancialHealthCheckInputSchema.omit({ model: true }) },
+        output: { schema: FinancialHealthCheckOutputSchema.omit({ model: true }) },
+        config: {
+          temperature: 0.4,
+          maxOutputTokens: 400,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          ],
+        },
+        prompt: healthCheckPromptTemplate,
+      });
+      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result.output;
     }
-    
+
     if (!output) {
       throw new Error("AI analysis failed to produce a valid health check summary.");
     }
@@ -104,4 +104,3 @@ const financialHealthCheckFlow = ai.defineFlow(
   }
 );
 
-    

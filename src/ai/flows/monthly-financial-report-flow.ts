@@ -10,7 +10,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const result = await monthlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -70,28 +70,28 @@ const monthlyFinancialReportFlow = ai.defineFlow(
   },
   async (input) => {
     const model = input.model || 'gemini-1.5-flash-latest';
-    
+
     // Create the prompt input, excluding the model property
     const promptInput = {
       monthName: input.monthName,
       year: input.year,
       transactions: input.transactions,
     };
-    
+
     let output;
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-            name: 'monthlyFinancialReportPrompt',
-            input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
-            output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
-            prompt: reportPromptTemplate,
-        });
-        const { output: result } = await retryableAIGeneration(() => prompt(promptInput, { model: googleAI.model(model) }));
-        output = result;
+      const prompt = ai.definePrompt({
+        name: 'monthlyFinancialReportPrompt',
+        input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
+        output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
+        prompt: reportPromptTemplate,
+      });
+      const { output: result } = await retryableAIGeneration(() => prompt(promptInput, { model: googleAI.model(model) }));
+      output = result;
     }
-    
+
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");
     }

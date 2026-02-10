@@ -10,7 +10,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
 export async function analyzeOpportunityCost(input: OpportunityCostInput): Promise<OpportunityCostOutput> {
-  const modelToUse = input.model || 'gemini-1.5-flash-latest';
+  const modelToUse = input.model || 'gemini-3-flash-preview';
   try {
     const result = await opportunityCostAnalysisFlow(input);
     return { ...result, model: modelToUse };
@@ -70,18 +70,18 @@ const opportunityCostAnalysisFlow = ai.defineFlow(
     let output;
 
     if (model === 'gpt-5.2-chat') {
-        output = await callAzureOpenAI(analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
     } else {
-        const prompt = ai.definePrompt({
-          name: 'opportunityCostAnalysisPrompt',
-          input: { schema: OpportunityCostInputSchema.omit({ model: true }) },
-          output: { schema: OpportunityCostOutputSchema.omit({ model: true }) },
-          prompt: analysisPromptTemplate,
-        });
-        const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result;
+      const prompt = ai.definePrompt({
+        name: 'opportunityCostAnalysisPrompt',
+        input: { schema: OpportunityCostInputSchema.omit({ model: true }) },
+        output: { schema: OpportunityCostOutputSchema.omit({ model: true }) },
+        prompt: analysisPromptTemplate,
+      });
+      const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      output = result;
     }
-    
+
     if (!output) {
       throw new Error("Opportunity cost analysis failed to produce a valid output.");
     }
