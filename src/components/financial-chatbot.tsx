@@ -172,11 +172,12 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
             <CardDescription>Ask questions about your finances. Powered by AI.</CardDescription>
           </div>
           {!isPage && (
-            <Link href="/chatbot" passHref>
-              <Button asChild variant="ghost" size="icon">
-                <a><Expand className="h-5 w-5" /><span className="sr-only">Expand Chatbot</span></a>
-              </Button>
-            </Link>
+            <Button asChild variant="ghost" size="icon">
+              <Link href="/chatbot">
+                <Expand className="h-5 w-5" />
+                <span className="sr-only">Expand Chatbot</span>
+              </Link>
+            </Button>
           )}
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden">
