@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/chart"
 import type { AppTransaction } from "@/lib/types"
 import { subMonths, getMonth, getYear } from "date-fns";
+import { isSameCalendarMonth } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 
 interface IncomeExpenseTrendChartProps {
@@ -40,19 +41,16 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
       const year = getYear(targetDate);
 
       const monthlyIncome = transactions
-        .filter(t => {
-            const transactionDate = new Date(t.date);
-            return t.type === 'income' && transactionDate.getMonth() === month && transactionDate.getFullYear() === year;
-        })
+        .filter(t =>
+            t.type === 'income' && isSameCalendarMonth(t.date, month, year)
+        )
         .reduce((sum, t) => sum + t.amount, 0);
 
       const monthlyTotalExpenses = transactions
-        .filter(t => {
-            const transactionDate = new Date(t.date);
-            return t.type === 'expense' && // All expense types
-                   transactionDate.getMonth() === month &&
-                   transactionDate.getFullYear() === year;
-        })
+        .filter(t =>
+            t.type === 'expense' && // All expense types
+            isSameCalendarMonth(t.date, month, year)
+        )
         .reduce((sum, t) => sum + t.amount, 0);
 
       data.push({

@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
 import { format } from "date-fns";
+import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users } from "lucide-react";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
@@ -152,15 +153,13 @@ export default function TransactionsPage() {
     let tempTransactions = [...allTransactions];
 
     if (viewMode === 'selected_month') {
-      tempTransactions = tempTransactions.filter(t => {
-        const transactionDate = t.date;
-        return transactionDate && transactionDate.getUTCMonth() === selectedMonth && transactionDate.getUTCFullYear() === selectedYear;
-      });
-    } else { 
-      tempTransactions = tempTransactions.filter(t => {
-        const transactionDate = t.date;
-        return transactionDate && transactionDate.getUTCFullYear() === selectedYear;
-      });
+      tempTransactions = tempTransactions.filter(t =>
+        isSameCalendarMonth(t.date, selectedMonth, selectedYear)
+      );
+    } else {
+      tempTransactions = tempTransactions.filter(t =>
+        isSameCalendarYear(t.date, selectedYear)
+      );
     }
 
     if (searchTerm) {
@@ -333,7 +332,7 @@ export default function TransactionsPage() {
     const rows = filteredTransactions.map(t => [
       t.id,
       t.type,
-      format(new Date(t.date), "yyyy-MM-dd"),
+      getCalendarDateString(t.date) || format(new Date(t.date), "yyyy-MM-dd"),
       t.amount.toFixed(2),
       `"${(t.description || '').replace(/"/g, '""')}"`,
       t.category?.name || t.source || '',
@@ -512,7 +511,7 @@ export default function TransactionsPage() {
                         />
                         <div className="flex-1">
                           <p className="font-semibold text-foreground flex items-center gap-1.5">{t.description}</p>
-                          <p className="text-xs text-muted-foreground">{format(new Date(t.date), "dd MMM, yyyy")}</p>
+                          <p className="text-xs text-muted-foreground">{format(toCalendarDate(t.date) || new Date(t.date), "dd MMM, yyyy")}</p>
                         </div>
                         <p className={cn("text-lg font-bold", t.type === 'income' ? 'text-green-500' : 'text-red-500')}>
                           {t.type === 'income' ? '+' : '-'}₹{t.amount.toFixed(2)}
@@ -593,7 +592,7 @@ export default function TransactionsPage() {
                               aria-label={`Select transaction ${transaction.description}`}
                             />
                           </TableCell>
-                          <TableCell className="text-foreground/90 whitespace-nowrap">{format(new Date(transaction.date), "dd MMM, yy")}</TableCell>
+                          <TableCell className="text-foreground/90 whitespace-nowrap">{format(toCalendarDate(transaction.date) || new Date(transaction.date), "dd MMM, yy")}</TableCell>
                           <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
                           <TableCell>
                             <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}

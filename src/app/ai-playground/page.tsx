@@ -20,6 +20,7 @@ import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
 import { getFinancialHealthCheck } from '@/ai/flows/financial-health-check-flow';
 import { analyzeFixedExpenses } from '@/ai/flows/fixed-expense-analyzer-flow';
 import { subMonths, getMonth, getYear, startOfMonth, endOfMonth, format, addMonths, differenceInMonths, startOfWeek, endOfWeek } from 'date-fns';
+import { getCalendarDateString, isSameCalendarMonth, toCalendarDate } from '@/lib/date-utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
@@ -135,10 +136,9 @@ export default function AIPlaygroundPage() {
     setAiFixedExpenseAnalysis(null);
     setAiFixedExpenseError(null);
 
-    const targetMonthTransactions = allTransactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      return transactionDate.getFullYear() === fixedExpenseYear && transactionDate.getMonth() === fixedExpenseMonth && t.type === 'expense';
-    });
+    const targetMonthTransactions = allTransactions.filter(t =>
+      isSameCalendarMonth(t.date, fixedExpenseMonth, fixedExpenseYear) && t.type === 'expense'
+    );
     
      if (targetMonthTransactions.length === 0) {
       toast({ title: "No Data", description: `No expense transactions found for ${monthNamesList[fixedExpenseMonth]} ${fixedExpenseYear}.`, variant: "default" });
@@ -150,7 +150,7 @@ export default function AIPlaygroundPage() {
     const aiTransactions: AITransactionForAnalysis[] = targetMonthTransactions.map(t => ({
       description: t.description,
       amount: t.amount,
-      date: t.date.toISOString(),
+      date: getCalendarDateString(t.date) || t.date.toISOString(),
       categoryName: t.category?.name,
     }));
 
@@ -194,8 +194,7 @@ export default function AIPlaygroundPage() {
 
       let monthHasData = false;
       allTransactions.forEach(t => {
-        const transactionDate = new Date(t.date);
-        if (transactionDate.getFullYear() === getYear(targetDate) && transactionDate.getMonth() === getMonth(targetDate)) {
+        if (isSameCalendarMonth(t.date, getMonth(targetDate), getYear(targetDate))) {
           monthHasData = true;
           if (t.type === 'income') totalIncomeLast6Months += t.amount;
           if (t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name))) {
@@ -381,8 +380,7 @@ export default function AIPlaygroundPage() {
 
       let monthHasData = false;
       allTransactions.forEach(t => {
-        const transactionDate = new Date(t.date);
-        if (transactionDate >= monthStart && transactionDate <= monthEnd) {
+        if (isSameCalendarMonth(t.date, getMonth(monthStart), getYear(monthStart))) {
           monthHasData = true;
           if (t.type === 'expense') {
             if (t.expenseType === 'need' || t.expenseType === 'want') {
@@ -466,7 +464,8 @@ export default function AIPlaygroundPage() {
 
   const getTransactionsForDateRange = (startDate: Date, endDate: Date): AppTransaction[] => {
     return allTransactions.filter(t => {
-      const transactionDate = new Date(t.date);
+      const transactionDate = toCalendarDate(t.date);
+      if (!transactionDate) return false;
       return transactionDate >= startDate && transactionDate <= endDate;
     });
   };

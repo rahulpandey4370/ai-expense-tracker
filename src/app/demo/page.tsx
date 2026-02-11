@@ -18,6 +18,7 @@ import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { mockTransactions, mockCategories, mockPaymentMethods } from '@/lib/mock-data';
+import { isSameCalendarMonth } from '@/lib/date-utils';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -87,10 +88,7 @@ export default function DemoDashboardPage() {
 
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
-      t => {
-        const transactionDate = new Date(t.date);
-        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
-      }
+      t => isSameCalendarMonth(t.date, selectedMonth, selectedYear)
     );
   }, [transactions, selectedMonth, selectedYear]);
 
@@ -142,13 +140,11 @@ export default function DemoDashboardPage() {
     const yearForLastMonth = prevMonthDate.getFullYear();
 
     return transactions
-      .filter(t => {
-        const transactionDate = new Date(t.date);
-        return t.type === 'expense' && 
-               (t.expenseType === 'need' || t.expenseType === 'want') &&
-               transactionDate.getMonth() === lastMonth && 
-               transactionDate.getFullYear() === yearForLastMonth;
-      })
+      .filter(t =>
+        t.type === 'expense' && 
+        (t.expenseType === 'need' || t.expenseType === 'want') &&
+        isSameCalendarMonth(t.date, lastMonth, yearForLastMonth)
+      )
       .reduce((sum, t) => sum + t.amount, 0) || 0;
   }, [transactions, selectedDate]);
 

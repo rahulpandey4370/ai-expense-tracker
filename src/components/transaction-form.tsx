@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins, Users } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
+import { toCalendarDate } from "@/lib/date-utils";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
@@ -1056,7 +1057,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <PopoverTrigger asChild>
                         <Button variant={"outline"} size="sm" className={cn(popoverButtonClasses, "text-xs h-8 mt-0.5")} >
                             <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-accent" />
-                            {tx.date ? format(new Date(tx.date), "PPP") : <span>Pick date</span>}
+                            {tx.date ? format(toCalendarDate(tx.date) || new Date(tx.date), "PPP") : <span>Pick date</span>}
                         </Button>
                         </PopoverTrigger>
                         <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={tx.date instanceof Date ? tx.date : new Date(tx.date)} onSelect={(d) => handleAIReviewChange(index, 'date', d)} initialFocus className={calendarClasses} /></PopoverContent>
@@ -1205,7 +1206,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                                 <PopoverTrigger asChild>
                                 <Button variant={"outline"} size="sm" className={cn(popoverButtonClasses, "text-xs h-8 mt-0.5")} >
                                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-accent" />
-                                    {aiReceiptReviewTransaction.date ? format(new Date(aiReceiptReviewTransaction.date), "PPP") : <span>Pick date</span>}
+                                    {aiReceiptReviewTransaction.date ? format(toCalendarDate(aiReceiptReviewTransaction.date) || new Date(aiReceiptReviewTransaction.date), "PPP") : <span>Pick date</span>}
                                 </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={aiReceiptReviewTransaction.date instanceof Date ? aiReceiptReviewTransaction.date : new Date(aiReceiptReviewTransaction.date)} onSelect={(d) => handleAIReceiptReviewChange('date', d)} initialFocus className={calendarClasses} /></PopoverContent>

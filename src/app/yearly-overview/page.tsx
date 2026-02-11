@@ -15,6 +15,7 @@ import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
+import { getCalendarYear, isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
 
@@ -74,7 +75,7 @@ export default function YearlyOverviewPage() {
 
   const availableYears = useMemo(() => {
     if (allTransactions.length === 0 && !isLoadingData) return [new Date().getFullYear()];
-    const years = new Set(allTransactions.map(t => new Date(t.date).getFullYear()));
+    const years = new Set(allTransactions.map(t => getCalendarYear(t.date)).filter((y): y is number => y !== null));
     const currentYear = new Date().getFullYear();
     if (!years.has(currentYear)) years.add(currentYear);
     if(years.size === 0) return [new Date().getFullYear()]; // Fallback if no transactions at all
@@ -114,8 +115,7 @@ export default function YearlyOverviewPage() {
     const summary: MonthlySummary[] = [];
     for (let i = 0; i < 12; i++) { 
       const monthTransactions = allTransactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return transactionDate.getFullYear() === selectedYear && transactionDate.getMonth() === i;
+        return isSameCalendarMonth(t.date, i, selectedYear);
       });
 
       const totalIncome = monthTransactions
@@ -170,7 +170,7 @@ export default function YearlyOverviewPage() {
   const categoryWiseYearlySpend = useMemo(() => {
     const spendingMap = new Map<string, number>();
     allTransactions
-      .filter(t => new Date(t.date).getFullYear() === selectedYear && t.type === 'expense' && t.category)
+      .filter(t => isSameCalendarYear(t.date, selectedYear) && t.type === 'expense' && t.category)
       .forEach(t => {
         const categoryName = t.category!.name;
         spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
@@ -224,7 +224,7 @@ export default function YearlyOverviewPage() {
               </Select>
             </div>
 
-            {allTransactions.filter(t => new Date(t.date).getFullYear() === selectedYear).length === 0 ? (
+            {allTransactions.filter(t => isSameCalendarYear(t.date, selectedYear)).length === 0 ? (
               <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
                 <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                 <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for {selectedYear}</AlertTitle>
@@ -298,7 +298,7 @@ export default function YearlyOverviewPage() {
                                 const percentage = yearlyTotals.totalSpend > 0 ? (cat.totalAmount / yearlyTotals.totalSpend) * 100 : 0;
                                 const colorClass = progressColors[index % progressColors.length];
                                 
-                                const transactionsForCategory = allTransactions.filter(tx => tx.category?.name === cat.categoryName && new Date(tx.date).getFullYear() === selectedYear);
+                                const transactionsForCategory = allTransactions.filter(tx => tx.category?.name === cat.categoryName && isSameCalendarYear(tx.date, selectedYear));
 
                                 return (
                                   <Popover key={index}>

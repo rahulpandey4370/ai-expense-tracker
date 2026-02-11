@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import type { AppTransaction } from "@/lib/types";
 import { format } from "date-fns";
+import { toCalendarDate } from "@/lib/date-utils";
 import { ArrowDownCircle, ArrowUpCircle, ListChecks, Users, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from '@/components/ui/button';
@@ -106,7 +107,7 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                            <p className="font-medium text-sm text-foreground">{transaction.description}</p>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(transaction.date), "MMM d, yyyy")}
+                          {format(toCalendarDate(transaction.date) || new Date(transaction.date), "MMM d, yyyy")}
                           {transaction.type === 'expense' && transaction.category && ` • ${transaction.category.name}`} 
                           {transaction.type === 'income' && transaction.source && ` • ${transaction.source}`}
                         </p>

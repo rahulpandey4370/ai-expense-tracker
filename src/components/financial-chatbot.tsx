@@ -17,6 +17,7 @@ import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
 import Link from 'next/link';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
+import { isSameCalendarMonth } from '@/lib/date-utils';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -131,10 +132,9 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     if (!query) return;
 
     // Filter transactions based on selected month and year
-    const filteredTransactions = allTransactions.filter(t => {
-      const date = new Date(t.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
-    });
+    const filteredTransactions = allTransactions.filter(t =>
+      isSameCalendarMonth(t.date, selectedMonth, selectedYear)
+    );
 
     const userMessage: ChatMessage = { role: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);

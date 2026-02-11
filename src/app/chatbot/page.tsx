@@ -7,6 +7,7 @@ import type { AppTransaction } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
+import { isSameCalendarMonth } from '@/lib/date-utils';
 
 export default function ChatbotPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
@@ -37,10 +38,9 @@ export default function ChatbotPage() {
   }, [fetchAllTransactions]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
-    });
+    return transactions.filter(t =>
+      isSameCalendarMonth(t.date, selectedMonth, selectedYear)
+    );
   }, [transactions, selectedMonth, selectedYear]);
 
   if (isLoading) {

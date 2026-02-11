@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
+import { isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
 
@@ -108,13 +109,10 @@ export default function ReportsPage() {
 
   const filteredTransactionsForPeriod = useMemo(() => {
     return allTransactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      const transactionYear = transactionDate.getFullYear();
-      const transactionMonth = transactionDate.getMonth();
       if (reportMonth === -1) { // Annual report
-        return transactionYear === reportYear;
+        return isSameCalendarYear(t.date, reportYear);
       }
-      return transactionYear === reportYear && transactionMonth === reportMonth;
+      return isSameCalendarMonth(t.date, reportMonth, reportYear);
     });
   }, [allTransactions, reportYear, reportMonth]);
   

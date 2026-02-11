@@ -4,22 +4,20 @@
 import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
 import { AITransactionForAnalysisSchema, type AIModel, modelNames } from "@/lib/types";
 import { getTransactions } from "./transactions";
+import { getCalendarDateString, isSameCalendarMonth } from "@/lib/date-utils";
 
 export async function getMonthlyReport(month: number, year: number, model: AIModel): Promise<MonthlyFinancialReportOutput> {
   const allTransactions = await getTransactions();
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   const relevantTransactions = allTransactions
-    .filter(t => {
-      const transactionDate = new Date(t.date);
-      return transactionDate.getMonth() === month && transactionDate.getFullYear() === year;
-    })
+    .filter(t => isSameCalendarMonth(t.date, month, year))
     .map(t => {
       // Validate and transform each transaction to match AITransactionForAnalysisSchema
       const validatedData = AITransactionForAnalysisSchema.safeParse({
         description: t.description,
         amount: t.amount,
-        date: t.date.toISOString(),
+        date: getCalendarDateString(t.date) || t.date.toISOString(),
         categoryName: t.category?.name,
         paymentMethodName: t.paymentMethod?.name,
         expenseType: t.expenseType,
@@ -46,4 +44,3 @@ export async function getMonthlyReport(month: number, year: number, model: AIMod
 
   return await generateMonthlyFinancialReport(input);
 }
-

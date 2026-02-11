@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/chart"
 import type { AppTransaction } from "@/lib/types" 
 import { subMonths, getMonth, getYear } from "date-fns";
+import { isSameCalendarMonth } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 
 interface MonthlySpendingTrendChartProps {
@@ -39,12 +40,10 @@ export function MonthlySpendingTrendChart({ transactions, numberOfMonths = 6 }: 
 
       const monthlySpending = transactions
         .filter(t => {
-            const transactionDate = new Date(t.date);
             // Core Expenses: 'need' or 'want'
             return t.type === 'expense' && 
                    (t.expenseType === 'need' || t.expenseType === 'want') &&
-                   transactionDate.getMonth() === month && 
-                   transactionDate.getFullYear() === year;
+                   isSameCalendarMonth(t.date, month, year);
         })
         .reduce((sum, t) => sum + t.amount, 0);
       

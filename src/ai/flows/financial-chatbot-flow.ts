@@ -12,7 +12,8 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { getMonth, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { getCalendarDateParts, getCalendarDateString } from '@/lib/date-utils';
 import { callAzureOpenAIChat } from '@/lib/azure-openai';
 import { modelNames } from '@/lib/types';
 
@@ -79,9 +80,10 @@ export async function askFinancialBot(input: {
   // We can derive the data scope from the first transaction if available.
   let dataScopeMessage = "all available transactions";
   if (input.transactions.length > 0) {
-    const firstTransactionDate = new Date(input.transactions[0].date);
-    if (isValid(firstTransactionDate)) {
-      dataScopeMessage = `transactions for ${monthNamesForParsing[getMonth(firstTransactionDate)]} ${getYear(firstTransactionDate)}`;
+    const firstTransactionDate = input.transactions[0].date;
+    const parts = getCalendarDateParts(firstTransactionDate);
+    if (parts) {
+      dataScopeMessage = `transactions for ${monthNamesForParsing[parts.month]} ${parts.year}`;
     } else {
       dataScopeMessage = "transactions for the currently selected period."
     }
@@ -94,7 +96,7 @@ export async function askFinancialBot(input: {
     .map(t => ({
       id: t.id,
       type: t.type,
-      date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
+      date: getCalendarDateString(t.date) || (t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString()),
       amount: t.amount,
       description: t.description,
       categoryName: t.category?.name,

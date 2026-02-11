@@ -24,6 +24,7 @@ import { BudgetTrackerCard } from '@/components/budget-tracker-card';
 import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
+import { isSameCalendarMonth } from '@/lib/date-utils';
 import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 import { OpportunityCostAnalyzer } from '@/components/opportunity-cost-analyzer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -121,10 +122,7 @@ export default function DashboardPage() {
 
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
-      t => {
-        const transactionDate = t.date; // Already a Date object
-        return transactionDate.getMonth() === selectedMonth && transactionDate.getFullYear() === selectedYear;
-      }
+      t => isSameCalendarMonth(t.date, selectedMonth, selectedYear)
     );
   }, [transactions, selectedMonth, selectedYear]);
 
@@ -181,10 +179,9 @@ export default function DashboardPage() {
     const lastMonth = prevMonthDate.getMonth();
     const yearForLastMonth = prevMonthDate.getFullYear();
 
-    const lastMonthTransactions = transactions.filter(t => {
-        const transactionDate = t.date;
-        return transactionDate.getMonth() === lastMonth && transactionDate.getFullYear() === yearForLastMonth;
-    });
+    const lastMonthTransactions = transactions.filter(t =>
+      isSameCalendarMonth(t.date, lastMonth, yearForLastMonth)
+    );
 
     const lastMonthCoreExpenses = lastMonthTransactions
         .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want'))
