@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize2 } from "lucide-react";
+import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize2, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types";
@@ -101,14 +101,74 @@ const MarkdownContent = ({ content }: { content: string }) => {
   );
 };
 
+// Per-session keys so embedded + fullscreen views share the same conversation.
+const CHAT_SESSION_KEY = 'finwise.chat.messages.v1';
+const CHAT_FOLLOWUPS_KEY = 'finwise.chat.followUps.v1';
+
+function loadSessionMessages(): ChatMessage[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(CHAT_SESSION_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as ChatMessage[] : [];
+  } catch {
+    return [];
+  }
+}
+function loadSessionFollowUps(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(CHAT_FOLLOWUPS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function FinancialChatbot({ allTransactions, isPage = false }: FinancialChatbotProps) {
+  // Hydrate from sessionStorage so navigating between dashboard ↔ /chatbot does not lose context.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isVerbose, setIsVerbose] = useState<boolean>(false); // Add verbose state
   const [followUps, setFollowUps] = useState<string[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMessages(loadSessionMessages());
+    setFollowUps(loadSessionFollowUps());
+    setHydrated(true);
+  }, []);
+
+  // Persist messages whenever they change, but only after initial hydration so we don't wipe storage on mount.
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify(messages));
+    } catch {/* quota; ignore */}
+  }, [messages, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem(CHAT_FOLLOWUPS_KEY, JSON.stringify(followUps));
+    } catch {/* ignore */}
+  }, [followUps, hydrated]);
+
+  const handleClearConversation = () => {
+    setMessages([]);
+    setFollowUps([]);
+    setError(null);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(CHAT_SESSION_KEY);
+      sessionStorage.removeItem(CHAT_FOLLOWUPS_KEY);
+    }
+  };
   const { selectedModel } = useAIModel();
   const { selectedMonth, selectedYear } = useDateSelection();
 
@@ -191,6 +251,12 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
               <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} />
               <Label htmlFor="verbose-mode" className="text-xs font-normal cursor-pointer">Verbose</Label>
             </div>
+            {messages.length > 0 && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Clear conversation" onClick={handleClearConversation}>
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Clear conversation</span>
+              </Button>
+            )}
             {!isPage ? (
               <Button asChild variant="ghost" size="icon" className="h-8 w-8">
                 <Link href="/chatbot">

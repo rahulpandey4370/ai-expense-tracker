@@ -10,7 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar } from "lucide-react";
+import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2, Sparkles } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { parseRecurringRuleFromText } from "@/ai/flows/parse-recurring-rule-flow";
+import { useAIModel } from "@/contexts/AIModelContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +44,7 @@ const todayYmd = () => {
 
 export default function RecurringPage() {
   const { toast } = useToast();
+  const { selectedModel } = useAIModel();
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -55,10 +59,16 @@ export default function RecurringPage() {
   const [categoryId, setCategoryId] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [expenseType, setExpenseType] = useState<'need' | 'want' | 'investment'>('need');
-  const [dayOfMonth, setDayOfMonth] = useState(1);
+  // dayOfMonth as text so we can disable spinner UI and validate manually.
+  const [dayOfMonth, setDayOfMonth] = useState<string>('1');
   const [startDate, setStartDate] = useState(todayYmd());
   const [endDate, setEndDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // AI natural-language entry
+  const [aiInput, setAiInput] = useState('');
+  const [isAiParsing, setIsAiParsing] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
@@ -85,15 +95,71 @@ export default function RecurringPage() {
     setCategoryId('');
     setPaymentMethodId('');
     setExpenseType('need');
-    setDayOfMonth(1);
+    setDayOfMonth('1');
     setStartDate(todayYmd());
     setEndDate('');
+    setAiNote(null);
+  };
+
+  const handleDayOfMonthChange = (raw: string) => {
+    // Allow empty (mid-typing) and digits only; clamp to 1..31.
+    const cleaned = raw.replace(/[^0-9]/g, '').slice(0, 2);
+    if (cleaned === '') { setDayOfMonth(''); return; }
+    const n = parseInt(cleaned, 10);
+    if (Number.isNaN(n)) { setDayOfMonth(''); return; }
+    if (n > 31) { setDayOfMonth('31'); return; }
+    setDayOfMonth(String(n));
+  };
+
+  const handleAiFill = async () => {
+    if (!aiInput.trim()) {
+      toast({ title: "Type something first", description: "e.g. 'Rent ₹25000 on the 1st via HDFC credit card'" });
+      return;
+    }
+    setIsAiParsing(true);
+    setAiNote(null);
+    try {
+      const parsed = await parseRecurringRuleFromText({
+        naturalLanguageText: aiInput,
+        categories,
+        paymentMethods,
+        model: selectedModel,
+      });
+      // Apply parsed values to the form (only overwrite when AI returned something useful).
+      setType(parsed.type);
+      if (parsed.amount > 0) setAmount(String(parsed.amount));
+      if (parsed.description) setDescription(parsed.description);
+      if (parsed.categoryId && categories.some(c => c.id === parsed.categoryId)) {
+        setCategoryId(parsed.categoryId);
+      } else {
+        setCategoryId('');
+      }
+      if (parsed.type === 'expense' && parsed.paymentMethodId && paymentMethods.some(p => p.id === parsed.paymentMethodId)) {
+        setPaymentMethodId(parsed.paymentMethodId);
+      } else if (parsed.type === 'income') {
+        setPaymentMethodId('');
+      }
+      if (parsed.expenseType) setExpenseType(parsed.expenseType);
+      if (parsed.dayOfMonth >= 1 && parsed.dayOfMonth <= 31) setDayOfMonth(String(parsed.dayOfMonth));
+      if (parsed.notes) setAiNote(parsed.notes);
+      setShowForm(true);
+      toast({ title: "Form filled", description: "Review and tweak before saving." });
+    } catch (err: any) {
+      toast({ title: "AI parse failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsAiParsing(false);
+    }
   };
 
   const handleSubmit = async () => {
     const amountNum = parseFloat(amount);
+    const dayNum = parseInt(dayOfMonth, 10);
     if (!description.trim() || isNaN(amountNum) || amountNum <= 0) {
       toast({ title: "Invalid input", description: "Provide a description and a positive amount.", variant: "destructive" });
+      return;
+    }
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
+      toast({ title: "Invalid day", description: "Day of month must be a number between 1 and 31.", variant: "destructive" });
       return;
     }
     if (type === 'expense' && (!categoryId || !paymentMethodId)) {
@@ -113,7 +179,7 @@ export default function RecurringPage() {
         categoryId: categoryId || undefined,
         paymentMethodId: type === 'expense' ? paymentMethodId : undefined,
         expenseType: type === 'expense' ? expenseType : undefined,
-        dayOfMonth,
+        dayOfMonth: dayNum,
         startDate,
         endDate: endDate || undefined,
         isActive: true,
@@ -194,6 +260,31 @@ export default function RecurringPage() {
           </CardHeader>
           <CardContent className="space-y-4">
 
+            <div className="p-4 rounded-md border border-accent/30 bg-accent/5 space-y-2">
+              <Label className="flex items-center gap-2 text-sm">
+                <Sparkles className="h-4 w-4 text-accent" />
+                Describe a recurring transaction in plain English
+              </Label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Textarea
+                  value={aiInput}
+                  onChange={e => setAiInput(e.target.value)}
+                  placeholder='e.g. "Rent ₹25000 on the 1st via HDFC credit card" or "Salary 1.2L on 30th every month"'
+                  className="flex-1 min-h-[44px] resize-none"
+                  rows={1}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAiFill(); } }}
+                />
+                <Button onClick={handleAiFill} disabled={isAiParsing || !aiInput.trim()}>
+                  {isAiParsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                  AI fill form
+                </Button>
+              </div>
+              {aiNote && (
+                <p className="text-xs text-muted-foreground italic">AI note: {aiNote}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">AI fills the form below — review and tweak before saving.</p>
+            </div>
+
             {showForm && (
               <div className="p-4 rounded-md border border-primary/20 bg-background/50 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -250,8 +341,16 @@ export default function RecurringPage() {
                   )}
                   <div>
                     <Label>Day of month</Label>
-                    <Input type="number" min={1} max={31} value={dayOfMonth} onChange={e => setDayOfMonth(Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))))} />
-                    <p className="text-[11px] text-muted-foreground mt-1">If month has fewer days, the last day is used.</p>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={2}
+                      value={dayOfMonth}
+                      onChange={e => handleDayOfMonthChange(e.target.value)}
+                      placeholder="1-31"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">Enter a number from 1 to 31. If the month has fewer days, the last day of the month is used.</p>
                   </div>
                   <div>
                     <Label>Start date</Label>
