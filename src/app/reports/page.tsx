@@ -16,7 +16,7 @@ import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-tren
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
-import { getMonthlyReport, type MonthlyFinancialReportOutput } from '@/lib/actions/reports';
+import { getMonthlyReport, loadStoredMonthlyReport, type StoredMonthlyReport } from '@/lib/actions/reports';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
@@ -62,7 +62,7 @@ export default function ReportsPage() {
   const [reportYear, setReportYear] = useState<number>(selectedYear);
   const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for Annual
 
-  const [aiAnalysis, setAiAnalysis] = useState<MonthlyFinancialReportOutput | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<StoredMonthlyReport | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
   
@@ -141,18 +141,21 @@ export default function ReportsPage() {
     categorySpendingForPeriod.reduce((sum, cat) => sum + cat.totalAmount, 0)
   , [categorySpendingForPeriod]);
 
-  const generateAIReport = async () => {
+  const generateAIReport = async (forceRegenerate = false) => {
     if (reportMonth === -1) {
         toast({ title: "Action Not Available", description: "AI Reports are only available for monthly views.", variant: "default" });
         return;
     }
     setIsAiLoading(true);
     setAiError(null);
-    setAiAnalysis(null);
+    if (forceRegenerate) setAiAnalysis(null);
 
     try {
-      const result = await getMonthlyReport(reportMonth, reportYear, selectedModel);
+      const result = await getMonthlyReport(reportMonth, reportYear, selectedModel, { forceRegenerate });
       setAiAnalysis(result);
+      if (forceRegenerate) {
+        toast({ title: "Report regenerated", description: "Stored report replaced with the latest analysis." });
+      }
     } catch (err: any) {
       console.error("Error generating AI report:", err);
       setAiError(err.message || "Failed to generate the AI report. Please try again.");
@@ -160,6 +163,27 @@ export default function ReportsPage() {
       setIsAiLoading(false);
     }
   };
+
+  // When the user changes month/year, try to load any previously saved report
+  // for that period without triggering a fresh AI call.
+  useEffect(() => {
+    if (reportMonth === -1) {
+      setAiAnalysis(null);
+      return;
+    }
+    let cancelled = false;
+    setAiError(null);
+    setAiAnalysis(null);
+    (async () => {
+      try {
+        const cached = await loadStoredMonthlyReport(reportMonth, reportYear);
+        if (!cancelled) setAiAnalysis(cached);
+      } catch {
+        // Non-fatal — just leave it empty.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [reportMonth, reportYear]);
 
   const exportReportToPDF = async () => {
     const reportContentElement = document.getElementById('report-content-area');
@@ -336,7 +360,7 @@ export default function ReportsPage() {
                                     <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
                                       <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
                                       {transactionsForCategory.length > 0 ? (
-                                        <ScrollArea className="h-auto max-h-[150px]">
+                                        <ScrollArea className="h-auto max-h-[300px]">
                                           <ul className="space-y-1 text-xs">
                                             {transactionsForCategory.map(tx => (
                                               <li key={tx.id} className="flex items-center justify-between gap-2">
@@ -384,23 +408,68 @@ export default function ReportsPage() {
                         <Skeleton className="h-4 w-full bg-accent/30" />
                         <Skeleton className="h-4 w-full bg-accent/30" />
                         <Skeleton className="h-4 w-3/4 bg-accent/30" />
+                        <p className="text-xs text-muted-foreground pt-2">Analyzing every transaction for the month — this can take 20-40 seconds for the deep report.</p>
                       </div>
                     )}
                     {aiError && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{aiError}</p>}
                     {aiAnalysis && !isAiLoading && (
-                      <div className="text-xs sm:text-sm space-y-2 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
-                        <p>{aiAnalysis.executiveSummary}</p>
+                      <div className="text-xs sm:text-sm space-y-4 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90 whitespace-pre-wrap">
+                        {aiAnalysis.generatedAt && (
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Generated {format(new Date(aiAnalysis.generatedAt), "dd MMM yyyy, HH:mm")} · {aiAnalysis.transactionCount} txns
+                          </p>
+                        )}
+                        <section>
+                          <h4 className="font-semibold text-accent mb-1">Executive Summary</h4>
+                          <p>{aiAnalysis.executiveSummary}</p>
+                        </section>
+                        {aiAnalysis.incomeVsExpenseAnalysis && (
+                          <section>
+                            <h4 className="font-semibold text-accent mb-1">Income vs Expense</h4>
+                            <p>{aiAnalysis.incomeVsExpenseAnalysis}</p>
+                          </section>
+                        )}
+                        {aiAnalysis.categoryDeepDive && (
+                          <section>
+                            <h4 className="font-semibold text-accent mb-1">Category Deep-Dive</h4>
+                            <p>{aiAnalysis.categoryDeepDive}</p>
+                          </section>
+                        )}
+                        {aiAnalysis.savingsAndInvestmentAnalysis && (
+                          <section>
+                            <h4 className="font-semibold text-accent mb-1">Savings & Investments</h4>
+                            <p>{aiAnalysis.savingsAndInvestmentAnalysis}</p>
+                          </section>
+                        )}
+                        {Array.isArray(aiAnalysis.actionableRecommendations) && aiAnalysis.actionableRecommendations.length > 0 && (
+                          <section>
+                            <h4 className="font-semibold text-accent mb-1">Actionable Recommendations</h4>
+                            <ul className="list-disc list-inside space-y-1">
+                              {aiAnalysis.actionableRecommendations.map((r, i) => <li key={i}>{r}</li>)}
+                            </ul>
+                          </section>
+                        )}
                       </div>
                     )}
                     {(!aiAnalysis && !isAiLoading && !aiError && filteredTransactionsForPeriod.length === 0 && !isLoadingData) && (
                       <p className="text-xs sm:text-sm text-muted-foreground">Not enough data to generate AI analysis for this period.</p>
                     )}
-                    <motion.div {...buttonHoverTap}>
-                      <Button onClick={generateAIReport} disabled={isAiLoading || (filteredTransactionsForPeriod.length === 0 && !isLoadingData)} className="w-full mt-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-xs md:text-sm">
-                        {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
-                        {isAiLoading ? "Generating..." : "Generate AI Analysis"}
-                      </Button>
-                    </motion.div>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                      <motion.div {...buttonHoverTap} className="flex-1">
+                        <Button onClick={() => generateAIReport(false)} disabled={isAiLoading || (filteredTransactionsForPeriod.length === 0 && !isLoadingData)} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold text-xs md:text-sm">
+                          {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrendingUp className="mr-2 h-4 w-4" /> }
+                          {isAiLoading ? "Generating..." : aiAnalysis ? "View Saved Report" : "Generate AI Analysis"}
+                        </Button>
+                      </motion.div>
+                      {aiAnalysis && (
+                        <motion.div {...buttonHoverTap}>
+                          <Button onClick={() => generateAIReport(true)} disabled={isAiLoading} variant="outline" className="w-full sm:w-auto border-accent/50 text-accent text-xs md:text-sm">
+                            <RefreshCw className={cn("mr-2 h-4 w-4", isAiLoading && "animate-spin")} />
+                            Regenerate
+                          </Button>
+                        </motion.div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>

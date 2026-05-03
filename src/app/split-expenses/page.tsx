@@ -227,7 +227,7 @@ export default function SplitExpensesPage() {
                     <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><ListChecks className="text-primary/80"/>Shared Expense History</CardTitle></CardHeader>
                     <CardContent>
                         {isLoadingExpenses ? <p className="text-muted-foreground">Loading history...</p> : splitExpenses.length === 0 ? <p className="text-muted-foreground">No shared expenses recorded yet.</p> :
-                        <ScrollArea className="h-[400px] pr-3">
+                        <div className="pr-3">
                             <div className="space-y-4">
                                 {splitExpenses.map(expense => (
                                     <motion.div key={expense.id} variants={itemVariants} className="p-4 border rounded-lg bg-background/50 space-y-3">
@@ -257,7 +257,7 @@ export default function SplitExpensesPage() {
                                     </motion.div>
                                 ))}
                             </div>
-                        </ScrollArea>
+                        </div>
                         }
                     </CardContent>
                 </Card>

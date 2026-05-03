@@ -7,12 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
@@ -83,6 +84,8 @@ export default function TransactionsPage() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false); // For single delete
   const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
@@ -96,6 +99,11 @@ export default function TransactionsPage() {
   const paramYear = searchParams.get('year');
   const paramType = searchParams.get('type');
   const paramExpenseType = searchParams.get('expenseType');
+  const paramExpenseTypes = searchParams.get('expenseTypes'); // comma-separated multi-filter from KPI drill-downs
+  const paramCategoryNames = searchParams.get('categoryNames'); // comma-separated category-name filter from KPI drill-downs
+
+  const [filterExpenseTypes, setFilterExpenseTypes] = useState<string[]>([]);
+  const [filterCategoryNames, setFilterCategoryNames] = useState<string[]>([]);
 
   const hasAppliedInitialParams = useRef(false);
   const { selectedModel } = useAIModel();
@@ -141,12 +149,14 @@ export default function TransactionsPage() {
       }
       if (paramType) setFilterType(paramType);
       if (paramExpenseType) setFilterExpenseType(paramExpenseType);
-      
-      if (paramMonth || paramYear || paramType || paramExpenseType || searchParams.toString() === '') {
+      if (paramExpenseTypes) setFilterExpenseTypes(paramExpenseTypes.split(',').map(s => s.trim()).filter(Boolean));
+      if (paramCategoryNames) setFilterCategoryNames(paramCategoryNames.split(',').map(s => s.trim()).filter(Boolean));
+
+      if (paramMonth || paramYear || paramType || paramExpenseType || paramExpenseTypes || paramCategoryNames || searchParams.toString() === '') {
          hasAppliedInitialParams.current = true;
       }
     }
-  }, [paramMonth, paramYear, paramType, paramExpenseType, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
+  }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
 
 
   useEffect(() => {
@@ -176,6 +186,15 @@ export default function TransactionsPage() {
     
     if (filterExpenseType !== 'all') {
       tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
+    }
+
+    if (filterExpenseTypes.length > 0) {
+      tempTransactions = tempTransactions.filter(t => t.expenseType && filterExpenseTypes.includes(t.expenseType));
+    }
+
+    if (filterCategoryNames.length > 0) {
+      const wanted = new Set(filterCategoryNames.map(s => s.toLowerCase()));
+      tempTransactions = tempTransactions.filter(t => t.category?.name && wanted.has(t.category.name.toLowerCase()));
     }
 
     if (filterCategoryId !== 'all') {
@@ -221,7 +240,7 @@ export default function TransactionsPage() {
       });
     }
     setFilteredTransactions(tempTransactions);
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterSplit, sortConfig, selectedMonth, selectedYear, viewMode]);
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig, selectedMonth, selectedYear, viewMode]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -251,18 +270,19 @@ export default function TransactionsPage() {
   };
 
   const handleToggleSplit = async (transaction: AppTransaction) => {
+    const nextSplit = !transaction.isSplit;
+    // Optimistic update so rapid taps don't refetch / unmount the row each time.
+    setAllTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, isSplit: nextSplit } : t));
     setIsTogglingSplit(transaction.id);
     try {
-      await updateTransaction(transaction.id, { isSplit: !transaction.isSplit });
-      toast({
-        title: `Transaction ${!transaction.isSplit ? 'marked' : 'unmarked'} as split.`,
-      });
-      fetchData(); // This will re-fetch and re-filter
+      await updateTransaction(transaction.id, { isSplit: nextSplit });
     } catch (error) {
       console.error("Failed to toggle split status:", error);
+      // Revert on failure
+      setAllTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, isSplit: !nextSplit } : t));
       toast({ title: "Update Failed", description: "Could not update the split status.", variant: "destructive" });
     } finally {
-      setIsTogglingSplit(null);
+      setIsTogglingSplit(prevId => (prevId === transaction.id ? null : prevId));
     }
   };
 
@@ -360,14 +380,13 @@ export default function TransactionsPage() {
   }, [viewMode, selectedMonth, selectedYear, monthNamesList]);
 
   return (
-    <div className="flex-1 flex flex-col p-0 space-y-6 bg-background/80 backdrop-blur-sm sm:p-2 md:p-4 lg:p-6">
+    <div className="p-0 space-y-6 bg-background/80 backdrop-blur-sm sm:p-2 md:p-4 lg:p-6">
       <motion.div
         variants={pageVariants}
         initial="hidden"
         animate="visible"
-        className="flex-1 flex flex-col"
       >
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 flex-1 flex flex-col w-full", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 w-full", glowClass)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <BookOpen className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-6"/>
@@ -378,7 +397,7 @@ export default function TransactionsPage() {
               Currently viewing: <strong className="text-accent">{currentPeriodText}</strong>
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col">
+          <CardContent>
             <div className="mb-6 space-y-4">
               <Input
                 type="text"
@@ -464,6 +483,18 @@ export default function TransactionsPage() {
                 <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
               </div>
+              {(filterExpenseTypes.length > 0 || filterCategoryNames.length > 0) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setFilterExpenseTypes([]); setFilterCategoryNames([]); }}
+                  className="text-xs"
+                >
+                  Clear KPI filter
+                  {filterExpenseTypes.length > 0 && ` · ${filterExpenseTypes.join(', ')}`}
+                  {filterCategoryNames.length > 0 && ` · ${filterCategoryNames.join(', ')}`}
+                </Button>
+              )}
               {selectedTransactionIds.size > 0 && (
                  <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -496,7 +527,7 @@ export default function TransactionsPage() {
                 <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading transactions...</p>
               </div>
             ) : (
-            <ScrollArea className="h-0 flex-grow rounded-md border border-primary/30 bg-background/50">
+            <div className="rounded-md border border-primary/30 bg-background/50">
               {/* Mobile View - Card List */}
               <div className="md:hidden space-y-3 p-2">
                 {filteredTransactions.length > 0 ? (
@@ -691,31 +722,68 @@ export default function TransactionsPage() {
                   </motion.tbody>
                 </Table>
               </div>
-            </ScrollArea>
+            </div>
             )}
           </CardContent>
         </Card>
       </motion.div>
 
-      <AlertDialog open={editingTransaction !== null} onOpenChange={(isOpen) => !isOpen && setEditingTransaction(null)}>
-          <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg w-[90vw] max-w-lg sm:max-w-xl md:max-w-2xl rounded-lg">
+      {(() => {
+        const isFormOpen = editingTransaction !== null || isAddingNew;
+        const closeForm = () => { setEditingTransaction(null); setIsAddingNew(false); };
+        const titleText = editingTransaction ? "Edit Transaction" : "New Transaction";
+        const descText = editingTransaction ? "Modify the details of this transaction." : "Record a new income or expense.";
+        const onSubmittedOrAdded = () => { handleTransactionUpdateOrAdd(); setIsAddingNew(false); };
+
+        if (isMobile) {
+          return (
+            <Sheet open={isFormOpen} onOpenChange={(open) => !open && closeForm()}>
+              <SheetContent side="bottom" className="bg-background/95 border-primary/50 h-[92vh] flex flex-col p-0 rounded-t-xl">
+                <SheetHeader className="px-4 pt-4 pb-2 text-left">
+                  <SheetTitle className="text-accent text-lg">{titleText}</SheetTitle>
+                  <SheetDescription className="text-muted-foreground text-sm">{descText}</SheetDescription>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto px-4 pb-6">
+                  <TransactionForm
+                    onTransactionAdded={onSubmittedOrAdded}
+                    initialTransactionData={editingTransaction}
+                    onCancel={closeForm}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          );
+        }
+
+        return (
+          <AlertDialog open={isFormOpen} onOpenChange={(open) => !open && closeForm()}>
+            <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg w-[90vw] max-w-lg sm:max-w-xl md:max-w-2xl rounded-lg">
               <AlertDialogHeader>
-                  <AlertDialogTitle className="text-accent text-xl">
-                    {editingTransaction ? "Edit Transaction" : "New Transaction"}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription className="text-muted-foreground">
-                    {editingTransaction ? "Modify the details of this transaction." : "Record a new income or expense."}
-                  </AlertDialogDescription>
+                <AlertDialogTitle className="text-accent text-xl">{titleText}</AlertDialogTitle>
+                <AlertDialogDescription className="text-muted-foreground">{descText}</AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-4 max-h-[70vh] overflow-y-auto pr-2">
                 <TransactionForm
-                  onTransactionAdded={handleTransactionUpdateOrAdd}
+                  onTransactionAdded={onSubmittedOrAdded}
                   initialTransactionData={editingTransaction}
-                  onCancel={() => setEditingTransaction(null)}
+                  onCancel={closeForm}
                 />
               </div>
-          </AlertDialogContent>
-      </AlertDialog>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
+
+      <div className="md:hidden fixed bottom-6 right-6 z-40">
+        <Button
+          onClick={() => setIsAddingNew(true)}
+          className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"
+          size="icon"
+          aria-label="Add Transaction"
+        >
+          <Plus className="h-8 w-8" />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { BrainCircuit, Loader2, Wand2, AlertTriangle, Lightbulb, Briefcase, TrendingUp, Sparkles, Info } from "lucide-react";
 import { Skeleton } from './ui/skeleton';
+import { Slider } from './ui/slider';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { OpportunityCostInput, OpportunityCostOutput } from '@/lib/types';
 import { analyzeOpportunityCost } from '@/ai/flows/opportunity-cost-analysis-flow';
 import { useAIModel } from '@/contexts/AIModelContext';
@@ -33,7 +35,10 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
   const [itemName, setItemName] = useState('');
   const [itemCost, setItemCost] = useState('');
   const [userIncome, setUserIncome] = useState(averageMonthlyIncome?.toString() || '');
-  
+  // 5A: editable assumptions
+  const [annualReturnRate, setAnnualReturnRate] = useState<number>(10);
+  const [investmentYears, setInvestmentYears] = useState<number>(10);
+
   const [analysis, setAnalysis] = useState<OpportunityCostOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +65,10 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
       itemName,
       itemCost: costNum,
       userIncome: incomeNum,
+      workingHoursPerDay: 8,
+      workingDaysPerMonth: 22,
+      annualReturnRate,
+      investmentYears,
       model: selectedModel,
     };
 
@@ -102,6 +111,17 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
                 <Label htmlFor="user-income">Your Monthly Income (₹)</Label>
                 <Input id="user-income" type="number" value={userIncome} onChange={(e) => setUserIncome(e.target.value)} placeholder="e.g., 80000" className="mt-1" />
                 {!averageMonthlyIncome && <p className="text-xs text-muted-foreground mt-1">Provide your income for an accurate time-cost calculation.</p>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-primary/10">
+              <div>
+                <Label className="flex justify-between"><span>Assumed annual return</span><span className="text-accent font-semibold">{annualReturnRate}%</span></Label>
+                <Slider min={2} max={25} step={0.5} value={[annualReturnRate]} onValueChange={([v]) => setAnnualReturnRate(v)} className="mt-2" />
+                <p className="text-[10px] text-muted-foreground mt-1">Try 8% (FD), 10% (balanced MF), 12% (equity MF), 15% (aggressive equity).</p>
+              </div>
+              <div>
+                <Label className="flex justify-between"><span>Investment horizon</span><span className="text-accent font-semibold">{investmentYears} {investmentYears === 1 ? 'year' : 'years'}</span></Label>
+                <Slider min={1} max={30} step={1} value={[investmentYears]} onValueChange={([v]) => setInvestmentYears(v)} className="mt-2" />
+              </div>
             </div>
             <Button onClick={handleAnalyze} disabled={isLoading} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold" withMotion>
               {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}

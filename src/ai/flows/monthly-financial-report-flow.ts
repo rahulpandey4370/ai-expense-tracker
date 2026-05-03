@@ -10,7 +10,8 @@ import { googleAI } from '@genkit-ai/googleai';
 import { callAzureOpenAI } from '@/lib/azure-openai';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  // Default to gpt-5.2-chat for the deeper, longer-form monthly report.
+  const modelToUse = input.model || 'gpt-5.2-chat';
   try {
     const result = await monthlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -20,45 +21,58 @@ export async function generateMonthlyFinancialReport(input: MonthlyFinancialRepo
   }
 }
 
-const reportPromptTemplate = `You are an expert financial analyst. Your task is to create a detailed monthly financial report in markdown format based on the user's transaction data for {{monthName}} {{year}}.
-Your response MUST be in a valid JSON format.
+const reportPromptTemplate = `You are an expert personal-finance analyst writing a comprehensive monthly report for an Indian user (currency: INR ₹).
+You are given the COMPLETE list of transactions for {{monthName}} {{year}} — analyze every single one. Do NOT sample, summarize prematurely, or skip rows.
 
-Transaction Data:
+Output MUST be valid JSON conforming to the supplied schema. Use markdown inside string fields. All monetary values use the ₹ symbol with Indian comma grouping (e.g., ₹1,23,456.78).
+
+## RAW TRANSACTION DATA (full month, do not omit)
 \`\`\`json
 {{{json transactions}}}
 \`\`\`
 
-**Report Sections:**
+## ANALYSIS DEPTH
+Be rigorous and quantitative. Cite specific numbers, dates, merchants, and categories from the data. Avoid vague platitudes like "manage your spending"; give concrete, dated, numbered observations.
 
-**1. Executive Summary:**
-   - Start with a brief, high-level overview of the month's financial health.
-   - Mention total income, total expenses, and net savings/loss.
-   - Highlight one key positive and one area for improvement.
+## SECTION REQUIREMENTS
 
-**2. Income vs. Expense Analysis:**
-   - Detail the total income and total expenses.
-   - Calculate and state the savings rate for the month ((Income - Expenses) / Income).
-   - Compare this month's spending to the previous month if data is available, or note if it's not.
+### 1. executiveSummary (markdown, 4-6 sentences)
+- Total income, total expenses, net cashflow, savings rate %.
+- One sentence each: biggest financial WIN this month and biggest CONCERN.
+- Mention day-of-month patterns if obvious (e.g., "expenses concentrated in week 1 due to rent + EMI").
 
-**3. Category Deep-Dive:**
-   - Identify the top 3-5 spending categories.
-   - For each top category, provide the total amount spent and the percentage of total expenses it represents.
-   - Offer a brief insight for at least one of the top categories (e.g., "Food and Dining was the highest expense, consider tracking sub-categories like 'groceries' vs 'eating out'.").
+### 2. incomeVsExpenseAnalysis (markdown)
+- Break income by source (salary, dividends, cashback, other) with ₹ amounts.
+- Break expenses into Needs / Wants / Investments with ₹ + % of total.
+- Compute and state savings rate = (Income − Total Outflows) / Income, to 1 decimal.
+- Average daily spend (total expenses / days in month).
+- Biggest single transaction (₹, description, date) and what it was.
+- Number of transactions in the month.
 
-**4. Savings and Investment Analysis:**
-   - Identify and sum up all transactions categorized under investment-related categories (e.g., 'Stocks', 'Mutual Funds').
-   - Calculate the investment rate ((Total Investment / Total Income)).
-   - Analyze the net cash flow (Income - all outflows) and what it implies for their savings goals.
+### 3. categoryDeepDive (markdown)
+- Top 5 expense categories ranked, each line: \`**Category** — ₹X (Y% of expenses, N txns, avg ₹Z/txn)\`.
+- For each of the top 3, give one sharp, data-grounded insight (e.g., "Food and Dining: ₹12,400 across 28 txns; 18 of those are weekday lunches averaging ₹350 — a meal-prep habit could save ~₹4,500/mo").
+- Call out any category that looks anomalous vs typical patterns (very high txn count, very high avg amount).
+- List any one-off or unusual expenses worth noting (rare merchants, large outliers).
 
-**5. Actionable Recommendations:**
-   - Provide 2-3 clear, actionable recommendations.
-   - Examples: "Set a budget of ₹X for 'Shopping' next month.", "Consider automating a small monthly investment of ₹Y.", "Review your subscriptions to find potential savings."
+### 4. savingsAndInvestmentAnalysis (markdown)
+- Sum of investment outflows (categories like Stocks, Mutual Funds, Recurring Deposit, Equity, Debt, Gold/Silver, US Stocks, Crypto, or expenseType=investment).
+- Investment rate = Total Investments / Total Income (1 decimal %).
+- Cash savings = Income − (Needs + Wants + Investments). State whether positive/negative.
+- Diversity comment: how many distinct investment vehicles were used? Concentration risk?
+- Cashback/dividends/interest income earned this month.
 
-**Formatting Rules:**
-- Use markdown for clear, readable sections.
-- Use bolding for key terms and figures.
-- Use bullet points for lists.
-- All monetary values must be in Indian Rupees (₹).
+### 5. actionableRecommendations (array of 4-6 strings)
+- Each item must be specific, quantified, and tied to data observed above.
+- Mix: 1 spending-cut recommendation with target ₹, 1 investment/savings recommendation with target ₹, 1 behavioural recommendation (timing, automation, review subscriptions), 1 budget/goal recommendation for next month.
+- Bad: "Reduce wants spending."  Good: "Cap 'Shopping' at ₹4,000 next month — you spent ₹6,200 across 9 txns this month, with ₹2,800 of that on 3 weekend impulse buys."
+
+## RULES
+- Numbers must reconcile (sums must be consistent across sections).
+- If the month has very few transactions (< 5), still produce a report but say data is sparse.
+- Never invent transactions, merchants, or categories that aren't in the data.
+- Treat any transaction with expenseType='investment' OR a category in {Stocks, Mutual Funds, Recurring Deposit, Equity, Debt, Gold/Silver, US Stocks, Crypto} as an investment.
+- Treat categories {Cashback, Investment Income, Dividends} (when type=income) as passive income.
 `;
 
 
@@ -69,7 +83,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || 'gpt-5.2-chat';
 
     // Create the prompt input, excluding the model property
     const promptInput = {

@@ -50,9 +50,8 @@ export async function forecastFinancialGoal(
   }
 }
 
-const financialGoalPromptTemplate = `You are a helpful and insightful personal finance advisor for FinWise AI.
-The user wants to achieve a financial goal. Analyze their goal against their current financial situation (averages based on recent data in INR) and provide a forecast and actionable plan.
-Your response MUST be in a valid JSON format.
+const financialGoalPromptTemplate = `You are a pragmatic personal finance advisor for FinWise AI (Indian users, INR).
+Your response MUST be a valid JSON object matching the schema.
 
 User's Goal:
 - Description: {{goalDescription}}
@@ -62,27 +61,59 @@ User's Goal:
 User's Financials (Recent Averages):
 - Average Monthly Income: ₹{{averageMonthlyIncome}}
 - Average Monthly Expenses (Core Spending): ₹{{averageMonthlyExpenses}}
-- Current Approximate Savings Rate (after core expenses): {{currentSavingsRate}}%
+- Average Monthly Net Savings: ₹{{netMonthlySavings}}
+- Current Approximate Savings Rate: {{currentSavingsRate}}%
 
-Your Task:
-1.  **Determine Goal Amount**:
-    - If a positive '{{goalAmount}}' is provided by the user, use that as the 'estimatedOrProvidedGoalAmount'. Set 'wasAmountEstimatedByAI' to false.
-    - If '{{goalAmount}}' is NOT provided (is zero or missing), you MUST estimate a realistic cost in INR for the '{{goalDescription}}'. This estimated amount becomes 'estimatedOrProvidedGoalAmount'. Set 'wasAmountEstimatedByAI' to true. For example, if description is "Vacation to Europe for 2 people", estimate a reasonable cost. If "New Gaming Laptop", estimate that. Be specific if possible.
-2.  **Calculate Feasibility**: Based on the 'estimatedOrProvidedGoalAmount', determine if the goal is 'Highly Feasible', 'Challenging but Possible', or 'Likely Unfeasible without changes' within the {{goalDurationMonths}} months.
-    - Calculate required monthly savings for this goal: ('estimatedOrProvidedGoalAmount' / {{goalDurationMonths}}). Ensure this is positive.
-    - Compare this to their current average monthly net savings ({{averageMonthlyIncome}} - {{averageMonthlyExpenses}}).
-3.  **Projected Timeline (if applicable)**: If the goal seems feasible or challenging with their *current* average net savings, estimate how many months it would take them to reach 'estimatedOrProvidedGoalAmount'. If unfeasible, omit this. Ensure this is a positive integer if provided.
-4.  **Required Monthly Savings**: Clearly state the amount (in INR) they need to save *specifically for this goal* each month to meet it in {{goalDurationMonths}} months, using the 'estimatedOrProvidedGoalAmount'. This should be a positive number.
-5.  **Actionable Suggestions (2-4 points)**: Provide specific, practical suggestions based on the 'estimatedOrProvidedGoalAmount'.
-    - If current savings are insufficient, suggest how much *additional* monthly savings are needed.
-    - Suggest which typical expense categories (e.g., 'Food and Dining', 'Shopping', 'Entertainment') they might consider reducing, and by what approximate percentage or amount (INR) if possible.
-    - Suggest ways to increase income if relevant.
-6.  **Motivational Message**: End with a brief, encouraging note.
+PRE-COMPUTED VALUES (use these exact numbers — do NOT recalculate):
+- estimatedOrProvidedGoalAmount: ₹{{computedGoalAmount}}
+- wasAmountEstimatedByAI: {{wasEstimatedFlag}}
+- requiredMonthlySavings: ₹{{computedRequiredMonthlySavings}}
+- projectedMonthsToGoal (months at current net savings): {{computedProjectedMonths}}
+- alternativeTimelines: {{{json alternativeTimelines}}}
 
-Structure your output according to the defined schema. Ensure all monetary values are positive.
-If average monthly income is ₹0, and goalAmount was not provided (AI needs to estimate), state that a goal cannot be estimated or planned without income, set feasibility to 'Insufficient Data for Full Forecast', estimatedOrProvidedGoalAmount to 0, and provide general saving tips.
-If goalAmount *was* provided but income is ₹0, calculate required monthly savings but state feasibility is 'Insufficient Data for Full Forecast'.
-`;
+REFERENCE COSTS (use only when you must estimate the goal amount; pick a sensible point in the range and explain briefly):
+- Domestic vacation (1 wk, 2 ppl): ₹30,000–₹80,000
+- International vacation, mid-tier (1 wk, 2 ppl): ₹1,50,000–₹4,00,000
+- Smartphone (mid-tier): ₹25,000–₹60,000  |  Premium: ₹70,000–₹1,50,000
+- Laptop (mid-tier): ₹60,000–₹1,00,000  |  Pro/Gaming: ₹1,20,000–₹2,50,000
+- Wedding (mid-tier, India): ₹10,00,000–₹40,00,000
+- Used car: ₹3,00,000–₹8,00,000  |  New car (sedan/SUV): ₹8,00,000–₹20,00,000
+- Home down-payment (Tier-1 metro, 20% of ₹80L): ₹16,00,000
+- Emergency fund (6 months expenses): 6 × monthlyExpenses
+Cap any estimate at 10× annualIncome unless the goal explicitly demands it (e.g., house).
+
+YOUR JOB:
+1. Use the pre-computed numbers verbatim — never recompute monthly savings or projected timeline yourself.
+2. Decide feasibility:
+   - "Highly Feasible" if requiredMonthlySavings ≤ 0.6 × netMonthlySavings.
+   - "Challenging but Possible" if requiredMonthlySavings is between 0.6× and 1.2× netMonthlySavings.
+   - "Likely Unfeasible without changes" if requiredMonthlySavings > 1.2× netMonthlySavings or netMonthlySavings ≤ 0.
+   - "Insufficient Data for Full Forecast" if averageMonthlyIncome is 0.
+3. Suggested Actions (3–5 items): each must reference a specific number from the data (₹ amount or category) — e.g., "Trim 'Dining Out' by ₹2,000/mo (~30% of current) to free up the gap".
+4. Briefly comment on the alternativeTimelines array (e.g., "Stretching to 18 months drops monthly need to ₹X — much more sustainable").
+5. Motivational message: short, specific, not generic.
+
+Output the schema fields verbatim from PRE-COMPUTED VALUES; do not adjust them.`;
+
+// Reference cost ranges for AI-side estimation when the user does not provide a goal amount.
+// These are intentionally rough; the LLM picks a sensible point and we cap the result.
+function inferReferenceGoalAmount(description: string, monthlyIncome: number): number {
+  const d = description.toLowerCase();
+  const annual = Math.max(monthlyIncome, 0) * 12;
+  const cap = (n: number) => annual > 0 ? Math.min(n, annual * 10) : n;
+  if (/wedding/.test(d)) return cap(2_000_000);
+  if (/(home|house|flat|apartment).*down/.test(d) || /down.?payment/.test(d)) return cap(1_600_000);
+  if (/(buy|new).*(car|sedan|suv)/.test(d)) return cap(1_200_000);
+  if (/used.*car/.test(d)) return cap(500_000);
+  if (/europe|international|abroad|trip.*overseas/.test(d)) return cap(250_000);
+  if (/vacation|trip|holiday|travel/.test(d)) return cap(60_000);
+  if (/laptop|macbook/.test(d)) return cap(90_000);
+  if (/iphone|smartphone|phone/.test(d)) return cap(70_000);
+  if (/emergency.*fund/.test(d)) return cap(monthlyIncome * 6 || 300_000);
+  if (/bike|scooter|motorcycle/.test(d)) return cap(150_000);
+  // Generic fallback — half a month's income, min ₹10k.
+  return cap(Math.max(monthlyIncome / 2, 10_000));
+}
 
 const financialGoalForecasterFlow = ai.defineFlow(
   {
@@ -92,37 +123,76 @@ const financialGoalForecasterFlow = ai.defineFlow(
   },
   async (input) => {
     const model = (input as any).model || 'gemini-3-flash-preview';
-    if (input.averageMonthlyIncome <= 0 && !input.goalAmount) {
+
+    // ---- 8A/8C: compute timeline & savings deterministically ----
+    const netMonthlySavings = Math.max(0, input.averageMonthlyIncome - input.averageMonthlyExpenses);
+    const userProvidedAmount = input.goalAmount && input.goalAmount > 0 ? input.goalAmount : 0;
+    const wasEstimatedByAI = userProvidedAmount === 0;
+    const computedGoalAmount = userProvidedAmount || inferReferenceGoalAmount(input.goalDescription, input.averageMonthlyIncome);
+
+    const requiredMonthlySavings = computedGoalAmount / input.goalDurationMonths;
+    const computedProjectedMonths = netMonthlySavings > 0
+      ? Math.max(1, Math.ceil(computedGoalAmount / netMonthlySavings))
+      : undefined;
+
+    // 8C: alternative timelines auto-computed
+    const alternativeTimelineMonths = Array.from(
+      new Set([
+        Math.max(1, Math.round(input.goalDurationMonths * 0.5)),
+        input.goalDurationMonths,
+        Math.round(input.goalDurationMonths * 1.5),
+        Math.round(input.goalDurationMonths * 2),
+      ])
+    ).sort((a, b) => a - b);
+    const alternativeTimelines = alternativeTimelineMonths.map(months => ({
+      months,
+      requiredMonthlySavings: Math.round(computedGoalAmount / months),
+      gapVsCurrent: Math.round((computedGoalAmount / months) - netMonthlySavings),
+    }));
+
+    // ---- early-return cases (kept) ----
+    if (input.averageMonthlyIncome <= 0 && !userProvidedAmount) {
       return {
         feasibilityAssessment: "Insufficient Data for Full Forecast",
         estimatedOrProvidedGoalAmount: 0,
-        wasAmountEstimatedByAI: true, // Attempted estimation but failed due to no income
+        wasAmountEstimatedByAI: true,
         requiredMonthlySavings: 0,
-        suggestedActions: ["Average monthly income is zero or negative. A goal cannot be estimated or planned without positive income data. Please ensure you have recent income transactions recorded."],
+        suggestedActions: ["Average monthly income is zero. Add recent income transactions so we can plan against your real cashflow."],
         motivationalMessage: "Update your transaction history for a more accurate forecast."
       };
     }
-    if (input.averageMonthlyIncome <= 0 && input.goalAmount && input.goalAmount > 0) {
+    if (input.averageMonthlyIncome <= 0 && userProvidedAmount > 0) {
       return {
         feasibilityAssessment: "Insufficient Data for Full Forecast",
-        estimatedOrProvidedGoalAmount: input.goalAmount,
+        estimatedOrProvidedGoalAmount: userProvidedAmount,
         wasAmountEstimatedByAI: false,
-        requiredMonthlySavings: input.goalAmount / input.goalDurationMonths,
-        suggestedActions: ["Average monthly income is zero or negative. While we can calculate required monthly savings for the goal, a full feasibility assessment isn't possible without positive income data."],
+        requiredMonthlySavings,
+        suggestedActions: [`At your current data, you'd need ₹${Math.round(requiredMonthlySavings).toLocaleString('en-IN')}/mo for this goal. Add income data to enable a full feasibility view.`],
         motivationalMessage: "Update your transaction history for a more accurate forecast."
       };
     }
 
+    // ---- LLM call: only narrative / suggestions / motivation ----
+    const promptInput = {
+      ...input,
+      netMonthlySavings: Math.round(netMonthlySavings),
+      computedGoalAmount: Math.round(computedGoalAmount),
+      wasEstimatedFlag: String(wasEstimatedByAI),
+      computedRequiredMonthlySavings: Math.round(requiredMonthlySavings),
+      computedProjectedMonths: computedProjectedMonths ?? 'unfeasible at current savings',
+      alternativeTimelines,
+    };
+
     let output;
     if (model === 'gpt-5.2-chat') {
-      output = await callAzureOpenAI(financialGoalPromptTemplate, input, GoalForecasterOutputSchema.omit({ model: true }));
+      output = await callAzureOpenAI(financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }));
     } else {
+      // For Gemini, we still go through definePrompt — but use a non-templated input schema to avoid
+      // breaking strict input validation (the Genkit flow input schema doesn't include our extras).
       const prompt = ai.definePrompt({
         name: 'financialGoalPrompt',
-        input: { schema: GoalForecasterInputSchema.omit({ model: true }) },
-        output: { schema: GoalForecasterOutputSchema.omit({ model: true }) },
         config: {
-          temperature: 0.5, // Allow for some creative yet grounded advice
+          temperature: 0.4,
           maxOutputTokens: 800,
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -131,16 +201,25 @@ const financialGoalForecasterFlow = ai.defineFlow(
             { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           ],
         },
+        output: { schema: GoalForecasterOutputSchema.omit({ model: true }) },
         prompt: financialGoalPromptTemplate,
       });
-      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
+      const result = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(model) }));
       output = result.output;
     }
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid goal forecast.");
     }
-    return output;
+
+    // 8A: enforce the deterministic numbers regardless of what the LLM returned.
+    return {
+      ...output,
+      estimatedOrProvidedGoalAmount: computedGoalAmount,
+      wasAmountEstimatedByAI: wasEstimatedByAI,
+      requiredMonthlySavings,
+      projectedMonthsToGoal: computedProjectedMonths,
+    };
   }
 );
 

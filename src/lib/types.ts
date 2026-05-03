@@ -83,6 +83,33 @@ export const TransactionInputSchema = z.object({
 
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
+// --- Recurring Transactions (Option A: lazy materialization) ---
+export const RecurringRuleInputSchema = z.object({
+  type: z.enum(['income', 'expense']),
+  amount: z.number().gt(0),
+  description: z.string().min(1),
+  categoryId: z.string().optional(),
+  paymentMethodId: z.string().optional(),
+  source: z.string().optional(),
+  expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
+  dayOfMonth: z.number().int().min(1).max(31).describe("Calendar day each month the transaction is automatically created. If month has fewer days, the last day of the month is used."),
+  startDate: z.string().describe("YYYY-MM-DD; first month from which the rule is active."),
+  endDate: z.string().optional().describe("YYYY-MM-DD; last month inclusive, optional."),
+  isActive: z.boolean().default(true),
+}).refine(data => {
+  if (data.type === 'expense') return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
+  return true;
+}, { message: "Expense rules need category, payment method, and expense type." });
+
+export type RecurringRuleInput = z.infer<typeof RecurringRuleInputSchema>;
+
+export interface RecurringRule extends RecurringRuleInput {
+  id: string;
+  lastGeneratedDate?: string; // YYYY-MM-DD of the most recent materialized instance
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
 export type ExpenseType = 'need' | 'want' | 'investment' | 'investment_expense';
@@ -209,15 +236,29 @@ export const FinancialHealthCheckInputSchema = z.object({
   periodDescription: z.string().describe("Description of the period being analyzed, e.g., 'This Week (Oct 21 - Oct 27, 2023)' or 'This Month (October 2023)'."),
   currentTotalIncome: z.number().min(0).describe("Total income for the current period in INR."),
   currentTotalExpenses: z.number().min(0).describe("Total expenses for the current period in INR."),
+  currentTotalInvestments: z.number().min(0).optional().describe("Total investment outflows for the current period in INR (Stocks, Mutual Funds, RD, etc.)."),
   currentSpendingBreakdown: z.string().describe("Summary of current spending by type and top categories. E.g., 'Needs: ₹15000, Wants: ₹8000, Investments: ₹5000. Top categories: Food & Dining (₹7000), Groceries: ₹4000).' Ensure INR currency symbol is used."),
   previousTotalIncome: z.number().min(0).describe("Total income for the immediately preceding period in INR."),
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
+  currentCategoryTotals: z.record(z.string(), z.number()).optional().describe("Category-name → ₹ amount map for the current period."),
+  previousCategoryTotals: z.record(z.string(), z.number()).optional().describe("Category-name → ₹ amount map for the previous period."),
   model: z.enum(modelNames).optional(),
 });
 export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInputSchema>;
 
 export const FinancialHealthCheckOutputSchema = z.object({
   healthSummary: z.string().describe("A concise (3-5 sentences) natural language summary of the user's financial activity for the period. Highlight key income/expense figures, compare to the previous period, mention spending distribution (Needs/Wants/Investments), identify and list the top 3-4 spending categories from the breakdown, provide 1-2 actionable suggestions for optimizing spending, and give a brief overall financial 'health' sentiment (eg., 'spending is well-managed', 'expenses significantly higher'). Use INR currency symbol."),
+  healthScore: z.number().min(0).max(100).optional().describe("Numeric financial health score (0-100), computed from savings rate, expense growth, and budget adherence."),
+  scoreBreakdown: z.object({
+    savingsRate: z.number().describe("Savings rate component, 0-40."),
+    expenseGrowth: z.number().describe("Expense growth penalty/bonus component, 0-30."),
+    investmentRate: z.number().describe("Investment rate component, 0-30."),
+  }).optional(),
+  anomalies: z.array(z.object({
+    label: z.string(),
+    detail: z.string(),
+    severity: z.enum(['info', 'warning', 'critical']).default('info'),
+  })).optional().describe("Categories or metrics that moved sharply vs the previous period."),
   model: z.enum(modelNames).optional(),
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
@@ -370,6 +411,8 @@ export const OpportunityCostInputSchema = z.object({
   userIncome: z.number().min(1).describe("The user's monthly income in INR."),
   workingHoursPerDay: z.number().min(1).max(24).default(8).describe("The number of hours the user works per day."),
   workingDaysPerMonth: z.number().min(1).max(31).default(22).describe("The number of days the user works per month."),
+  annualReturnRate: z.number().min(0).max(50).default(10).describe("Assumed annual return rate (%) for the investment alternative calculation."),
+  investmentYears: z.number().min(1).max(40).default(10).describe("Investment horizon (years) for the future-value calculation."),
   model: z.enum(modelNames).optional(),
 });
 export type OpportunityCostInput = z.infer<typeof OpportunityCostInputSchema>;

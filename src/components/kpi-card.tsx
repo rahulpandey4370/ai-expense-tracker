@@ -22,6 +22,7 @@ interface KpiCardProps {
   secondaryTitle?: string;
   secondaryValue?: string;
   isVisible: boolean; // New prop to control visibility
+  numericValue?: number; // Underlying numeric amount; when 0/undefined the card is non-navigable
 }
 
 const glowClass = "shadow-card-glow";
@@ -40,6 +41,7 @@ export function KpiCard({
   secondaryTitle,
   secondaryValue,
   isVisible,
+  numericValue,
 }: KpiCardProps) {
   const router = useRouter();
   const [showSecondary, setShowSecondary] = useState(false);
@@ -50,19 +52,18 @@ export function KpiCard({
     setIsClient(true);
   }, []);
 
+  // KPIs that are pure ratios with no meaningful drill-down should not navigate.
+  const nonNavigableKpis = new Set(["savingsPercentage", "investmentRate"]);
+  const hasData = numericValue === undefined ? true : numericValue > 0;
+  const isClickable = isVisible && hasData && !nonNavigableKpis.has(kpiKey);
 
   const handleCardClick = () => {
     if (!isClient) return;
-    if (!isVisible) return; // Don't navigate if not visible
+    if (!isClickable) return;
 
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       setClickTimeout(null);
-    }
-
-    // Specific KPIs where single click navigation is disabled
-    if (kpiKey === "savingsPercentage" || kpiKey === "investmentRate" || kpiKey === "cashSavings") {
-      return; 
     }
 
     const newTimeout = setTimeout(() => {
@@ -74,21 +75,22 @@ export function KpiCard({
         queryParams.append('type', 'income');
       } else if (kpiKey === 'coreExpenses') {
         queryParams.append('type', 'expense');
-        // Optionally add filters for 'need' and 'want' if desired
-        // queryParams.append('expenseType', 'need');
-        // queryParams.append('expenseType', 'want');
+        queryParams.append('expenseTypes', 'need,want');
       } else if (kpiKey === 'totalInvestmentsAmount') {
         queryParams.append('type', 'expense');
-        queryParams.append('expenseType', 'investment_expense');
+        queryParams.append('expenseType', 'investment');
+      } else if (kpiKey === 'totalOutgoings') {
+        queryParams.append('type', 'expense');
       } else if (kpiKey === 'cashbackInterests') {
         queryParams.append('type', 'income');
-        // Consider adding category filter for 'Cashback', 'Investment Income', 'Dividends'
+        queryParams.append('categoryNames', 'Cashback,Investment Income,Dividends');
+      } else if (kpiKey === 'cashSavings') {
+        // Net cashflow is computed from all activity for the month — show everything.
       }
-      // For 'totalOutgoings', 'availableToSaveInvest', 'savingsPercentage', 'netMonthlyCashflow', we show all transactions for context.
 
       router.push(`/transactions?${queryParams.toString()}`);
       setClickTimeout(null);
-    }, 250); 
+    }, 250);
 
     setClickTimeout(newTimeout);
   };
@@ -118,14 +120,14 @@ export function KpiCard({
     <motion.div
       className={cn(
         "shadow-lg h-full flex flex-col",
-        isVisible ? "cursor-pointer" : "cursor-default",
+        isClickable ? "cursor-pointer" : "cursor-default",
         glowClass,
         className
       )}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
-      whileHover={isVisible ? { scale: 1.02, transition: { duration: 0.1 } } : {}}
-      whileTap={isVisible ? { scale: 0.98 } : {}}
+      whileHover={isClickable ? { scale: 1.02, transition: { duration: 0.1 } } : {}}
+      whileTap={isClickable ? { scale: 0.98 } : {}}
     >
       <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

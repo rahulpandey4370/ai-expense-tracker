@@ -315,7 +315,7 @@ export default function YearlyOverviewPage() {
                                      <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
                                       <p className="font-bold text-primary mb-2 border-b pb-1">Transactions for {cat.categoryName}</p>
                                       {transactionsForCategory.length > 0 ? (
-                                        <ScrollArea className="h-auto max-h-[150px]">
+                                        <ScrollArea className="h-auto max-h-[300px]">
                                           <ul className="space-y-1 text-xs">
                                             {transactionsForCategory.map(tx => (
                                               <li key={tx.id} className="flex items-center justify-between gap-2">

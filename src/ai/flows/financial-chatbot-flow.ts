@@ -55,6 +55,7 @@ type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaI
 
 const FinancialChatbotOutputSchema = z.object({
   response: z.string().describe("The AI's response to the user's query."),
+  followUpQuestions: z.array(z.string()).max(4).optional().describe("Up to 4 short, contextually-relevant follow-up questions the user might want to ask next, derived from the answer above."),
   model: z.enum(modelNames).optional(),
 });
 export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema>;
@@ -65,6 +66,23 @@ const monthNamesForParsing = [
   "july", "august", "september", "october", "november", "december"
 ];
 
+// 1E: Out-of-scope guard.
+// Reject obvious non-financial requests before incurring an LLM call.
+const OFF_TOPIC_PATTERNS: RegExp[] = [
+  /\b(write|generate|create)\s+(me\s+)?(a\s+)?(poem|song|story|joke|essay|code|function|sql|regex|tweet|blog|email)\b/i,
+  /\bcapital of\b/i,
+  /\b(weather|temperature)\s+(in|at|for)\b/i,
+  /\b(translate|translation)\b.*\b(to|into|from)\b/i,
+  /\b(who|what)\s+(is|won|invented|discovered)\b/i,
+  /\bcooking|recipe|ingredients\b/i,
+  /\b(define|definition of|meaning of)\b(?!.*\b(invest|saving|budget|expense|income|emi|cashback|salary|tax|equity|debt|mutual fund|sip|fd|rd|loan)\b)/i,
+];
+function isProbablyOffTopic(query: string): boolean {
+  const q = query.trim();
+  if (q.length === 0) return false;
+  return OFF_TOPIC_PATTERNS.some(re => re.test(q));
+}
+
 export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];
@@ -72,6 +90,19 @@ export async function askFinancialBot(input: {
   model?: AIModel; // Add model parameter
   verbose?: boolean; // Add verbose parameter
 }): Promise<FinancialChatbotOutput> {
+  // 1E: short-circuit clearly off-topic queries.
+  if (isProbablyOffTopic(input.query)) {
+    return {
+      response: "I'm a financial assistant for your transactions and money. That question looks unrelated — try asking about your spending, income, categories, savings, investments, or budgets.",
+      followUpQuestions: [
+        "What were my top 3 spending categories this month?",
+        "How much did I save this month?",
+        "Show me all 'want' expenses for this month.",
+      ],
+      model: input.model,
+    };
+  }
+
   // ... (console logs)
 
   // ... (data scope logic)
@@ -204,6 +235,15 @@ ${transactions.length >= 250 ? `\n...(Note: A large number of transactions were 
 - Provide actionable insights when possible.
 - **Adhere strictly to the response style: ${verbose ? "Detailed/Verbose" : "Concise"}.**
 
+## FOLLOW-UP QUESTIONS BLOCK
+At the very END of every response, append a special block listing 2-4 short, specific follow-up questions the user is likely to ask next based on what you just said. Each question should be ≤ 12 words. Format exactly:
+[FOLLOWUPS]
+- question 1
+- question 2
+- question 3
+[/FOLLOWUPS]
+Do not repeat questions already in chat history. If no useful follow-ups apply, omit the block.
+
 ## EXAMPLES OF GOOD RESPONSES
 - "Based on your transactions for January 2024, your total food expenses were **₹8,500.00** across 15 transactions."
 - "Your highest spending category this month was **Transport** with **₹12,300.00** (45.2% of total expenses)."
@@ -255,6 +295,22 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
         model: modelToUse
       };
     }
-    return { response: responseText, model: modelToUse };
+
+    // 1B: extract follow-up questions appended in the [FOLLOWUPS]…[/FOLLOWUPS] block.
+    const { cleanText, followUps } = extractFollowUps(responseText);
+    return { response: cleanText, followUpQuestions: followUps, model: modelToUse };
   }
 );
+
+function extractFollowUps(raw: string): { cleanText: string; followUps?: string[] } {
+  const match = raw.match(/\[FOLLOWUPS\]([\s\S]*?)\[\/FOLLOWUPS\]/i);
+  if (!match) return { cleanText: raw.trim() };
+  const block = match[1];
+  const followUps = block
+    .split('\n')
+    .map(line => line.replace(/^\s*[-•*]\s*/, '').trim())
+    .filter(line => line.length > 0 && line.length <= 120)
+    .slice(0, 4);
+  const cleanText = raw.replace(match[0], '').trim();
+  return { cleanText, followUps: followUps.length > 0 ? followUps : undefined };
+}

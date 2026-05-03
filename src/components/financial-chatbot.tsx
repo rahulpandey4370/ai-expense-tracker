@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, User, SendHorizonal, Zap, Sparkles, Expand } from "lucide-react";
+import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types";
@@ -107,6 +107,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isVerbose, setIsVerbose] = useState<boolean>(false); // Add verbose state
+  const [followUps, setFollowUps] = useState<string[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { selectedModel } = useAIModel();
   const { selectedMonth, selectedYear } = useDateSelection();
@@ -141,6 +142,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     setInputValue('');
     setIsLoading(true);
     setError(null);
+    setFollowUps([]);
 
     try {
       const result = await askFinancialBot({
@@ -152,6 +154,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response, model: result.model };
       setMessages(prev => [...prev, assistantMessage]);
+      setFollowUps(result.followUpQuestions ?? []);
     } catch (err) {
       console.error("Error with financial chatbot:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to get a response from the AI. Please try again.";
@@ -172,7 +175,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   );
 
   return (
-    <motion.div variants={cardVariants} initial="hidden" animate="visible" className={cn(isPage && "h-full")}>
+    <motion.div variants={cardVariants} initial="hidden" animate="visible" className={cn(isPage && "h-full flex flex-col min-h-0 flex-1")}>
       <Card className={cn(
         "flex flex-col",
         isPage ? "h-full w-full rounded-none border-none" : "h-[500px] shadow-lg",
@@ -188,11 +191,18 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
               <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} />
               <Label htmlFor="verbose-mode" className="text-xs font-normal cursor-pointer">Verbose</Label>
             </div>
-            {!isPage && (
+            {!isPage ? (
               <Button asChild variant="ghost" size="icon" className="h-8 w-8">
                 <Link href="/chatbot">
                   <Expand className="h-4 w-4" />
                   <span className="sr-only">Expand Chatbot</span>
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="Back to dashboard">
+                <Link href="/">
+                  <Minimize2 className="h-4 w-4" />
+                  <span className="sr-only">Minimize and return to dashboard</span>
                 </Link>
               </Button>
             )}
@@ -221,6 +231,17 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
               )}
             </div>
           </ScrollArea>
+          {followUps.length > 0 && !isLoading && (
+            <div className={cn("flex flex-wrap gap-2 px-4 pt-2 border-t bg-background/40", isPage && "px-6")}>
+              <span className="w-full text-[10px] uppercase tracking-wide text-muted-foreground pt-1">Suggested follow-ups</span>
+              {followUps.map((q, i) => (
+                <Button key={i} variant="outline" size="sm" className="text-xs h-auto py-1 px-2 whitespace-normal break-words" onClick={() => handleSubmit(q)}>
+                  <Sparkles className="mr-1.5 h-3 w-3 flex-shrink-0" />
+                  {q}
+                </Button>
+              ))}
+            </div>
+          )}
           <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} disabled={isLoading} />

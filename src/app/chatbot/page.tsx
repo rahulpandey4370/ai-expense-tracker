@@ -53,7 +53,8 @@ export default function ChatbotPage() {
   }
   
   return (
-    <div className="flex-1 flex flex-col">
+    // Header is sticky h-16 (4rem). Constrain this view so the chatbot's internal ScrollArea has a real bounded height.
+    <div className="flex flex-col h-[calc(100svh-4rem)] overflow-hidden">
         <FinancialChatbot allTransactions={filteredTransactions} isPage={true} />
     </div>
   );

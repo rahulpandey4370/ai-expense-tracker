@@ -534,13 +534,30 @@ export default function AIPlaygroundPage() {
         .reduce((sum, t) => sum + t.amount, 0);
 
 
+    const buildCategoryTotals = (txns: typeof currentTransactions) => {
+      const map: Record<string, number> = {};
+      for (const t of txns) {
+        if (t.type !== 'expense') continue;
+        const name = t.category?.name;
+        if (!name) continue;
+        map[name] = (map[name] || 0) + t.amount;
+      }
+      return map;
+    };
+    const currentInvestments = currentTransactions
+      .filter(t => t.type === 'expense' && (t.expenseType === 'investment' || (t.category && investmentCategoryNames.includes(t.category.name))))
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const input: FinancialHealthCheckInput & { model?: AIModel } = {
       periodDescription,
       currentTotalIncome: currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
-      currentTotalExpenses: currentCoreExpenses, // Use core expenses
-      currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions.filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))), // Pass only core expenses for breakdown
+      currentTotalExpenses: currentCoreExpenses,
+      currentTotalInvestments: currentInvestments,
+      currentSpendingBreakdown: summarizeSpendingForAI(currentTransactions.filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && !(t.category && investmentCategoryNames.includes(t.category.name)))),
       previousTotalIncome: previousTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
-      previousTotalExpenses: previousCoreExpenses, // Use core expenses
+      previousTotalExpenses: previousCoreExpenses,
+      currentCategoryTotals: buildCategoryTotals(currentTransactions),
+      previousCategoryTotals: buildCategoryTotals(previousTransactions),
       model: selectedModel,
     };
 
@@ -1064,8 +1081,39 @@ export default function AIPlaygroundPage() {
             )}
 
             {aiHealthCheckSummary && !isAILoadingHealthCheck && !aiHealthCheckError && (
-              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30">
-                <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Health Summary</CardTitle>
+              <motion.div variants={cardVariants} className="p-4 border rounded-lg bg-accent/10 border-accent/30 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="text-lg text-accent dark:text-accent-foreground">FinWise AI Health Summary</CardTitle>
+                  {typeof aiHealthCheckSummary.healthScore === 'number' && (
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl font-bold text-accent">{aiHealthCheckSummary.healthScore}<span className="text-base text-muted-foreground">/100</span></div>
+                      {aiHealthCheckSummary.scoreBreakdown && (
+                        <div className="text-xs text-muted-foreground leading-tight">
+                          <div>Savings: {aiHealthCheckSummary.scoreBreakdown.savingsRate}/40</div>
+                          <div>Expense control: {aiHealthCheckSummary.scoreBreakdown.expenseGrowth}/30</div>
+                          <div>Investments: {aiHealthCheckSummary.scoreBreakdown.investmentRate}/30</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {aiHealthCheckSummary.anomalies && aiHealthCheckSummary.anomalies.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notable changes</p>
+                    <ul className="space-y-1 text-sm">
+                      {aiHealthCheckSummary.anomalies.map((a, i) => (
+                        <li key={i} className={cn(
+                          "px-2 py-1 rounded border-l-4",
+                          a.severity === 'critical' ? 'border-red-500 bg-red-500/10' :
+                          a.severity === 'warning' ? 'border-amber-500 bg-amber-500/10' :
+                          'border-blue-400 bg-blue-400/10'
+                        )}>
+                          <strong>{a.label}:</strong> {a.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="space-y-2 text-sm text-foreground/90 whitespace-pre-wrap">
                   {aiHealthCheckSummary.healthSummary.split('\n').map((line, index) => (
                     <p key={index}>{line}</p>

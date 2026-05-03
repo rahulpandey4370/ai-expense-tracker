@@ -27,6 +27,7 @@ Your response MUST be in a valid JSON format.
 - **Item Cost:** ₹{{itemCost}}
 - **Monthly Income:** ₹{{userIncome}}
 - **Working Schedule:** {{workingHoursPerDay}} hours/day, {{workingDaysPerMonth}} days/month
+- **Investment Assumptions:** {{annualReturnRate}}% annual return over {{investmentYears}} years
 
 **Your Task & Output Structure Rules:**
 Structure your output precisely according to the defined JSON schema. The values for 'timeCost' and 'investmentAlternative' must be single strings.
@@ -38,10 +39,10 @@ Structure your output precisely according to the defined JSON schema. The values
     - **Example for 'timeCost' field:** "about 5.5 hours of work" or "approx. 3.2 days of work".
 
 2.  **Calculate Investment Alternative:**
-    - Project the future value of the item's cost if it were invested instead. Assume a conservative 10% annual return over 10 years.
-    - The formula is: Future Value = Principal * (1 + Rate)^Time. E.g., {{itemCost}} * (1.10)^10.
-    - **Format this into a single, clear sentence for the 'investmentAlternative' field.**
-    - **Example for 'investmentAlternative' field:** "If invested, this amount could grow to approximately ₹[Calculated Value] in 10 years at a 10% annual return."
+    - Project the future value of the item's cost if it were invested instead. Use the user-supplied assumptions: {{annualReturnRate}}% annual return over {{investmentYears}} years.
+    - The formula is: Future Value = Principal * (1 + Rate/100)^Years. E.g., {{itemCost}} * (1 + {{annualReturnRate}}/100)^{{investmentYears}}.
+    - **Format this into a single, clear sentence for the 'investmentAlternative' field**, citing the chosen rate and horizon explicitly.
+    - **Example:** "If invested, this could grow to approximately ₹[Calculated Value] in {{investmentYears}} years at a {{annualReturnRate}}% annual return."
 
 3.  **Suggest Alternative Uses:**
     - For the 'alternativeUses' field, provide an array of 3-4 diverse, tangible, and enriching alternative ways the user could spend this money.

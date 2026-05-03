@@ -13,6 +13,7 @@ import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-ch
 import type { AppTransaction, Category, Budget, AIModel } from '@/lib/types';
 import { getTransactions, getCategories } from '@/lib/actions/transactions';
 import { getBudgets } from '@/lib/actions/budgets';
+import { materializeRecurringTransactions } from '@/lib/actions/recurring';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff, MoreVertical, Check } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -82,6 +83,21 @@ export default function DashboardPage() {
   const fetchAndSetData = useCallback(async () => {
     setIsLoadingData(true);
     try {
+      // Materialize any due recurring transactions before fetching (rate-limited to once per day client-side).
+      try {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const lastRun = typeof window !== 'undefined' ? localStorage.getItem('finwise.recurringLastRun') : todayKey;
+        if (lastRun !== todayKey) {
+          const result = await materializeRecurringTransactions();
+          if (result.inserted > 0) {
+            toast({ title: "Recurring transactions added", description: `${result.inserted} due entry/entries auto-created.` });
+          }
+          if (typeof window !== 'undefined') localStorage.setItem('finwise.recurringLastRun', todayKey);
+        }
+      } catch (err) {
+        console.warn("Recurring materialization failed (continuing):", err);
+      }
+
       const [fetchedTransactions, fetchedCategories, fetchedBudgets] = await Promise.all([
         getTransactions({ limit: 10000 }),
         getCategories(),
@@ -276,21 +292,23 @@ export default function DashboardPage() {
               insightText="Total earnings received this month from all sources."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.income}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
-            <KpiCard 
-              title="Core Expenses" 
-              value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`} 
+            <KpiCard
+              title="Core Expenses"
+              value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`}
               isVisible={kpisVisible}
-              icon={TrendingDown} 
+              icon={TrendingDown}
               description="Needs & Wants this month"
-              valueClassName="text-red-500 dark:text-red-400" 
+              valueClassName="text-red-500 dark:text-red-400"
               className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20 dark:border-red-700/50 dark:bg-red-900/20 dark:hover:bg-red-800/30"
               kpiKey="coreExpenses"
               insightText="Spending on daily necessities and discretionary items."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.coreExpenses}
             />
           </motion.div>
            <motion.div variants={itemVariants}>
@@ -306,6 +324,7 @@ export default function DashboardPage() {
               insightText="Outflows towards investment assets like stocks, mutual funds, etc."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.totalInvestments}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
@@ -321,6 +340,7 @@ export default function DashboardPage() {
               insightText="Sum of all spending: daily expenses plus investments."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.totalOutgoings}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
@@ -352,6 +372,7 @@ export default function DashboardPage() {
               insightText="Extra income from rewards, interest, and dividends."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.totalCashbackInterestsDividends}
             />
           </motion.div>
           <motion.div variants={itemVariants}>
@@ -378,10 +399,11 @@ export default function DashboardPage() {
               description="Actual cash saved after all outgoings"
               valueClassName={monthlyMetrics.netMonthlyCashflow >= 0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
               className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
-              kpiKey="cashSavings" 
+              kpiKey="cashSavings"
               insightText="Actual cash saved after all income and all outgoings (including investments)."
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
+              numericValue={monthlyMetrics.income + monthlyMetrics.totalOutgoings}
             />
           </motion.div>
         </motion.div>
