@@ -356,6 +356,8 @@ export const AITransactionForAnalysisSchema = z.object({
   categoryName: z.string().nullish(),
   paymentMethodName: z.string().nullish(),
   expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
+  type: z.enum(['income', 'expense']).optional().describe("Whether the transaction is income or expense."),
+  source: z.string().nullish().describe("Source of income, when type is 'income'."),
 });
 export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSchema>;
 
@@ -459,6 +461,41 @@ export const MonthlyFinancialReportOutputSchema = z.object({
   model: z.enum(modelNames).optional(),
 });
 export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
+
+// Yearly Financial Report
+export const MonthlySummarySchema = z.object({
+  monthName: z.string(),
+  monthIndex: z.number(),
+  totalIncome: z.number(),
+  totalExpenses: z.number(),
+  needs: z.number(),
+  wants: z.number(),
+  investments: z.number(),
+  transactionCount: z.number(),
+  topCategories: z.array(z.object({ name: z.string(), amount: z.number(), txnCount: z.number() })),
+});
+export type MonthlySummary = z.infer<typeof MonthlySummarySchema>;
+
+export const YearlyFinancialReportInputSchema = z.object({
+  year: z.number(),
+  monthlySummaries: z.array(MonthlySummarySchema),
+  transactions: z.array(AITransactionForAnalysisSchema).optional().describe("Full year transactions when small enough; omitted when large."),
+  largestTransactions: z.array(AITransactionForAnalysisSchema).optional().describe("Top largest transactions of the year, used when full set is too large."),
+  totalTransactionCount: z.number(),
+  isAggregated: z.boolean().describe("True when the AI is being given aggregates + sample due to large data."),
+  model: z.enum(modelNames).optional(),
+});
+export type YearlyFinancialReportInput = z.infer<typeof YearlyFinancialReportInputSchema>;
+
+export const YearlyFinancialReportOutputSchema = z.object({
+  executiveSummary: z.string(),
+  incomeVsExpenseAnalysis: z.string(),
+  categoryDeepDive: z.string(),
+  savingsAndInvestmentAnalysis: z.string(),
+  actionableRecommendations: z.array(z.string()),
+  model: z.enum(modelNames).optional(),
+});
+export type YearlyFinancialReportOutput = z.infer<typeof YearlyFinancialReportOutputSchema>;
 
 // Spending Insights
 export const SpendingInsightsOutputSchema = z.object({

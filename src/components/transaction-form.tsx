@@ -1,6 +1,6 @@
 
 
-import { useState, type FormEvent, useEffect, useCallback, useMemo } from 'react';
+import { useState, type FormEvent, type ChangeEvent, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransac
 import Image from 'next/image';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 
 interface TransactionFormProps {
@@ -63,6 +64,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('ai_text');
   const { selectedModel } = useAIModel();
+  const isMobile = useIsMobile();
 
   // Single Transaction State
   const [type, setType] = useState<AppTransactionTypeEnum>('expense');
@@ -852,15 +854,31 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor={`date-${formId || 'new'}`} className={labelClasses}>Date of Transaction</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant={"outline"} className={popoverButtonClasses} disabled={isFetchingDropdowns}>
-                <CalendarIcon className="mr-2 h-4 w-4 text-accent" />
-                {date ? format(date, "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={date} onSelect={setDate} initialFocus className={calendarClasses} /></PopoverContent>
-          </Popover>
+          {isMobile ? (
+            <Input
+              id={`date-${formId || 'new'}`}
+              type="date"
+              value={date ? format(date, "yyyy-MM-dd") : ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const v = e.target.value;
+                if (!v) { setDate(undefined); return; }
+                const parsed = parseDateFns(v, "yyyy-MM-dd", new Date());
+                if (!isNaN(parsed.getTime())) setDate(parsed);
+              }}
+              className={cn("mt-1", inputClasses)}
+              disabled={isFetchingDropdowns}
+            />
+          ) : (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant={"outline"} className={popoverButtonClasses} disabled={isFetchingDropdowns}>
+                  <CalendarIcon className="mr-2 h-4 w-4 text-accent" />
+                  {date ? format(date, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className={popoverContentClasses}><Calendar mode="single" selected={date} onSelect={setDate} initialFocus className={calendarClasses} /></PopoverContent>
+            </Popover>
+          )}
         </div>
         <div>
           <Label htmlFor={`amount-${formId || 'new'}`} className={labelClasses}>Amount (₹)</Label>

@@ -16,7 +16,8 @@ import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-tren
 import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
-import { getMonthlyReport, loadStoredMonthlyReport, type StoredMonthlyReport } from '@/lib/actions/reports';
+import { getMonthlyReport, loadStoredMonthlyReport, getYearlyReport, loadStoredYearlyReport, type StoredMonthlyReport, type StoredYearlyReport } from '@/lib/actions/reports';
+import { MarkdownContent } from '@/components/markdown-content';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
@@ -62,7 +63,7 @@ export default function ReportsPage() {
   const [reportYear, setReportYear] = useState<number>(selectedYear);
   const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for Annual
 
-  const [aiAnalysis, setAiAnalysis] = useState<StoredMonthlyReport | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<StoredMonthlyReport | StoredYearlyReport | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
   
@@ -142,16 +143,14 @@ export default function ReportsPage() {
   , [categorySpendingForPeriod]);
 
   const generateAIReport = async (forceRegenerate = false) => {
-    if (reportMonth === -1) {
-        toast({ title: "Action Not Available", description: "AI Reports are only available for monthly views.", variant: "default" });
-        return;
-    }
     setIsAiLoading(true);
     setAiError(null);
     if (forceRegenerate) setAiAnalysis(null);
 
     try {
-      const result = await getMonthlyReport(reportMonth, reportYear, selectedModel, { forceRegenerate });
+      const result = reportMonth === -1
+        ? await getYearlyReport(reportYear, selectedModel, { forceRegenerate })
+        : await getMonthlyReport(reportMonth, reportYear, selectedModel, { forceRegenerate });
       setAiAnalysis(result);
       if (forceRegenerate) {
         toast({ title: "Report regenerated", description: "Stored report replaced with the latest analysis." });
@@ -167,16 +166,14 @@ export default function ReportsPage() {
   // When the user changes month/year, try to load any previously saved report
   // for that period without triggering a fresh AI call.
   useEffect(() => {
-    if (reportMonth === -1) {
-      setAiAnalysis(null);
-      return;
-    }
     let cancelled = false;
     setAiError(null);
     setAiAnalysis(null);
     (async () => {
       try {
-        const cached = await loadStoredMonthlyReport(reportMonth, reportYear);
+        const cached = reportMonth === -1
+          ? await loadStoredYearlyReport(reportYear)
+          : await loadStoredMonthlyReport(reportMonth, reportYear);
         if (!cancelled) setAiAnalysis(cached);
       } catch {
         // Non-fatal — just leave it empty.
@@ -396,10 +393,10 @@ export default function ReportsPage() {
                   <CardHeader>
                     <CardTitle className="text-lg sm:text-xl font-semibold text-accent dark:text-accent-foreground flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-accent" />
-                      AI Monthly Report
+                      {reportMonth === -1 ? 'AI Annual Report' : 'AI Monthly Report'}
                     </CardTitle>
                     <CardDescription className="text-xs sm:text-sm text-accent/80 dark:text-accent-foreground/80">
-                      In-depth AI analysis for {monthNamesList[reportMonth]} {reportYear}.
+                      In-depth AI analysis for {reportMonth === -1 ? reportYear : `${monthNamesList[reportMonth]} ${reportYear}`}.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -413,7 +410,7 @@ export default function ReportsPage() {
                     )}
                     {aiError && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{aiError}</p>}
                     {aiAnalysis && !isAiLoading && (
-                      <div className="text-xs sm:text-sm space-y-4 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90 whitespace-pre-wrap">
+                      <div className="text-xs sm:text-sm space-y-4 p-3 bg-accent/5 border border-accent/20 rounded-md text-accent dark:text-accent-foreground/90">
                         {aiAnalysis.generatedAt && (
                           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                             Generated {format(new Date(aiAnalysis.generatedAt), "dd MMM yyyy, HH:mm")} · {aiAnalysis.transactionCount} txns
@@ -421,31 +418,31 @@ export default function ReportsPage() {
                         )}
                         <section>
                           <h4 className="font-semibold text-accent mb-1">Executive Summary</h4>
-                          <p>{aiAnalysis.executiveSummary}</p>
+                          <MarkdownContent content={aiAnalysis.executiveSummary} />
                         </section>
                         {aiAnalysis.incomeVsExpenseAnalysis && (
                           <section>
                             <h4 className="font-semibold text-accent mb-1">Income vs Expense</h4>
-                            <p>{aiAnalysis.incomeVsExpenseAnalysis}</p>
+                            <MarkdownContent content={aiAnalysis.incomeVsExpenseAnalysis} />
                           </section>
                         )}
                         {aiAnalysis.categoryDeepDive && (
                           <section>
                             <h4 className="font-semibold text-accent mb-1">Category Deep-Dive</h4>
-                            <p>{aiAnalysis.categoryDeepDive}</p>
+                            <MarkdownContent content={aiAnalysis.categoryDeepDive} />
                           </section>
                         )}
                         {aiAnalysis.savingsAndInvestmentAnalysis && (
                           <section>
                             <h4 className="font-semibold text-accent mb-1">Savings & Investments</h4>
-                            <p>{aiAnalysis.savingsAndInvestmentAnalysis}</p>
+                            <MarkdownContent content={aiAnalysis.savingsAndInvestmentAnalysis} />
                           </section>
                         )}
                         {Array.isArray(aiAnalysis.actionableRecommendations) && aiAnalysis.actionableRecommendations.length > 0 && (
                           <section>
                             <h4 className="font-semibold text-accent mb-1">Actionable Recommendations</h4>
-                            <ul className="list-disc list-inside space-y-1">
-                              {aiAnalysis.actionableRecommendations.map((r, i) => <li key={i}>{r}</li>)}
+                            <ul className="list-disc pl-5 space-y-1">
+                              {aiAnalysis.actionableRecommendations.map((r, i) => <li key={i}><MarkdownContent content={r} /></li>)}
                             </ul>
                           </section>
                         )}

@@ -34,6 +34,10 @@ Output MUST be valid JSON conforming to the supplied schema. Use markdown inside
 ## ANALYSIS DEPTH
 Be rigorous and quantitative. Cite specific numbers, dates, merchants, and categories from the data. Avoid vague platitudes like "manage your spending"; give concrete, dated, numbered observations.
 
+## OUTPUT FORMAT NOTES
+- Do NOT repeat the section title as a markdown heading inside that section's field. The UI already renders the section title — your content should start directly with the analysis.
+- Use markdown for emphasis/bullets/sub-headings inside the body, but reserve top-level headings (\`### ...\`) for sub-sections WITHIN the analysis, not for the section's own title.
+
 ## SECTION REQUIREMENTS
 
 ### 1. executiveSummary (markdown, 4-6 sentences)

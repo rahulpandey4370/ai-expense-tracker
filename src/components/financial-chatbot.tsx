@@ -12,9 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
 import type { AppTransaction } from "@/lib/types";
 import { cn } from '@/lib/utils';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
+import { MarkdownContent } from './markdown-content';
 import Link from 'next/link';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { isSameCalendarMonth } from '@/lib/date-utils';
@@ -44,62 +44,6 @@ const examplePrompts = [
   "Compare my income and expenses for the last 3 months.",
   "What are my top 3 spending categories this month?",
 ];
-
-const MarkdownContent = ({ content }: { content: string }) => {
-  const parts = content.split(/(\[START_TABLE\][\s\S]*?\[END_TABLE\])/g);
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith('[START_TABLE]') && part.endsWith('[END_TABLE]')) {
-          const tableContent = part.replace('[START_TABLE]', '').replace('[END_TABLE]', '').trim();
-          if (!tableContent) return null;
-
-          const rows = tableContent.split('\n').map(row => row.split('|').map(cell => cell.trim()));
-          const headers = ['Date', 'Amount', 'Description', 'Category'];
-
-          return (
-            <div key={index} className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
-              <Table className="text-xs min-w-[500px] sm:min-w-0">
-                <TableHeader><TableRow>{headers.map((header, i) => <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>{rows.map((row, i) => (<TableRow key={i}>{row.map((cell, j) => <TableCell key={j} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>))}</TableBody>
-              </Table>
-            </div>
-          );
-        } else if (part.trim()) {
-          const lines = part.trim().split('\n');
-          return (
-            <div key={index} className="space-y-1">
-              {lines.map((line, lineIndex) => {
-                if (line.startsWith('### ')) {
-                  return <h3 key={lineIndex} className="text-lg font-semibold mt-2">{line.substring(4)}</h3>;
-                }
-                if (line.trim().startsWith('• ') || line.trim().startsWith('- ')) {
-                  const listItemContent = line.trim().substring(2);
-                  const boldedContent = listItemContent.split(/(\*\*.*?\*\*)/g).map((segment, segIndex) => {
-                    if (segment.startsWith('**') && segment.endsWith('**')) {
-                      return <strong key={segIndex}>{segment.substring(2, segment.length - 2)}</strong>;
-                    }
-                    return <span key={segIndex}>{segment}</span>;
-                  });
-                  return <div key={lineIndex} className="flex items-start gap-2 ml-2"><span className="mt-1"> •</span><p>{boldedContent}</p></div>;
-                }
-                const boldedLine = line.split(/(\*\*.*?\*\*)/g).map((segment, segIndex) => {
-                  if (segment.startsWith('**') && segment.endsWith('**')) {
-                    return <strong key={segIndex}>{segment.substring(2, segment.length - 2)}</strong>;
-                  }
-                  return <span key={segIndex}>{segment}</span>;
-                });
-                return <p key={lineIndex}>{boldedLine}</p>;
-              })}
-            </div>
-          );
-        }
-        return null;
-      })}
-    </>
-  );
-};
 
 // Per-session keys so embedded + fullscreen views share the same conversation.
 const CHAT_SESSION_KEY = 'finwise.chat.messages.v1';
@@ -226,7 +170,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   };
 
   const ChatMessageContent = ({ message }: { message: ChatMessage }) => (
-    <div className="w-full min-w-0 text-sm break-words overflow-x-auto whitespace-pre-wrap">
+    <div className="w-full min-w-0 text-sm break-words overflow-x-auto">
       <MarkdownContent content={message.content} />
       {message.role === 'assistant' && message.model && (
         <div className="mt-2 flex justify-end"><ModelInfoBadge model={message.model} /></div>
