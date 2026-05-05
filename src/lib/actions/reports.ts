@@ -3,9 +3,8 @@
 
 import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
 import { generateYearlyFinancialReport, type YearlyFinancialReportInput, type YearlyFinancialReportOutput } from "@/ai/flows/yearly-financial-report-flow";
-import { AITransactionForAnalysisSchema, type AIModel, type AITransactionForAnalysis, type MonthlySummary } from "@/lib/types";
-import { getTransactions } from "./transactions";
-import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, getCalendarDateParts } from "@/lib/date-utils";
+import { type AIModel, type AITransactionForAnalysis, type MonthlySummary } from "@/lib/types";
+import { getCalendarDateParts } from "@/lib/date-utils";
 import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -74,38 +73,24 @@ async function saveStoredMonthlyReport(month: number, year: number, report: Stor
 }
 
 /**
- * Returns the cached report for the month if one exists; otherwise generates
- * (and persists) a new one. Pass `forceRegenerate=true` to overwrite the stored
- * report with a freshly generated one.
+ * Generates (or returns the cached) monthly AI report. Transactions must be
+ * pre-filtered AND pre-converted on the client (in the user's local timezone)
+ * so that a UTC-based server filter / date string doesn't shift IST-edge dates
+ * into the wrong month. Mirrors the chatbot/insights pattern.
  */
 export async function getMonthlyReport(
   month: number,
   year: number,
+  relevantTransactions: AITransactionForAnalysis[],
   model: AIModel,
   options?: { forceRegenerate?: boolean }
 ): Promise<StoredMonthlyReport> {
   if (!options?.forceRegenerate) {
     const cached = await loadStoredMonthlyReport(month, year);
-    if (cached) return cached;
+    // Treat the cache as stale if the transaction count has changed (e.g., user
+    // added/edited/deleted transactions since the report was generated).
+    if (cached && cached.transactionCount === relevantTransactions.length) return cached;
   }
-
-  const allTransactions = await getTransactions();
-  const relevantTransactions = allTransactions
-    .filter(t => isSameCalendarMonth(t.date, month, year))
-    .map(t => {
-      const validated = AITransactionForAnalysisSchema.safeParse({
-        description: t.description,
-        amount: t.amount,
-        date: getCalendarDateString(t.date) || t.date.toISOString(),
-        categoryName: t.category?.name,
-        paymentMethodName: t.paymentMethod?.name,
-        expenseType: t.expenseType,
-        type: t.type,
-        source: t.source,
-      });
-      return validated.success ? validated.data : null;
-    })
-    .filter((t): t is NonNullable<typeof t> => t !== null);
 
   if (relevantTransactions.length === 0) {
     throw new Error(`No transactions found for ${monthNames[month]} ${year}.`);
@@ -168,20 +153,6 @@ const INVESTMENT_CATEGORIES = new Set([
   'Stocks', 'Mutual Funds', 'Recurring Deposit', 'Equity', 'Debt', 'Gold/Silver', 'US Stocks', 'Crypto',
 ]);
 
-function toAIShape(t: Awaited<ReturnType<typeof getTransactions>>[number]): AITransactionForAnalysis | null {
-  const validated = AITransactionForAnalysisSchema.safeParse({
-    description: t.description,
-    amount: t.amount,
-    date: getCalendarDateString(t.date) || t.date.toISOString(),
-    categoryName: t.category?.name,
-    paymentMethodName: t.paymentMethod?.name,
-    expenseType: t.expenseType,
-    type: t.type,
-    source: t.source,
-  });
-  return validated.success ? validated.data : null;
-}
-
 function buildMonthlySummaries(txns: AITransactionForAnalysis[], year: number): MonthlySummary[] {
   const monthNamesArr = monthNames;
   const summaries: MonthlySummary[] = monthNamesArr.map((name, idx) => ({
@@ -197,7 +168,7 @@ function buildMonthlySummaries(txns: AITransactionForAnalysis[], year: number): 
 
   for (const t of txns) {
     const parts = getCalendarDateParts(t.date);
-    if (!parts || parts.year !== year) continue;
+    if (!parts) continue;
     const m = parts.month;
     const s = summaries[m];
     s.transactionCount += 1;
@@ -234,19 +205,14 @@ function buildMonthlySummaries(txns: AITransactionForAnalysis[], year: number): 
 
 export async function getYearlyReport(
   year: number,
+  yearTxns: AITransactionForAnalysis[],
   model: AIModel,
   options?: { forceRegenerate?: boolean }
 ): Promise<StoredYearlyReport> {
   if (!options?.forceRegenerate) {
     const cached = await loadStoredYearlyReport(year);
-    if (cached) return cached;
+    if (cached && cached.transactionCount === yearTxns.length) return cached;
   }
-
-  const allTransactions = await getTransactions();
-  const yearTxnsRaw = allTransactions.filter(t => isSameCalendarYear(t.date, year));
-  const yearTxns: AITransactionForAnalysis[] = yearTxnsRaw
-    .map(toAIShape)
-    .filter((t): t is AITransactionForAnalysis => t !== null);
 
   if (yearTxns.length === 0) {
     throw new Error(`No transactions found for ${year}.`);

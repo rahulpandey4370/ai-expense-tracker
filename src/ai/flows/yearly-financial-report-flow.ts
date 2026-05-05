@@ -32,6 +32,9 @@ You are given:
 
 Output MUST be valid JSON conforming to the supplied schema. Use markdown inside string fields. All monetary values use the ₹ symbol with Indian comma grouping (e.g., ₹1,23,456.78).
 
+## DATA SHAPE
+Transactions (when present) include: \`type\` ('income'|'expense'), \`amount\`, \`date\`, \`description\`, \`categoryName\`, \`paymentMethodName\`, \`expenseType\` (expenses only), \`source\` (income only). When \`type\` is set, use it directly — do NOT re-infer from descriptions.
+
 ## MONTHLY SUMMARIES
 \`\`\`json
 {{{json monthlySummaries}}}

@@ -355,8 +355,8 @@ export const AITransactionForAnalysisSchema = z.object({
   date: z.string().describe("Date in ISO format string"),
   categoryName: z.string().nullish(),
   paymentMethodName: z.string().nullish(),
-  expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
-  type: z.enum(['income', 'expense']).optional().describe("Whether the transaction is income or expense."),
+  expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).nullish(),
+  type: z.enum(['income', 'expense']).nullish().describe("Whether the transaction is income or expense."),
   source: z.string().nullish().describe("Source of income, when type is 'income'."),
 });
 export type AITransactionForAnalysis = z.infer<typeof AITransactionForAnalysisSchema>;

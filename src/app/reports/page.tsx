@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { AppTransaction, ExpenseType, AIModel } from '@/lib/types';
+import type { AppTransaction, ExpenseType, AIModel, AITransactionForAnalysis } from '@/lib/types';
+import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { getTransactions } from '@/lib/actions/transactions';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers, RefreshCw, Wand2 } from 'lucide-react';
@@ -27,7 +28,6 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
-import { isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
 
@@ -116,6 +116,27 @@ export default function ReportsPage() {
       return isSameCalendarMonth(t.date, reportMonth, reportYear);
     });
   }, [allTransactions, reportYear, reportMonth]);
+
+  // Convert in the browser (IST) so the date string is computed in the user's
+  // timezone — sending Date objects through to the UTC server would shift
+  // IST-edge dates into the wrong month.
+  const aiTransactionsForPeriod = useMemo<AITransactionForAnalysis[]>(() => {
+    return filteredTransactionsForPeriod
+      .filter(t => t.date)
+      .map(t => {
+        const d = t.date instanceof Date ? t.date : new Date(t.date);
+        return {
+          description: t.description ?? null,
+          amount: t.amount,
+          date: getCalendarDateString(t.date) || d.toISOString(),
+          categoryName: t.category?.name ?? null,
+          paymentMethodName: t.paymentMethod?.name ?? null,
+          expenseType: t.expenseType ?? null,
+          type: t.type ?? null,
+          source: t.source ?? null,
+        };
+      });
+  }, [filteredTransactionsForPeriod]);
   
   const categorySpendingForPeriod = useMemo(() => {
     const spendingMap = new Map<string, number>();
@@ -149,8 +170,8 @@ export default function ReportsPage() {
 
     try {
       const result = reportMonth === -1
-        ? await getYearlyReport(reportYear, selectedModel, { forceRegenerate })
-        : await getMonthlyReport(reportMonth, reportYear, selectedModel, { forceRegenerate });
+        ? await getYearlyReport(reportYear, aiTransactionsForPeriod, selectedModel, { forceRegenerate })
+        : await getMonthlyReport(reportMonth, reportYear, aiTransactionsForPeriod, selectedModel, { forceRegenerate });
       setAiAnalysis(result);
       if (forceRegenerate) {
         toast({ title: "Report regenerated", description: "Stored report replaced with the latest analysis." });

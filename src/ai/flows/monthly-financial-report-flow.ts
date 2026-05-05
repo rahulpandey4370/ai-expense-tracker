@@ -27,6 +27,7 @@ You are given the COMPLETE list of transactions for {{monthName}} {{year}} — a
 Output MUST be valid JSON conforming to the supplied schema. Use markdown inside string fields. All monetary values use the ₹ symbol with Indian comma grouping (e.g., ₹1,23,456.78).
 
 ## RAW TRANSACTION DATA (full month, do not omit)
+Each transaction has fields: \`type\` ('income' or 'expense'), \`amount\`, \`date\`, \`description\`, \`categoryName\`, \`paymentMethodName\`, \`expenseType\` ('need'|'want'|'investment'|'investment_expense', expenses only), and \`source\` (income only). When \`type\` is set, use it directly to partition income vs expense — do NOT re-infer from descriptions or category names.
 \`\`\`json
 {{{json transactions}}}
 \`\`\`
