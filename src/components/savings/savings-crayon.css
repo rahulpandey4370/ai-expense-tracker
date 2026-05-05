@@ -156,6 +156,35 @@
 .crayon-btn[data-variant="danger"] { background: var(--crayon-red); }
 .crayon-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
 
+.crayon-ai-mode {
+  display: inline-flex;
+  align-items: center;
+  border: 3px solid var(--crayon-ink);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--crayon-ink);
+  overflow: hidden;
+}
+.crayon-ai-mode button {
+  min-width: 54px;
+  padding: 6px 12px;
+  font-family: var(--font-patrick-hand), cursive;
+  font-size: 15px;
+  color: var(--crayon-ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.crayon-ai-mode button.active {
+  background: var(--crayon-teal);
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.22);
+}
+.crayon-ai-mode button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .crayon-input,
 .crayon-textarea,
 .crayon-select {

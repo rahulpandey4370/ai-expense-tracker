@@ -75,6 +75,13 @@ const formatINR = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFracti
 
 const UI_MODE_KEY = 'finwise.savings.uiMode.v1';
 type UiMode = 'normal' | 'crayon';
+type SavingsAiMode = 'auto' | 'add' | 'edit';
+
+const AI_MODE_LABELS: Record<SavingsAiMode, string> = {
+  auto: 'Auto',
+  add: 'Add',
+  edit: 'Edit',
+};
 
 export default function SavingsPage() {
   const { toast } = useToast();
@@ -102,6 +109,7 @@ export default function SavingsPage() {
   // AI natural-language input
   const [aiText, setAiText] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiMode, setAiMode] = useState<SavingsAiMode>('auto');
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
@@ -192,11 +200,18 @@ export default function SavingsPage() {
     if (!text) return;
     setAiBusy(true);
     try {
-      const result = await parseAndApplySavingsAllocation(text, selectedModel);
+      const result = await parseAndApplySavingsAllocation(text, selectedModel, aiMode);
       if (!result.ok) {
         toast({ title: "Couldn't apply", description: result.reason, variant: "destructive" });
       } else if (result.mode === 'add') {
         toast({ title: "Added", description: `${result.record.name} — ${formatINR(result.record.amount)}` });
+        setAiText('');
+        fetchAll();
+      } else if (result.mode === 'split') {
+        toast({
+          title: "Split created",
+          description: `${formatINR(result.splitAmount)} moved from ${result.previousSource.name} to ${result.record.name}`,
+        });
         setAiText('');
         fetchAll();
       } else {
@@ -224,7 +239,14 @@ export default function SavingsPage() {
           onNew={() => { if (showForm) resetForm(); setShowForm(s => !s); }}
           showForm={showForm}
         />
-        <CrayonAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
+        <CrayonAiInput
+          aiText={aiText}
+          setAiText={setAiText}
+          aiBusy={aiBusy}
+          aiMode={aiMode}
+          setAiMode={setAiMode}
+          onSubmit={handleAiSubmit}
+        />
         <CrayonTotalSavings total={total} count={items.length} isLoading={isLoading} />
         {showForm && (
           <CrayonForm
@@ -278,7 +300,14 @@ export default function SavingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <NormalAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
+            <NormalAiInput
+              aiText={aiText}
+              setAiText={setAiText}
+              aiBusy={aiBusy}
+              aiMode={aiMode}
+              setAiMode={setAiMode}
+              onSubmit={handleAiSubmit}
+            />
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-baseline justify-between flex-wrap gap-2">
               <div className="text-sm text-muted-foreground">Total tracked</div>
               <div className="text-2xl font-bold text-primary">
@@ -426,20 +455,25 @@ function UiModeToggle({ uiMode, setUiMode }: { uiMode: UiMode; setUiMode: (m: Ui
   );
 }
 
-function NormalAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
+function NormalAiInput({ aiText, setAiText, aiBusy, aiMode, setAiMode, onSubmit }: {
   aiText: string;
   setAiText: (v: string) => void;
   aiBusy: boolean;
+  aiMode: SavingsAiMode;
+  setAiMode: (m: SavingsAiMode) => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="rounded-lg border bg-background/60 p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="h-4 w-4 text-accent" />
-        <span className="font-semibold text-sm">AI quick entry</span>
+      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-accent" />
+          <span className="font-semibold text-sm">AI quick entry</span>
+        </div>
+        <AiModeToggle mode={aiMode} setMode={setAiMode} disabled={aiBusy} />
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Try: "I have ₹50k in HDFC savings tagged emergency fund" or "update emergency fund to ₹60k".
+        Try: "I have ₹50k in HDFC savings tagged emergency fund", "update emergency fund to ₹60k", or "separate 10k from March into Slice Fixed Deposit".
       </p>
       <div className="flex gap-2 flex-col sm:flex-row">
         <Textarea rows={2} value={aiText} onChange={(e) => setAiText(e.target.value)}
@@ -453,20 +487,72 @@ function NormalAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
   );
 }
 
-function CrayonAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
+function AiModeToggle({ mode, setMode, disabled }: {
+  mode: SavingsAiMode;
+  setMode: (m: SavingsAiMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-primary/40 bg-background/70 p-0.5 text-xs">
+      {(Object.keys(AI_MODE_LABELS) as SavingsAiMode[]).map((m) => (
+        <button
+          key={m}
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "px-3 py-1 rounded-full transition-colors disabled:opacity-50",
+            mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+          )}
+          onClick={() => setMode(m)}
+        >
+          {AI_MODE_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CrayonAiModeToggle({ mode, setMode, disabled }: {
+  mode: SavingsAiMode;
+  setMode: (m: SavingsAiMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="crayon-ai-mode">
+      {(Object.keys(AI_MODE_LABELS) as SavingsAiMode[]).map((m) => (
+        <button
+          key={m}
+          type="button"
+          disabled={disabled}
+          className={mode === m ? 'active' : undefined}
+          onClick={() => setMode(m)}
+        >
+          {AI_MODE_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CrayonAiInput({ aiText, setAiText, aiBusy, aiMode, setAiMode, onSubmit }: {
   aiText: string;
   setAiText: (v: string) => void;
   aiBusy: boolean;
+  aiMode: SavingsAiMode;
+  setAiMode: (m: SavingsAiMode) => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="crayon-card crayon-anim-in" data-accent="blue">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="h-5 w-5" />
-        <span className="crayon-title text-2xl">Tell me what changed</span>
+      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5" />
+          <span className="crayon-title text-2xl">Tell me what changed</span>
+        </div>
+        <CrayonAiModeToggle mode={aiMode} setMode={setAiMode} disabled={aiBusy} />
       </div>
       <p className="text-sm text-[color:var(--crayon-muted)] mb-3">
-        Try: "I have ₹50k in HDFC savings tagged emergency fund" or "update emergency fund to ₹60k".
+        Try: "I have ₹50k in HDFC savings tagged emergency fund", "update emergency fund to ₹60k", or "separate 10k from March into Slice Fixed Deposit".
       </p>
       <textarea
         className="crayon-textarea"
