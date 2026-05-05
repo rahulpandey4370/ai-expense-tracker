@@ -45,9 +45,17 @@ const examplePrompts = [
   "What are my top 3 spending categories this month?",
 ];
 
-// Per-session keys so embedded + fullscreen views share the same conversation.
+// Per-session keys so embedded + fullscreen views share the same conversation
+// AND the user's toggle choices.
 const CHAT_SESSION_KEY = 'finwise.chat.messages.v1';
 const CHAT_FOLLOWUPS_KEY = 'finwise.chat.followUps.v1';
+const CHAT_VERBOSE_KEY = 'finwise.chat.verbose.v1';
+const CHAT_INVESTMENT_MODE_KEY = 'finwise.chat.investmentMode.v1';
+
+function loadSessionFlag(key: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return sessionStorage.getItem(key) === '1'; } catch { return false; }
+}
 
 function loadSessionMessages(): ChatMessage[] {
   if (typeof window === 'undefined') return [];
@@ -78,7 +86,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isVerbose, setIsVerbose] = useState<boolean>(false); // Add verbose state
+  const [isVerbose, setIsVerbose] = useState<boolean>(false);
   const [isInvestmentMode, setIsInvestmentMode] = useState<boolean>(false);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -87,8 +95,20 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   useEffect(() => {
     setMessages(loadSessionMessages());
     setFollowUps(loadSessionFollowUps());
+    setIsVerbose(loadSessionFlag(CHAT_VERBOSE_KEY));
+    setIsInvestmentMode(loadSessionFlag(CHAT_INVESTMENT_MODE_KEY));
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    try { sessionStorage.setItem(CHAT_VERBOSE_KEY, isVerbose ? '1' : '0'); } catch {/* ignore */}
+  }, [isVerbose, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    try { sessionStorage.setItem(CHAT_INVESTMENT_MODE_KEY, isInvestmentMode ? '1' : '0'); } catch {/* ignore */}
+  }, [isInvestmentMode, hydrated]);
 
   // Persist messages whenever they change, but only after initial hydration so we don't wipe storage on mount.
   useEffect(() => {

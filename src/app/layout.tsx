@@ -1,6 +1,6 @@
 
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, Patrick_Hand, Caveat } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -16,6 +16,18 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
+  subsets: ['latin'],
+});
+
+const patrickHand = Patrick_Hand({
+  variable: '--font-patrick-hand',
+  weight: '400',
+  subsets: ['latin'],
+});
+
+const caveat = Caveat({
+  variable: '--font-caveat',
+  weight: ['400', '600', '700'],
   subsets: ['latin'],
 });
 
@@ -39,7 +51,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${patrickHand.variable} ${caveat.variable} antialiased`}>
         <AuthProvider> {/* AuthProvider remains high */}
           <ThemeProvider
             attribute="class"

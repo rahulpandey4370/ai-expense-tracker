@@ -1,19 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FinancialChatbot } from '@/components/financial-chatbot';
 import { getTransactions } from '@/lib/actions/transactions';
 import type { AppTransaction } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { isSameCalendarMonth } from '@/lib/date-utils';
 
 export default function ChatbotPage() {
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const { selectedMonth, selectedYear } = useDateSelection();
 
   const fetchAllTransactions = useCallback(async () => {
     setIsLoading(true);
@@ -37,12 +34,6 @@ export default function ChatbotPage() {
     fetchAllTransactions();
   }, [fetchAllTransactions]);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t =>
-      isSameCalendarMonth(t.date, selectedMonth, selectedYear)
-    );
-  }, [transactions, selectedMonth, selectedYear]);
-
   if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -55,7 +46,7 @@ export default function ChatbotPage() {
   return (
     // Header is sticky h-16 (4rem). Constrain this view so the chatbot's internal ScrollArea has a real bounded height.
     <div className="flex flex-col h-[calc(100svh-4rem)] overflow-hidden">
-        <FinancialChatbot allTransactions={filteredTransactions} isPage={true} />
+        <FinancialChatbot allTransactions={transactions} isPage={true} />
     </div>
   );
 }

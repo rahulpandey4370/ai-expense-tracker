@@ -7,7 +7,10 @@ import {
   SavingsAllocationInputSchema,
   type SavingsAllocation,
   type SavingsAllocationInput,
+  type AIModel,
 } from '@/lib/types';
+import { parseSavingsAllocationFromText } from '@/ai/flows/parse-savings-allocation-flow';
+import { computeSavingsSmartKpis, type SavingsSmartKpisOutput } from '@/ai/flows/savings-smart-kpis-flow';
 
 const SAVINGS_BLOB_PATH = 'internal/data/savings-allocations.json';
 
@@ -100,4 +103,82 @@ export async function deleteSavingsAllocation(id: string): Promise<void> {
   if (next.length === all.length) throw new Error(`Savings allocation ${id} not found`);
   await writeAll(next);
   revalidatePath('/savings');
+}
+
+export type AISavingsActionResult =
+  | { ok: true; mode: 'add'; record: SavingsAllocation }
+  | { ok: true; mode: 'update'; record: SavingsAllocation; previous: SavingsAllocation }
+  | { ok: false; reason: string };
+
+const todayYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * Run the AI parser over a one-line instruction and apply the resulting
+ * add/update against the persisted ledger. Returns either the new/updated
+ * record or a structured failure.
+ */
+export async function parseAndApplySavingsAllocation(
+  naturalLanguageText: string,
+  model?: AIModel,
+): Promise<AISavingsActionResult> {
+  const text = naturalLanguageText.trim();
+  if (!text) return { ok: false, reason: "Empty input." };
+
+  const existing = await readAll();
+  const parsed = await parseSavingsAllocationFromText({
+    naturalLanguageText: text,
+    existing: existing.map(({ id, name, location, category, amount }) => ({ id, name, location, category, amount })),
+    todayYmd: todayYmd(),
+    model,
+  });
+
+  if (parsed.intent === 'update') {
+    if (parsed.unmatched || !parsed.existingId) {
+      return { ok: false, reason: parsed.reasoning || "Couldn't match an existing record. Try mentioning the bank or label." };
+    }
+    const idx = existing.findIndex(e => e.id === parsed.existingId);
+    if (idx === -1) return { ok: false, reason: "Matched record vanished. Reload and retry." };
+    const prev = existing[idx];
+    const patch: Partial<SavingsAllocationInput> = {};
+    if (parsed.record.name) patch.name = parsed.record.name;
+    if (parsed.record.location) patch.location = parsed.record.location;
+    if (parsed.record.category) patch.category = parsed.record.category;
+    if (parsed.record.amount != null && parsed.record.amount > 0) patch.amount = parsed.record.amount;
+    if (parsed.record.asOfDate) patch.asOfDate = parsed.record.asOfDate;
+    if (parsed.record.notes !== null && parsed.record.notes !== undefined) {
+      patch.notes = parsed.record.notes.length > 0 ? parsed.record.notes : undefined;
+    }
+    if (Object.keys(patch).length === 0) {
+      return { ok: false, reason: "Nothing to change — couldn't extract a new value." };
+    }
+    const updated = await updateSavingsAllocation(prev.id, patch);
+    return { ok: true, mode: 'update', record: updated, previous: prev };
+  }
+
+  // intent === 'add'
+  const r = parsed.record;
+  if (!r.name || !r.location || !r.category || r.amount == null || r.amount <= 0) {
+    return { ok: false, reason: parsed.reasoning || "I need at least a name, location, type, and a positive amount to create an entry." };
+  }
+  const created = await addSavingsAllocation({
+    name: r.name,
+    location: r.location,
+    category: r.category,
+    amount: r.amount,
+    asOfDate: r.asOfDate || todayYmd(),
+    notes: r.notes || undefined,
+  });
+  return { ok: true, mode: 'add', record: created };
+}
+
+/**
+ * Wraps the smart-KPIs AI flow. Server-side so we don't have to ship the
+ * Genkit/Azure call into the browser bundle.
+ */
+export async function getSavingsSmartKpis(year: number, model?: AIModel): Promise<SavingsSmartKpisOutput> {
+  const allocations = await readAll();
+  return computeSavingsSmartKpis({ allocations, year, model });
 }
