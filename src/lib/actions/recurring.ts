@@ -186,3 +186,60 @@ export async function materializeRecurringTransactions(): Promise<{ inserted: nu
   if (mutated) await writeRules(rules);
   return { inserted, ruleErrors };
 }
+
+/**
+ * Manually trigger a single rule for the current calendar month with today's
+ * date. Useful when the actual expense happens before the rule's scheduled
+ * dayOfMonth (e.g. rent due on the 7th got paid on the 5th). Marks the rule's
+ * lastGeneratedDate so the lazy materializer skips this month going forward.
+ */
+export async function triggerRecurringRuleNow(ruleId: string): Promise<{ inserted: boolean; reason?: string }> {
+  const all = await readRules();
+  const idx = all.findIndex(r => r.id === ruleId);
+  if (idx === -1) throw new Error(`Recurring rule ${ruleId} not found`);
+  const rule = all[idx];
+
+  if (!rule.isActive) {
+    return { inserted: false, reason: "Rule is paused. Resume it first." };
+  }
+
+  const today = new Date();
+  const ymdToday = ymd(today);
+
+  const start = new Date(rule.startDate + "T00:00:00");
+  if (today < start) {
+    return { inserted: false, reason: `Rule starts on ${rule.startDate}.` };
+  }
+  if (rule.endDate) {
+    const end = new Date(rule.endDate + "T23:59:59");
+    if (today > end) return { inserted: false, reason: `Rule ended on ${rule.endDate}.` };
+  }
+
+  // Block double-insertion if this month is already materialized.
+  if (rule.lastGeneratedDate) {
+    const lastGen = new Date(rule.lastGeneratedDate + "T00:00:00");
+    if (lastGen.getFullYear() === today.getFullYear() && lastGen.getMonth() === today.getMonth()) {
+      return { inserted: false, reason: `Already generated this month on ${rule.lastGeneratedDate}.` };
+    }
+  }
+
+  await addTransaction({
+    type: rule.type,
+    date: today,
+    amount: rule.amount,
+    description: `🔁 ${rule.description}`,
+    categoryId: rule.categoryId,
+    paymentMethodId: rule.paymentMethodId,
+    source: rule.source,
+    expenseType: rule.expenseType,
+    isSplit: false,
+  });
+
+  rule.lastGeneratedDate = ymdToday;
+  rule.updatedAt = new Date().toISOString();
+  all[idx] = rule;
+  await writeRules(all);
+  revalidatePath('/recurring');
+
+  return { inserted: true };
+}

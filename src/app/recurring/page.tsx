@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2, Sparkles } from "lucide-react";
+import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2, Sparkles, Zap } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { parseRecurringRuleFromText } from "@/ai/flows/parse-recurring-rule-flow";
 import { useAIModel } from "@/contexts/AIModelContext";
@@ -31,6 +31,7 @@ import {
   updateRecurringRule,
   deleteRecurringRule,
   materializeRecurringTransactions,
+  triggerRecurringRuleNow,
 } from "@/lib/actions/recurring";
 import { getCategories, getPaymentMethods } from "@/lib/actions/transactions";
 import type { RecurringRule, Category, PaymentMethod } from "@/lib/types";
@@ -210,6 +211,24 @@ export default function RecurringPage() {
       fetchAll();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const [triggeringRuleId, setTriggeringRuleId] = useState<string | null>(null);
+  const handleTriggerNow = async (rule: RecurringRule) => {
+    setTriggeringRuleId(rule.id);
+    try {
+      const result = await triggerRecurringRuleNow(rule.id);
+      if (result.inserted) {
+        toast({ title: "Transaction created", description: `"${rule.description}" added with today's date. This month won't auto-generate again.` });
+      } else {
+        toast({ title: "Skipped", description: result.reason || "Nothing to do.", variant: "default" });
+      }
+      fetchAll();
+    } catch (err: any) {
+      toast({ title: "Trigger failed", description: err.message, variant: "destructive" });
+    } finally {
+      setTriggeringRuleId(null);
     }
   };
 
@@ -407,6 +426,15 @@ export default function RecurringPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleTriggerNow(rule)}
+                        disabled={triggeringRuleId === rule.id || !rule.isActive}
+                        title="Trigger this rule for the current month using today's date (skips this month's auto-run)"
+                      >
+                        {triggeringRuleId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleToggleActive(rule)} title={rule.isActive ? 'Pause' : 'Resume'}>
                         {rule.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
