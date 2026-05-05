@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { PiggyBank, Loader2, Trash2, Plus, Pencil, X, Check, Wand2, Sparkles, Palette, RefreshCw, ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
+import { PiggyBank, Loader2, Trash2, Plus, Pencil, X, Check, Wand2, Sparkles, Palette } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +28,9 @@ import {
   updateSavingsAllocation,
   deleteSavingsAllocation,
   parseAndApplySavingsAllocation,
-  getSavingsSmartKpis,
 } from "@/lib/actions/savings";
 import { useAIModel } from "@/contexts/AIModelContext";
-import { useDateSelection } from "@/contexts/DateSelectionContext";
 import type { SavingsAllocation, SavingsAllocationCategory, SavingsAllocationInput } from "@/lib/types";
-import type { SavingsSmartKpisOutput } from "@/ai/flows/savings-smart-kpis-flow";
 import "@/components/savings/savings-crayon.css";
 
 const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
@@ -56,6 +53,15 @@ const CATEGORY_ORDER: SavingsAllocationCategory[] = [
   'savings_account', 'liquid_fund', 'fd', 'rd', 'cash', 'other',
 ];
 
+const CATEGORY_ACCENTS: Record<SavingsAllocationCategory, string> = {
+  savings_account: 'blue',
+  liquid_fund: 'yellow',
+  fd: 'purple',
+  rd: 'pink',
+  cash: 'green',
+  other: 'orange',
+};
+
 const emptyForm = (): SavingsAllocationInput => ({
   name: '',
   location: '',
@@ -73,7 +79,6 @@ type UiMode = 'normal' | 'crayon';
 export default function SavingsPage() {
   const { toast } = useToast();
   const { selectedModel } = useAIModel();
-  const { selectedYear } = useDateSelection();
   const [items, setItems] = useState<SavingsAllocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -97,12 +102,6 @@ export default function SavingsPage() {
   // AI natural-language input
   const [aiText, setAiText] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
-
-  // Smart KPIs (hidden by default — only loaded when user expands).
-  const [kpis, setKpis] = useState<SavingsSmartKpisOutput | null>(null);
-  const [kpisLoading, setKpisLoading] = useState(false);
-  const [kpisError, setKpisError] = useState<string | null>(null);
-  const [kpisOpen, setKpisOpen] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
@@ -215,36 +214,10 @@ export default function SavingsPage() {
     }
   };
 
-  const refreshKpis = useCallback(async () => {
-    if (items.length === 0) { setKpis(null); return; }
-    setKpisLoading(true);
-    setKpisError(null);
-    try {
-      const out = await getSavingsSmartKpis(selectedYear, selectedModel);
-      setKpis(out);
-    } catch (err: any) {
-      setKpisError(err.message || "Failed to compute KPIs");
-    } finally {
-      setKpisLoading(false);
-    }
-  }, [selectedYear, selectedModel, items.length]);
-
-  // Only load KPIs when the user expands the panel (or after data changes
-  // while it's already open). Saves an AI call on every page mount.
-  useEffect(() => {
-    if (!kpisOpen) return;
-    if (items.length === 0) { setKpis(null); return; }
-    refreshKpis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kpisOpen, items.length, total]);
-
-  const showKpis = items.length >= 2; // Need at least 2 entries for any merge/concentration insight.
-
   // ----- root render -----
   if (uiMode === 'crayon') {
     return (
       <div className="crayon-ui min-h-[calc(100svh-4rem)] p-4 sm:p-6 lg:p-8 space-y-6">
-        <CrayonSvgDefs />
         <CrayonHeader
           uiMode={uiMode}
           setUiMode={setUiModePersisted}
@@ -252,16 +225,7 @@ export default function SavingsPage() {
           showForm={showForm}
         />
         <CrayonAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
-        {showKpis && (
-          <CrayonKpisDisclosure
-            open={kpisOpen}
-            onToggle={() => setKpisOpen(o => !o)}
-            kpis={kpis}
-            loading={kpisLoading}
-            error={kpisError}
-            onRefresh={refreshKpis}
-          />
-        )}
+        <CrayonTotalSavings total={total} count={items.length} isLoading={isLoading} />
         {showForm && (
           <CrayonForm
             form={form} setForm={setForm}
@@ -315,16 +279,6 @@ export default function SavingsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <NormalAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
-            {showKpis && (
-              <NormalKpisDisclosure
-                open={kpisOpen}
-                onToggle={() => setKpisOpen(o => !o)}
-                kpis={kpis}
-                loading={kpisLoading}
-                error={kpisError}
-                onRefresh={refreshKpis}
-              />
-            )}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-baseline justify-between flex-wrap gap-2">
               <div className="text-sm text-muted-foreground">Total tracked</div>
               <div className="text-2xl font-bold text-primary">
@@ -506,7 +460,7 @@ function CrayonAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
   onSubmit: () => void;
 }) {
   return (
-    <div className="crayon-card crayon-anim-in">
+    <div className="crayon-card crayon-anim-in" data-accent="blue">
       <div className="flex items-center gap-2 mb-2">
         <Sparkles className="h-5 w-5" />
         <span className="crayon-title text-2xl">Tell me what changed</span>
@@ -532,82 +486,17 @@ function CrayonAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
   );
 }
 
-function NormalKpisDisclosure({ open, onToggle, kpis, loading, error, onRefresh }: {
-  open: boolean;
-  onToggle: () => void;
-  kpis: SavingsSmartKpisOutput | null;
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-}) {
+function CrayonTotalSavings({ total, count, isLoading }: { total: number; count: number; isLoading: boolean }) {
   return (
-    <div className="rounded-lg border bg-background/60">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 text-sm font-semibold hover:bg-background/80 transition-colors"
-      >
-        <span className="flex items-center gap-2">
-          <Lightbulb className="h-4 w-4 text-accent" />
-          AI insights
-          <span className="text-xs font-normal text-muted-foreground">(optional, on-demand)</span>
-        </span>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-      {open && (
-        <div className="px-4 pb-4 pt-1">
-          <div className="flex items-center justify-end mb-2">
-            <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
-              <RefreshCw className={cn("mr-2 h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
-            </Button>
-          </div>
-          {loading && !kpis && (
-            <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Looking for non-obvious patterns...
-            </div>
-          )}
-          {error && <p className="text-xs text-destructive mb-2">{error}</p>}
-          {kpis?.headline && <p className="text-sm italic text-foreground mb-3">"{kpis.headline}"</p>}
-          {kpis && (kpis.kpis?.length ?? 0) === 0 && !loading && (
-            <p className="text-xs text-muted-foreground py-2">
-              Nothing non-obvious to flag right now — the per-category breakdown below already tells the story.
-            </p>
-          )}
-          {kpis && (kpis.kpis?.length ?? 0) > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {kpis.kpis.map((k, i) => (
-                <div key={i} className="rounded-md border bg-card/70 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</div>
-                    {k.kind && <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">{k.kind}</span>}
-                  </div>
-                  <div className="text-lg font-bold text-primary">{formatINR(k.amount)}</div>
-                  {k.share != null && <div className="text-[11px] text-muted-foreground">{k.share.toFixed(1)}% of total</div>}
-                  {k.detail && <div className="text-[11px] text-muted-foreground mt-1">{k.detail}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+    <div className="crayon-kpi crayon-total-kpi crayon-anim-in" data-color="green">
+      <div className="label">Total savings</div>
+      <div className="value">{isLoading ? 'Counting...' : formatINR(total)}</div>
+      <div className="sub">{count === 1 ? '1 location tracked' : `${count} locations tracked`}</div>
     </div>
   );
 }
 
 /* ---------------- crayon variant ---------------- */
-
-function CrayonSvgDefs() {
-  return (
-    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-      <defs>
-        <filter id="crayon-rough">
-          <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="2" seed="7" />
-          <feDisplacementMap in="SourceGraphic" scale="2.2" />
-        </filter>
-      </defs>
-    </svg>
-  );
-}
 
 function CrayonHeader({ uiMode, setUiMode, onNew, showForm }: {
   uiMode: UiMode;
@@ -616,7 +505,7 @@ function CrayonHeader({ uiMode, setUiMode, onNew, showForm }: {
   showForm: boolean;
 }) {
   return (
-    <div className="crayon-card crayon-anim-in">
+    <div className="crayon-card crayon-anim-in" data-accent="purple">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="crayon-title text-3xl sm:text-4xl flex items-center gap-2">
@@ -639,71 +528,6 @@ function CrayonHeader({ uiMode, setUiMode, onNew, showForm }: {
   );
 }
 
-function CrayonKpisDisclosure({ open, onToggle, kpis, loading, error, onRefresh }: {
-  open: boolean;
-  onToggle: () => void;
-  kpis: SavingsSmartKpisOutput | null;
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-}) {
-  return (
-    <div className="crayon-card crayon-anim-in" data-accent="yellow">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-2"
-      >
-        <span className="flex items-center gap-2">
-          <Lightbulb className="h-5 w-5" />
-          <span className="crayon-title text-2xl">AI insights</span>
-          <span className="text-xs text-[color:var(--crayon-muted)]">(tap to {open ? 'hide' : 'show'})</span>
-        </span>
-        {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-      </button>
-      {open && (
-        <div className="mt-3">
-          <div className="flex justify-end mb-2">
-            <button className="crayon-btn" data-variant="ghost" onClick={onRefresh} disabled={loading}>
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              <span>Refresh</span>
-            </button>
-          </div>
-          {loading && !kpis && (
-            <div className="flex items-center justify-center py-6 text-[color:var(--crayon-muted)]">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Looking for non-obvious patterns...
-            </div>
-          )}
-          {error && <p className="text-sm text-[color:var(--crayon-red)] mb-2">{error}</p>}
-          {kpis?.headline && (
-            <p className="crayon-title text-xl italic mb-3 text-[color:var(--crayon-ink)]">"{kpis.headline}"</p>
-          )}
-          {kpis && (kpis.kpis?.length ?? 0) === 0 && !loading && (
-            <p className="text-sm text-[color:var(--crayon-muted)] py-2">
-              Nothing non-obvious to flag — the category cards below already cover it.
-            </p>
-          )}
-          {kpis && (kpis.kpis?.length ?? 0) > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {kpis.kpis.map((k, i) => (
-                <div key={i} className="crayon-kpi" data-color={k.color || ['blue','purple','pink','yellow','green','red'][i % 6]}>
-                  <div className="flex items-center justify-between">
-                    <div className="label">{k.label}</div>
-                    {k.kind && <span className="crayon-tag other text-[11px]">{k.kind}</span>}
-                  </div>
-                  <div className="value">{formatINR(k.amount)}</div>
-                  {k.share != null && <div className="sub">{k.share.toFixed(1)}% of total</div>}
-                  {k.detail && <div className="sub mt-1">{k.detail}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CrayonForm({ form, setForm, amountText, setAmountText, onCancel, onSubmit, submitting, editing }: {
   form: SavingsAllocationInput;
   setForm: React.Dispatch<React.SetStateAction<SavingsAllocationInput>>;
@@ -715,7 +539,7 @@ function CrayonForm({ form, setForm, amountText, setAmountText, onCancel, onSubm
   editing: boolean;
 }) {
   return (
-    <div className="crayon-card crayon-anim-in">
+    <div className="crayon-card crayon-anim-in" data-accent="green">
       <h2 className="crayon-title text-2xl mb-3">{editing ? 'Edit entry' : 'New entry'}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
@@ -772,14 +596,14 @@ function CrayonList({ isLoading, items, grouped, total, onEdit, onDelete }: {
 }) {
   if (isLoading) {
     return (
-      <div className="crayon-card flex items-center justify-center py-8 text-[color:var(--crayon-muted)]">
+      <div className="crayon-card flex items-center justify-center py-8 text-[color:var(--crayon-muted)]" data-accent="yellow">
         <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
       </div>
     );
   }
   if (items.length === 0) {
     return (
-      <div className="crayon-card text-center py-8 crayon-title text-lg text-[color:var(--crayon-muted)]">
+      <div className="crayon-card text-center py-8 crayon-title text-lg text-[color:var(--crayon-muted)]" data-accent="pink">
         Nothing scribbled in here yet — try the AI box or hit "New entry".
       </div>
     );
@@ -790,7 +614,7 @@ function CrayonList({ isLoading, items, grouped, total, onEdit, onDelete }: {
         const subTotal = grouped[c].reduce((s, i) => s + i.amount, 0);
         const share = (subTotal / (total || 1)) * 100;
         return (
-          <div key={c} className="crayon-card crayon-anim-in">
+          <div key={c} className="crayon-card crayon-anim-in" data-accent={CATEGORY_ACCENTS[c]}>
             <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <span className={`crayon-tag ${c}`}>{CATEGORY_LABELS[c]}</span>
