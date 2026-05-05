@@ -21,18 +21,19 @@ import { callAzureOpenAI } from '@/lib/azure-openai';
 import type { AIModel, SavingsAllocation, AITransactionForAnalysis } from '@/lib/types';
 
 const KpiSchema = z.object({
-  label: z.string().describe("Short title, e.g. 'Total Parked', 'Liquid Funds', 'HDFC across products'."),
+  label: z.string().describe("Short title, e.g. 'HDFC across products', 'Goal: Down-payment'."),
   amount: z.number().describe("INR value for this KPI."),
-  share: z.number().nullish().describe("Share of total tracked savings, 0-100, 1 decimal. Null for non-shareable KPIs."),
-  detail: z.string().nullish().describe("Optional one-line context, e.g. '3 entries combined: ICICI Prudential Liquid, Axis Liquid, Quant Liquid'."),
+  share: z.number().nullish().describe("Share of total tracked savings, 0-100, 1 decimal. Null when not meaningful."),
+  detail: z.string().nullish().describe("One-line context, e.g. '3 entries combined: HDFC Savings + HDFC RD + HDFC FD'."),
   color: z.enum(['blue', 'purple', 'pink', 'yellow', 'green', 'red']).nullish().describe("Suggested colour bucket for the KPI tile."),
-  members: z.array(z.string()).nullish().describe("ids of the SavingsAllocations included in this KPI (when it's a combined one)."),
+  members: z.array(z.string()).nullish().describe("ids of the SavingsAllocations included in this KPI."),
+  kind: z.enum(['merge', 'concentration', 'idle', 'stale', 'goal', 'other']).describe("What flavour of insight this is."),
 });
 
 const SavingsSmartKpisOutputSchema = z.object({
   totalParked: z.number().describe("Sum of every tracked savings amount, ₹."),
-  kpis: z.array(KpiSchema).min(1).max(10).describe("Ordered list of KPIs to display. Always include 'Total Parked' first, then category subtotals, then any intelligent merges."),
-  headline: z.string().nullish().describe("One sharp, ≤25-word observation about the overall picture."),
+  kpis: z.array(KpiSchema).max(6).describe("Up to 6 NON-OBVIOUS insight tiles. Do NOT emit per-category subtotals — those are already shown elsewhere on the page. Empty array is fine if nothing useful applies."),
+  headline: z.string().nullish().describe("One sharp, ≤25-word observation. Null if nothing meaningful to say."),
 });
 export type SavingsSmartKpisOutput = z.infer<typeof SavingsSmartKpisOutputSchema>;
 
@@ -80,25 +81,31 @@ INVESTMENT TRANSACTIONS for {{year}} (read-only context; do NOT mix into the tot
 {{{json investmentsForYear}}}
 \`\`\`
 
-YOUR OUTPUT
-1. \`totalParked\` = sum of \`amount\` across ALL allocations.
-2. \`kpis\` = ordered list, max 8 items. Build them as follows:
-   a. First KPI MUST be label="Total Parked", amount=totalParked, share=null, color="purple".
-   b. Then ONE KPI per non-empty category bucket: 'Savings Accounts', 'Liquid Funds', 'Fixed Deposits', 'Recurring Deposits', 'Cash', 'Other'. Set members[] to the contributing ids and share=% of total to 1 decimal. Use color: savings_account→blue, liquid_fund→yellow, fd→purple, rd→pink, cash→green, other→red.
-   c. THEN add INTELLIGENT MERGE KPIs for any pattern you can detect across location/notes that is more useful than the raw category split. Examples of patterns worth merging:
-      - All HDFC products (savings + RD + FD at HDFC) → "HDFC across products".
-      - All liquid mutual funds across AMCs → "Liquid Funds (all AMCs)" — only if it adds value beyond the category KPI.
-      - All entries the user tagged for a single goal (e.g. notes mention "down-payment", "wedding", "emergency") → "Goal: Down-payment".
-      - Bank-level concentration (e.g. >60% sitting in one bank).
-      Only add a merge KPI if (i) it covers ≥2 allocations and (ii) it tells the user something non-obvious. Skip merges that just duplicate a category KPI.
-   d. Cap the merge KPIs at 4. Each merge KPI must include members[] = ids of the allocations it covers.
-3. \`headline\` = one short, sharp observation. Use specific numbers from the data (e.g. "₹8.2L parked, 71% in idle savings — moving ₹4L to a liquid fund could add ~₹16k/yr."). ≤25 words. Use ₹ Indian comma grouping. Null if there is nothing meaningful to say (e.g. <2 entries).
+YOUR OUTPUT — only NON-OBVIOUS insights. The page ALREADY shows total parked, per-category subtotals, and per-entry rows. Do NOT duplicate those. Emit a tile ONLY if it tells the user something they can't see at a glance.
+
+1. \`totalParked\` = sum of \`amount\` across ALL allocations (used internally; the UI may not show it).
+2. \`kpis\` — up to 6 tiles. Never repeat what's obvious. Patterns worth surfacing (pick 0-6 of these):
+   a. **Cross-category merges** (kind="merge") — same institution across products, e.g. all HDFC products (savings + RD + FD) → "HDFC across products". Or same goal tagged in notes (e.g. "down-payment", "wedding", "emergency") → "Goal: Down-payment". Only if ≥2 entries and the merge cuts ACROSS the category split.
+   b. **Concentration risk** (kind="concentration") — one bank/AMC/instrument holds >50% of total → "Concentration: HDFC". Include the % in detail.
+   c. **Idle cash** (kind="idle") — too much in plain savings_account vs liquid_fund. Only if savings_account share ≥ 50% AND total ≥ ₹2L. Suggest the opportunity: "₹X idle in savings — moving to liquid fund ≈ ₹Y/yr at 6.5%".
+   d. **Stale entries** (kind="stale") — entries whose asOfDate is >90 days before the latest asOfDate in the dataset. Tile = count + total ₹ at risk of being out of date.
+   e. **Goal coverage** (kind="goal") — multiple entries explicitly tagged in notes for one purpose; show goal total + #entries.
+   f. **Single-entry warning** (kind="other") — only if helpful (e.g. one entry is >70% of total).
+
+3. \`headline\` — one sharp observation, ≤25 words, with specific ₹ figures, OR null if nothing useful applies. Don't restate the per-category split.
+
+DO NOT EMIT
+- A "Total Parked" tile.
+- A per-category tile (Savings Accounts / Liquid Funds / FDs / RDs / Cash / Other) — those are already in the page's category breakdown.
+- Any tile that just restates a single allocation's amount.
+- More than 6 tiles. If there is nothing non-obvious, return kpis=[].
 
 RULES
 - All amounts are INR; use ₹ + Indian comma grouping in 'detail'/'headline' strings (e.g. ₹1,23,456.78). totalParked and kpi.amount must be plain numbers (no formatting).
 - Round share to 1 decimal.
 - Never invent allocations.
-- If allocations is empty, return totalParked=0, kpis=[{label:"Total Parked",amount:0,color:"purple"}], headline=null.
+- members[] is required for any tile that aggregates ≥2 entries.
+- If allocations is empty or has <2 entries, return totalParked accordingly, kpis=[], headline=null.
 
 OUTPUT JSON ONLY conforming to the schema.
 `;

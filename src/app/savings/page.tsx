@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { PiggyBank, Loader2, Trash2, Plus, Pencil, X, Check, Wand2, Sparkles, Palette, RefreshCw } from "lucide-react";
+import { PiggyBank, Loader2, Trash2, Plus, Pencil, X, Check, Wand2, Sparkles, Palette, RefreshCw, ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,10 +98,11 @@ export default function SavingsPage() {
   const [aiText, setAiText] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
 
-  // Smart KPIs
+  // Smart KPIs (hidden by default — only loaded when user expands).
   const [kpis, setKpis] = useState<SavingsSmartKpisOutput | null>(null);
   const [kpisLoading, setKpisLoading] = useState(false);
   const [kpisError, setKpisError] = useState<string | null>(null);
+  const [kpisOpen, setKpisOpen] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
@@ -228,14 +229,16 @@ export default function SavingsPage() {
     }
   }, [selectedYear, selectedModel, items.length]);
 
-  // Auto-refresh KPIs when the underlying data changes (debounced via length+total).
+  // Only load KPIs when the user expands the panel (or after data changes
+  // while it's already open). Saves an AI call on every page mount.
   useEffect(() => {
+    if (!kpisOpen) return;
     if (items.length === 0) { setKpis(null); return; }
     refreshKpis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, total]);
+  }, [kpisOpen, items.length, total]);
 
-  const showKpis = items.length > 0;
+  const showKpis = items.length >= 2; // Need at least 2 entries for any merge/concentration insight.
 
   // ----- root render -----
   if (uiMode === 'crayon') {
@@ -249,7 +252,16 @@ export default function SavingsPage() {
           showForm={showForm}
         />
         <CrayonAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
-        {showKpis && <CrayonKpis kpis={kpis} loading={kpisLoading} error={kpisError} onRefresh={refreshKpis} fallbackTotal={total} />}
+        {showKpis && (
+          <CrayonKpisDisclosure
+            open={kpisOpen}
+            onToggle={() => setKpisOpen(o => !o)}
+            kpis={kpis}
+            loading={kpisLoading}
+            error={kpisError}
+            onRefresh={refreshKpis}
+          />
+        )}
         {showForm && (
           <CrayonForm
             form={form} setForm={setForm}
@@ -303,7 +315,16 @@ export default function SavingsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <NormalAiInput aiText={aiText} setAiText={setAiText} aiBusy={aiBusy} onSubmit={handleAiSubmit} />
-            {showKpis && <NormalKpis kpis={kpis} loading={kpisLoading} error={kpisError} onRefresh={refreshKpis} fallbackTotal={total} />}
+            {showKpis && (
+              <NormalKpisDisclosure
+                open={kpisOpen}
+                onToggle={() => setKpisOpen(o => !o)}
+                kpis={kpis}
+                loading={kpisLoading}
+                error={kpisError}
+                onRefresh={refreshKpis}
+              />
+            )}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-baseline justify-between flex-wrap gap-2">
               <div className="text-sm text-muted-foreground">Total tracked</div>
               <div className="text-2xl font-bold text-primary">
@@ -511,36 +532,64 @@ function CrayonAiInput({ aiText, setAiText, aiBusy, onSubmit }: {
   );
 }
 
-function NormalKpis({ kpis, loading, error, onRefresh, fallbackTotal }: {
+function NormalKpisDisclosure({ open, onToggle, kpis, loading, error, onRefresh }: {
+  open: boolean;
+  onToggle: () => void;
   kpis: SavingsSmartKpisOutput | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  fallbackTotal: number;
 }) {
   return (
-    <div className="rounded-lg border bg-background/60 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" />
-          <span className="font-semibold text-sm">AI Smart KPIs</span>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={cn("mr-2 h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
-        </Button>
-      </div>
-      {error && <p className="text-xs text-destructive mb-2">{error}</p>}
-      {kpis?.headline && <p className="text-xs italic text-muted-foreground mb-3">{kpis.headline}</p>}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {(kpis?.kpis || [{ label: 'Total Parked', amount: fallbackTotal }]).map((k, i) => (
-          <div key={i} className="rounded-md border bg-card/70 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</div>
-            <div className="text-lg font-bold text-primary">{formatINR(k.amount)}</div>
-            {k.share != null && <div className="text-[11px] text-muted-foreground">{k.share.toFixed(1)}% of total</div>}
-            {k.detail && <div className="text-[11px] text-muted-foreground mt-1 truncate" title={k.detail}>{k.detail}</div>}
+    <div className="rounded-lg border bg-background/60">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-3 text-sm font-semibold hover:bg-background/80 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-accent" />
+          AI insights
+          <span className="text-xs font-normal text-muted-foreground">(optional, on-demand)</span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1">
+          <div className="flex items-center justify-end mb-2">
+            <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+              <RefreshCw className={cn("mr-2 h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
+            </Button>
           </div>
-        ))}
-      </div>
+          {loading && !kpis && (
+            <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Looking for non-obvious patterns...
+            </div>
+          )}
+          {error && <p className="text-xs text-destructive mb-2">{error}</p>}
+          {kpis?.headline && <p className="text-sm italic text-foreground mb-3">"{kpis.headline}"</p>}
+          {kpis && (kpis.kpis?.length ?? 0) === 0 && !loading && (
+            <p className="text-xs text-muted-foreground py-2">
+              Nothing non-obvious to flag right now — the per-category breakdown below already tells the story.
+            </p>
+          )}
+          {kpis && (kpis.kpis?.length ?? 0) > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {kpis.kpis.map((k, i) => (
+                <div key={i} className="rounded-md border bg-card/70 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</div>
+                    {k.kind && <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">{k.kind}</span>}
+                  </div>
+                  <div className="text-lg font-bold text-primary">{formatINR(k.amount)}</div>
+                  {k.share != null && <div className="text-[11px] text-muted-foreground">{k.share.toFixed(1)}% of total</div>}
+                  {k.detail && <div className="text-[11px] text-muted-foreground mt-1">{k.detail}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -590,40 +639,67 @@ function CrayonHeader({ uiMode, setUiMode, onNew, showForm }: {
   );
 }
 
-function CrayonKpis({ kpis, loading, error, onRefresh, fallbackTotal }: {
+function CrayonKpisDisclosure({ open, onToggle, kpis, loading, error, onRefresh }: {
+  open: boolean;
+  onToggle: () => void;
   kpis: SavingsSmartKpisOutput | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  fallbackTotal: number;
 }) {
-  const list = kpis?.kpis || [{ label: 'Total Parked', amount: fallbackTotal, color: 'purple' as const }];
   return (
-    <div className="crayon-card crayon-anim-in">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-          <span className="crayon-title text-2xl">Smart KPIs</span>
-        </div>
-        <button className="crayon-btn" data-variant="ghost" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          <span>Refresh</span>
-        </button>
-      </div>
-      {error && <p className="text-sm text-[color:var(--crayon-red)] mb-2">{error}</p>}
-      {kpis?.headline && (
-        <p className="crayon-title text-lg italic mb-3 text-[color:var(--crayon-ink)]">"{kpis.headline}"</p>
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {list.map((k, i) => (
-          <div key={i} className="crayon-kpi" data-color={k.color || 'purple'}>
-            <div className="label">{k.label}</div>
-            <div className="value">{formatINR(k.amount)}</div>
-            {k.share != null && <div className="sub">{k.share.toFixed(1)}% of total</div>}
-            {k.detail && <div className="sub mt-1" title={k.detail}>{k.detail}</div>}
+    <div className="crayon-card crayon-anim-in" data-accent="yellow">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2"
+      >
+        <span className="flex items-center gap-2">
+          <Lightbulb className="h-5 w-5" />
+          <span className="crayon-title text-2xl">AI insights</span>
+          <span className="text-xs text-[color:var(--crayon-muted)]">(tap to {open ? 'hide' : 'show'})</span>
+        </span>
+        {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+      </button>
+      {open && (
+        <div className="mt-3">
+          <div className="flex justify-end mb-2">
+            <button className="crayon-btn" data-variant="ghost" onClick={onRefresh} disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              <span>Refresh</span>
+            </button>
           </div>
-        ))}
-      </div>
+          {loading && !kpis && (
+            <div className="flex items-center justify-center py-6 text-[color:var(--crayon-muted)]">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Looking for non-obvious patterns...
+            </div>
+          )}
+          {error && <p className="text-sm text-[color:var(--crayon-red)] mb-2">{error}</p>}
+          {kpis?.headline && (
+            <p className="crayon-title text-xl italic mb-3 text-[color:var(--crayon-ink)]">"{kpis.headline}"</p>
+          )}
+          {kpis && (kpis.kpis?.length ?? 0) === 0 && !loading && (
+            <p className="text-sm text-[color:var(--crayon-muted)] py-2">
+              Nothing non-obvious to flag — the category cards below already cover it.
+            </p>
+          )}
+          {kpis && (kpis.kpis?.length ?? 0) > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {kpis.kpis.map((k, i) => (
+                <div key={i} className="crayon-kpi" data-color={k.color || ['blue','purple','pink','yellow','green','red'][i % 6]}>
+                  <div className="flex items-center justify-between">
+                    <div className="label">{k.label}</div>
+                    {k.kind && <span className="crayon-tag other text-[11px]">{k.kind}</span>}
+                  </div>
+                  <div className="value">{formatINR(k.amount)}</div>
+                  {k.share != null && <div className="sub">{k.share.toFixed(1)}% of total</div>}
+                  {k.detail && <div className="sub mt-1">{k.detail}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
