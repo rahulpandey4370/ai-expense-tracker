@@ -49,6 +49,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'all available transactions'."),
   model: z.enum(modelNames).optional(),
   verbose: z.boolean().optional().describe("If true, the AI should provide detailed, elaborate responses. If false, concise responses."), // Add verbose
+  investmentMode: z.boolean().optional().describe("If true, the bot is in investment-analysis mode and the transactions are the year's investment-related transactions only."),
 });
 type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaInternal>;
 
@@ -87,8 +88,10 @@ export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];
   chatHistory?: ChatMessage[];
-  model?: AIModel; // Add model parameter
-  verbose?: boolean; // Add verbose parameter
+  model?: AIModel;
+  verbose?: boolean;
+  investmentMode?: boolean;
+  scopeYear?: number;
 }): Promise<FinancialChatbotOutput> {
   // 1E: short-circuit clearly off-topic queries.
   if (isProbablyOffTopic(input.query)) {
@@ -110,7 +113,12 @@ export async function askFinancialBot(input: {
   // The transactions are now pre-filtered by the dashboard page.
   // We can derive the data scope from the first transaction if available.
   let dataScopeMessage = "all available transactions";
-  if (input.transactions.length > 0) {
+  if (input.investmentMode) {
+    const yr = input.scopeYear ?? (input.transactions.length > 0 ? getCalendarDateParts(input.transactions[0].date)?.year : undefined);
+    dataScopeMessage = yr
+      ? `INVESTMENT-RELATED transactions for the entire year ${yr}`
+      : "INVESTMENT-RELATED transactions for the selected year";
+  } else if (input.transactions.length > 0) {
     const firstTransactionDate = input.transactions[0].date;
     const parts = getCalendarDateParts(firstTransactionDate);
     if (parts) {
@@ -142,7 +150,8 @@ export async function askFinancialBot(input: {
     chatHistory: input.chatHistory,
     dataScopeMessage: dataScopeMessage,
     model: input.model,
-    verbose: input.verbose, // Pass verbose
+    verbose: input.verbose,
+    investmentMode: input.investmentMode,
   };
 
   const result = await financialChatbotFlow(flowInput);
@@ -156,7 +165,7 @@ const financialChatbotFlow = ai.defineFlow(
     inputSchema: FinancialChatbotInputSchemaInternal,
     outputSchema: FinancialChatbotOutputSchema,
   },
-  async ({ query, transactions, chatHistory, dataScopeMessage, model, verbose }) => {
+  async ({ query, transactions, chatHistory, dataScopeMessage, model, verbose, investmentMode }) => {
 
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
@@ -167,8 +176,25 @@ const financialChatbotFlow = ai.defineFlow(
       ? "Provide comprehensive, detailed explanations. Elaborate on your analysis, explain your reasoning step-by-step, and provide additional context or tips where relevant. Do not hold back on details."
       : "Be concise and to the point. Answer the user's question directly with minimal fluff. Only provide elaborate details if explicitly asked. Focus on the key numbers and facts.";
 
+    const investmentModeBlock = investmentMode ? `
+## INVESTMENT MODE — ACTIVE
+You are operating in **INVESTMENT MODE**. The transactions provided are NOT a generic monthly snapshot — they are the user's investment-related transactions for an entire calendar year (purchases of stocks, mutual funds, RDs, equity, debt, gold, US stocks, crypto, plus passive-income rows like dividends, cashback, and investment income).
+- Default to year-level reasoning, not month-level.
+- When relevant, break analysis down by:
+  - Investment vehicle / category (Stocks vs MF vs RD vs Gold etc.) with totals and % share.
+  - Month-over-month investment cadence (which months had the highest/lowest investment outflow).
+  - Top single investment transactions for the year.
+  - Total passive income earned (dividends + cashback + investment income).
+  - Concentration / diversification commentary if obvious.
+- Treat \`expenseType=='investment'\` rows and rows in categories {Stocks, Mutual Funds, Recurring Deposit, Equity, Debt, Gold/Silver, US Stocks, Crypto} as investment outflows.
+- Treat \`type=='income'\` rows in categories {Dividends, Cashback, Investment Income} as passive investment income.
+- Do NOT analyse rent/food/shopping/etc. — those are not in scope here. If asked, politely redirect: "Investment Mode is on, so I only have your investment transactions for the year. Switch off Investment Mode to ask about regular expenses."
+
+` : '';
+
     const systemPrompt = `## PERSONALITY
 You are a professional, knowledgeable, and helpful AI Financial Assistant who communicates in a friendly yet authoritative manner. You are patient, detail-oriented, and always prioritize accuracy in financial calculations and analysis.
+${investmentModeBlock}
 
 ## ROLE
 You are the AI Financial Assistant for FinWise AI, specializing in personal finance analysis for Indian users. You have expertise in:

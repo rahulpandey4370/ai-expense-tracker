@@ -110,6 +110,30 @@ export interface RecurringRule extends RecurringRuleInput {
   updatedAt: string; // ISO
 }
 
+// --- Cash Savings Allocations ---
+// User-tracked record of where their cash savings sit (savings account, liquid
+// fund, FD, etc.) so they can see at a glance how much money is parked where.
+export const SavingsAllocationCategoryEnum = z.enum([
+  'savings_account', 'liquid_fund', 'fd', 'rd', 'cash', 'other',
+]);
+export type SavingsAllocationCategory = z.infer<typeof SavingsAllocationCategoryEnum>;
+
+export const SavingsAllocationInputSchema = z.object({
+  name: z.string().min(1, "Name is required.").describe("Short label, e.g. 'Emergency Fund'."),
+  location: z.string().min(1, "Location is required.").describe("Where the money sits, e.g. 'HDFC Savings A/c', 'Quant Liquid Fund'."),
+  category: SavingsAllocationCategoryEnum,
+  amount: z.number().gt(0, "Amount must be positive."),
+  asOfDate: z.string().describe("YYYY-MM-DD; the date this balance was last verified."),
+  notes: z.string().optional(),
+});
+export type SavingsAllocationInput = z.infer<typeof SavingsAllocationInputSchema>;
+
+export interface SavingsAllocation extends SavingsAllocationInput {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
 export type ExpenseType = 'need' | 'want' | 'investment' | 'investment_expense';

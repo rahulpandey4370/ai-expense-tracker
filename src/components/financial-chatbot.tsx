@@ -17,7 +17,7 @@ import { ModelInfoBadge } from './model-info-badge';
 import { MarkdownContent } from './markdown-content';
 import Link from 'next/link';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
-import { isSameCalendarMonth } from '@/lib/date-utils';
+import { isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -79,6 +79,7 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isVerbose, setIsVerbose] = useState<boolean>(false); // Add verbose state
+  const [isInvestmentMode, setIsInvestmentMode] = useState<boolean>(false);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -136,10 +137,19 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     const query = (typeof e === 'string' ? e : inputValue).trim();
     if (!query) return;
 
-    // Filter transactions based on selected month and year
-    const filteredTransactions = allTransactions.filter(t =>
-      isSameCalendarMonth(t.date, selectedMonth, selectedYear)
-    );
+    // Default: month scope. Investment mode: full year, investment-related only.
+    const INVESTMENT_CATEGORIES = new Set([
+      'Stocks', 'Mutual Funds', 'Recurring Deposit', 'Equity', 'Debt', 'Gold/Silver', 'US Stocks', 'Crypto',
+      'Cashback', 'Investment Income', 'Dividends',
+    ]);
+    const filteredTransactions = isInvestmentMode
+      ? allTransactions.filter(t =>
+          isSameCalendarYear(t.date, selectedYear) && (
+            t.expenseType === 'investment' ||
+            (t.category?.name ? INVESTMENT_CATEGORIES.has(t.category.name) : false)
+          )
+        )
+      : allTransactions.filter(t => isSameCalendarMonth(t.date, selectedMonth, selectedYear));
 
     const userMessage: ChatMessage = { role: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);
@@ -154,7 +164,9 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
         transactions: filteredTransactions,
         chatHistory: messages.slice(-5),
         model: selectedModel,
-        verbose: isVerbose, // Pass verbose flag
+        verbose: isVerbose,
+        investmentMode: isInvestmentMode,
+        scopeYear: isInvestmentMode ? selectedYear : undefined,
       });
       const assistantMessage: ChatMessage = { role: 'assistant', content: result.response, model: result.model };
       setMessages(prev => [...prev, assistantMessage]);
@@ -191,6 +203,10 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
             <CardDescription className="text-xs">Financial Assistant</CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center space-x-2">
+              <Switch id="investment-mode" checked={isInvestmentMode} onCheckedChange={setIsInvestmentMode} />
+              <Label htmlFor="investment-mode" className="text-xs font-normal cursor-pointer" title={`When on, the chatbot sees only investment-related transactions for ${selectedYear} instead of the selected month.`}>Investment Mode</Label>
+            </div>
             <div className="flex items-center space-x-2">
               <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} />
               <Label htmlFor="verbose-mode" className="text-xs font-normal cursor-pointer">Verbose</Label>

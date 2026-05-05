@@ -104,7 +104,7 @@ Available Payment Methods:
 
 From the receipt image, extract the following:
 - date: Transaction date in YYYY-MM-DD format. If multiple dates are present (e.g., order date, payment date), prefer the payment date. If no date is clear, use the {{currentDate}}.
-- description: Merchant name or a concise description of the purchase (e.g., "Big Bazaar Groceries", "Starbucks Coffee").
+- description: Merchant name or a concise description of the purchase. **It MUST start with a single appropriate emoji followed by one space, then the description.** Examples: "🛒 Big Bazaar Groceries", "☕ Starbucks Coffee", "🍽️ Domino's Pizza", "⛽ Indian Oil Petrol", "🛍️ H&M Apparel", "🏥 Apollo Pharmacy", "🚕 Uber". Use 💸 only as a last-resort fallback. Only one emoji at the start.
 - amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
 - paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash", "PayTM UPI"), the best guess for a payment method name from the provided list. Look for card brand names, last 4 digits, or payment app names.
