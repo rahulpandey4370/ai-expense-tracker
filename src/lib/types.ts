@@ -134,6 +134,149 @@ export interface SavingsAllocation extends SavingsAllocationInput {
   updatedAt: string;
 }
 
+// --- Portfolio Tracking ---
+export const PortfolioAssetTypeEnum = z.enum([
+  'mutual_fund',
+  'indian_equity',
+  'us_equity',
+  'crypto',
+  'gold',
+  'fd_rd',
+  'other',
+]);
+export type PortfolioAssetType = z.infer<typeof PortfolioAssetTypeEnum>;
+
+export const PortfolioCurrencyEnum = z.enum(['INR', 'USD']);
+export type PortfolioCurrency = z.infer<typeof PortfolioCurrencyEnum>;
+
+export const PortfolioTransactionTypeEnum = z.enum([
+  'buy',
+  'sell',
+  'dividend',
+  'interest',
+  'fee',
+]);
+export type PortfolioTransactionType = z.infer<typeof PortfolioTransactionTypeEnum>;
+
+export const PortfolioEntrySourceEnum = z.enum(['manual', 'ai_text', 'screenshot']);
+export type PortfolioEntrySource = z.infer<typeof PortfolioEntrySourceEnum>;
+
+export interface PortfolioBaseDocument {
+  id: string;
+  userId: string;
+  docType: 'asset' | 'transaction' | 'valuation' | 'ai_import';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export const PortfolioAssetInputSchema = z.object({
+  name: z.string().min(1, "Asset name is required."),
+  assetType: PortfolioAssetTypeEnum.default('other'),
+  symbol: z.string().optional(),
+  isin: z.string().optional(),
+  schemeCode: z.string().optional(),
+  currency: PortfolioCurrencyEnum.default('INR'),
+  notes: z.string().optional(),
+});
+export type PortfolioAssetInput = z.infer<typeof PortfolioAssetInputSchema>;
+
+export interface PortfolioAsset extends PortfolioBaseDocument, PortfolioAssetInput {
+  docType: 'asset';
+}
+
+export const PortfolioTransactionInputSchema = z.object({
+  assetId: z.string().optional(),
+  assetName: z.string().min(1, "Fund/stock name is required."),
+  assetType: PortfolioAssetTypeEnum.default('other'),
+  type: PortfolioTransactionTypeEnum,
+  date: z.string().min(1, "Date is required."),
+  amount: z.number().gt(0, "Amount must be positive."),
+  quantity: z.number().gt(0).optional(),
+  pricePerUnit: z.number().gt(0).optional(),
+  charges: z.number().min(0).optional(),
+  taxes: z.number().min(0).optional(),
+  currency: PortfolioCurrencyEnum.default('INR'),
+  notes: z.string().optional(),
+  source: PortfolioEntrySourceEnum.default('manual'),
+});
+export type PortfolioTransactionInput = z.infer<typeof PortfolioTransactionInputSchema>;
+
+export interface PortfolioTransaction extends PortfolioBaseDocument, Omit<PortfolioTransactionInput, 'assetId'> {
+  docType: 'transaction';
+  assetId: string;
+}
+
+export const PortfolioValuationInputSchema = z.object({
+  assetId: z.string().optional(),
+  assetName: z.string().min(1, "Fund/stock name is required."),
+  assetType: PortfolioAssetTypeEnum.default('other'),
+  date: z.string().min(1, "Date is required."),
+  totalValue: z.number().gt(0, "Current value must be positive."),
+  quantity: z.number().gt(0).optional(),
+  pricePerUnit: z.number().gt(0).optional(),
+  currency: PortfolioCurrencyEnum.default('INR'),
+  notes: z.string().optional(),
+  source: PortfolioEntrySourceEnum.default('manual'),
+});
+export type PortfolioValuationInput = z.infer<typeof PortfolioValuationInputSchema>;
+
+export interface PortfolioValuation extends PortfolioBaseDocument, Omit<PortfolioValuationInput, 'assetId'> {
+  docType: 'valuation';
+  assetId: string;
+}
+
+export interface PortfolioAIImport extends PortfolioBaseDocument {
+  docType: 'ai_import';
+  inputType: 'text' | 'screenshot';
+  rawText?: string;
+  parsedJson: unknown;
+  createdRecordIds: string[];
+}
+
+export const PortfolioEntryInputSchema = z.discriminatedUnion('entryKind', [
+  PortfolioTransactionInputSchema.extend({ entryKind: z.literal('transaction') }),
+  PortfolioValuationInputSchema.extend({ entryKind: z.literal('valuation') }),
+]);
+export type PortfolioEntryInput = z.infer<typeof PortfolioEntryInputSchema>;
+
+export interface PortfolioAssetSummary {
+  asset: PortfolioAsset;
+  transactions: PortfolioTransaction[];
+  valuations: PortfolioValuation[];
+  totalInvested: number;
+  totalOutflows: number;
+  totalInflows: number;
+  currentValue: number;
+  latestValuation?: PortfolioValuation;
+  netPnl: number;
+  netPnlPercent: number | null;
+  xirr: number | null;
+  holdingDays: number | null;
+  transactionCount: number;
+}
+
+export interface PortfolioDashboardSummary {
+  totalInvested: number;
+  totalCurrentValue: number;
+  totalInflows: number;
+  netPnl: number;
+  netPnlPercent: number | null;
+  xirr: number | null;
+  assetCount: number;
+  transactionCount: number;
+  latestUpdateDate?: string;
+  bestPerformer?: PortfolioAssetSummary;
+  worstPerformer?: PortfolioAssetSummary;
+}
+
+export interface PortfolioDashboardData {
+  assets: PortfolioAsset[];
+  transactions: PortfolioTransaction[];
+  valuations: PortfolioValuation[];
+  assetSummaries: PortfolioAssetSummary[];
+  summary: PortfolioDashboardSummary;
+}
+
 // Derived types for UI convenience, if needed
 export type TransactionType = 'income' | 'expense';
 export type ExpenseType = 'need' | 'want' | 'investment' | 'investment_expense';

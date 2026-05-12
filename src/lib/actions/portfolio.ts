@@ -1,0 +1,410 @@
+'use server';
+
+import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
+import { revalidatePath } from 'next/cache';
+import cuid from 'cuid';
+import {
+  PortfolioAssetInputSchema,
+  PortfolioEntryInputSchema,
+  PortfolioTransactionInputSchema,
+  PortfolioValuationInputSchema,
+  type PortfolioAIImport,
+  type PortfolioAsset,
+  type PortfolioAssetInput,
+  type PortfolioDashboardData,
+  type PortfolioEntryInput,
+  type PortfolioTransaction,
+  type PortfolioTransactionInput,
+  type PortfolioValuation,
+  type PortfolioValuationInput,
+} from '@/lib/types';
+import { buildPortfolioDashboardData } from '@/lib/portfolio-calculations';
+import { parsePortfolioEntryWithAI } from '@/ai/flows/parse-portfolio-entry-flow';
+
+const DEFAULT_USER_ID = 'default';
+
+let portfolioContainerInstance: CosmosContainer | undefined;
+
+async function getCosmosClientAndDb() {
+  const endpoint = process.env.COSMOS_DB_ENDPOINT;
+  const key = process.env.COSMOS_DB_KEY;
+  const databaseId = process.env.COSMOS_DB_DATABASE_ID;
+
+  if (!endpoint || !key || !databaseId) {
+    throw new Error("Cosmos DB core environment variables are not fully configured.");
+  }
+
+  const cosmosClient = new CosmosClient({ endpoint, key });
+  return { database: cosmosClient.database(databaseId) };
+}
+
+async function getPortfolioContainer(): Promise<CosmosContainer> {
+  if (portfolioContainerInstance) return portfolioContainerInstance;
+  const { database } = await getCosmosClientAndDb();
+  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID;
+  if (!containerId) {
+    throw new Error("COSMOS_DB_PORTFOLIO_CONTAINER_ID is not configured. Expected value: portfolio");
+  }
+  portfolioContainerInstance = database.container(containerId);
+  return portfolioContainerInstance;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function todayYmd() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function cleanOptional(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function revalidatePortfolio(assetId?: string) {
+  revalidatePath('/portfolio');
+  if (assetId) revalidatePath(`/portfolio/${assetId}`);
+}
+
+export async function getPortfolioAssets(): Promise<PortfolioAsset[]> {
+  const container = await getPortfolioContainer();
+  const { resources } = await container.items.query({
+    query: "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'asset' ORDER BY c.name ASC",
+    parameters: [{ name: '@userId', value: DEFAULT_USER_ID }],
+  }).fetchAll();
+  return resources as PortfolioAsset[];
+}
+
+export async function getPortfolioTransactions(assetId?: string): Promise<PortfolioTransaction[]> {
+  const container = await getPortfolioContainer();
+  const query = assetId
+    ? "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'transaction' AND c.assetId = @assetId ORDER BY c.date DESC"
+    : "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'transaction' ORDER BY c.date DESC";
+  const parameters: { name: string; value: string }[] = [{ name: '@userId', value: DEFAULT_USER_ID }];
+  if (assetId) parameters.push({ name: '@assetId', value: assetId });
+  const { resources } = await container.items.query({ query, parameters }).fetchAll();
+  return resources as PortfolioTransaction[];
+}
+
+export async function getPortfolioValuations(assetId?: string): Promise<PortfolioValuation[]> {
+  const container = await getPortfolioContainer();
+  const query = assetId
+    ? "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'valuation' AND c.assetId = @assetId ORDER BY c.date DESC"
+    : "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'valuation' ORDER BY c.date DESC";
+  const parameters: { name: string; value: string }[] = [{ name: '@userId', value: DEFAULT_USER_ID }];
+  if (assetId) parameters.push({ name: '@assetId', value: assetId });
+  const { resources } = await container.items.query({ query, parameters }).fetchAll();
+  return resources as PortfolioValuation[];
+}
+
+export async function getPortfolioDashboardData(): Promise<PortfolioDashboardData> {
+  const [assets, transactions, valuations] = await Promise.all([
+    getPortfolioAssets(),
+    getPortfolioTransactions(),
+    getPortfolioValuations(),
+  ]);
+  return buildPortfolioDashboardData(assets, transactions, valuations);
+}
+
+export async function getPortfolioAssetDetail(assetId: string): Promise<{
+  asset: PortfolioAsset | null;
+  dashboard: PortfolioDashboardData;
+}> {
+  const dashboard = await getPortfolioDashboardData();
+  const asset = dashboard.assets.find(item => item.id === assetId) || null;
+  return { asset, dashboard };
+}
+
+async function findAssetByName(name: string): Promise<PortfolioAsset | null> {
+  const wanted = normalizeName(name);
+  if (!wanted) return null;
+  const assets = await getPortfolioAssets();
+  return assets.find(asset => normalizeName(asset.name) === wanted) || null;
+}
+
+export async function addPortfolioAsset(data: PortfolioAssetInput): Promise<PortfolioAsset> {
+  const validated = PortfolioAssetInputSchema.parse({
+    ...data,
+    name: data.name.trim(),
+    symbol: cleanOptional(data.symbol),
+    isin: cleanOptional(data.isin),
+    schemeCode: cleanOptional(data.schemeCode),
+    notes: cleanOptional(data.notes),
+  });
+
+  const existing = await findAssetByName(validated.name);
+  if (existing) return existing;
+
+  const now = nowIso();
+  const asset: PortfolioAsset = {
+    id: cuid(),
+    userId: DEFAULT_USER_ID,
+    docType: 'asset',
+    ...validated,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const container = await getPortfolioContainer();
+  await container.items.create(asset);
+  revalidatePortfolio(asset.id);
+  return asset;
+}
+
+export async function updatePortfolioAsset(id: string, patch: Partial<PortfolioAssetInput>): Promise<PortfolioAsset> {
+  const container = await getPortfolioContainer();
+  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioAsset>();
+  if (!resource || resource.docType !== 'asset') throw new Error(`Portfolio asset ${id} not found.`);
+
+  const merged: PortfolioAsset = {
+    ...resource,
+    ...patch,
+    name: patch.name?.trim() || resource.name,
+    symbol: cleanOptional(patch.symbol) ?? resource.symbol,
+    isin: cleanOptional(patch.isin) ?? resource.isin,
+    schemeCode: cleanOptional(patch.schemeCode) ?? resource.schemeCode,
+    notes: cleanOptional(patch.notes) ?? resource.notes,
+    updatedAt: nowIso(),
+  };
+
+  PortfolioAssetInputSchema.parse({
+    name: merged.name,
+    assetType: merged.assetType,
+    symbol: merged.symbol,
+    isin: merged.isin,
+    schemeCode: merged.schemeCode,
+    currency: merged.currency,
+    notes: merged.notes,
+  });
+
+  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  revalidatePortfolio(id);
+  return updated as PortfolioAsset;
+}
+
+async function resolveAssetForEntry(input: {
+  assetId?: string;
+  assetName: string;
+  assetType: PortfolioAssetInput['assetType'];
+  currency?: PortfolioAssetInput['currency'];
+}): Promise<PortfolioAsset> {
+  const container = await getPortfolioContainer();
+  if (input.assetId) {
+    const { resource } = await container.item(input.assetId, DEFAULT_USER_ID).read<PortfolioAsset>();
+    if (resource && resource.docType === 'asset') return resource;
+  }
+  const existing = await findAssetByName(input.assetName);
+  if (existing) return existing;
+  return addPortfolioAsset({
+    name: input.assetName,
+    assetType: input.assetType,
+    currency: input.currency || 'INR',
+  });
+}
+
+export async function addPortfolioTransaction(data: PortfolioTransactionInput): Promise<PortfolioTransaction> {
+  const validated = PortfolioTransactionInputSchema.parse({
+    ...data,
+    assetName: data.assetName.trim(),
+    date: data.date || todayYmd(),
+    notes: cleanOptional(data.notes),
+  });
+  const asset = await resolveAssetForEntry(validated);
+  const now = nowIso();
+  const item: PortfolioTransaction = {
+    id: cuid(),
+    userId: DEFAULT_USER_ID,
+    docType: 'transaction',
+    ...validated,
+    assetId: asset.id,
+    assetName: asset.name,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const container = await getPortfolioContainer();
+  await container.items.create(item);
+  revalidatePortfolio(asset.id);
+  return item;
+}
+
+export async function addPortfolioValuation(data: PortfolioValuationInput): Promise<PortfolioValuation> {
+  const validated = PortfolioValuationInputSchema.parse({
+    ...data,
+    assetName: data.assetName.trim(),
+    date: data.date || todayYmd(),
+    notes: cleanOptional(data.notes),
+  });
+  const asset = await resolveAssetForEntry(validated);
+  const now = nowIso();
+  const item: PortfolioValuation = {
+    id: cuid(),
+    userId: DEFAULT_USER_ID,
+    docType: 'valuation',
+    ...validated,
+    assetId: asset.id,
+    assetName: asset.name,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const container = await getPortfolioContainer();
+  await container.items.create(item);
+  revalidatePortfolio(asset.id);
+  return item;
+}
+
+export async function addPortfolioEntry(data: PortfolioEntryInput): Promise<PortfolioTransaction | PortfolioValuation> {
+  const validated = PortfolioEntryInputSchema.parse(data);
+  if (validated.entryKind === 'valuation') {
+    const { entryKind, ...valuation } = validated;
+    return addPortfolioValuation(valuation);
+  }
+  const { entryKind, ...transaction } = validated;
+  return addPortfolioTransaction(transaction);
+}
+
+export async function deletePortfolioTransaction(id: string): Promise<void> {
+  const container = await getPortfolioContainer();
+  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioTransaction>();
+  await container.item(id, DEFAULT_USER_ID).delete();
+  revalidatePortfolio(resource?.assetId);
+}
+
+export async function deletePortfolioValuation(id: string): Promise<void> {
+  const container = await getPortfolioContainer();
+  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioValuation>();
+  await container.item(id, DEFAULT_USER_ID).delete();
+  revalidatePortfolio(resource?.assetId);
+}
+
+export async function deletePortfolioAsset(id: string): Promise<void> {
+  const container = await getPortfolioContainer();
+  const [transactions, valuations] = await Promise.all([
+    getPortfolioTransactions(id),
+    getPortfolioValuations(id),
+  ]);
+
+  await Promise.all([
+    ...transactions.map(tx => container.item(tx.id, DEFAULT_USER_ID).delete()),
+    ...valuations.map(v => container.item(v.id, DEFAULT_USER_ID).delete()),
+    container.item(id, DEFAULT_USER_ID).delete(),
+  ]);
+  revalidatePortfolio(id);
+}
+
+export async function savePortfolioAIImport(data: {
+  inputType: 'text' | 'screenshot';
+  rawText?: string;
+  parsedJson: unknown;
+  createdRecordIds: string[];
+}): Promise<PortfolioAIImport> {
+  const now = nowIso();
+  const item: PortfolioAIImport = {
+    id: cuid(),
+    userId: DEFAULT_USER_ID,
+    docType: 'ai_import',
+    inputType: data.inputType,
+    rawText: cleanOptional(data.rawText),
+    parsedJson: data.parsedJson,
+    createdRecordIds: data.createdRecordIds,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const container = await getPortfolioContainer();
+  await container.items.create(item);
+  return item;
+}
+
+function removeNullish<T extends Record<string, any>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && entryValue !== '')
+  ) as T;
+}
+
+export async function parseAndApplyPortfolioEntry(input: {
+  text?: string;
+  imageDataUri?: string;
+  preferredAssetId?: string;
+  model?: any;
+}): Promise<{
+  ok: true;
+  created: Array<PortfolioTransaction | PortfolioValuation>;
+  summary?: string | null;
+} | {
+  ok: false;
+  reason: string;
+}> {
+  if (!input.text?.trim() && !input.imageDataUri) {
+    return { ok: false, reason: "Type a portfolio entry or upload a screenshot first." };
+  }
+
+  const assets = await getPortfolioAssets();
+  const preferredAsset = input.preferredAssetId
+    ? assets.find(asset => asset.id === input.preferredAssetId)
+    : undefined;
+
+  const parsed = await parsePortfolioEntryWithAI({
+    text: input.text,
+    imageDataUri: input.imageDataUri,
+    existingAssets: assets.map(asset => ({
+      id: asset.id,
+      name: asset.name,
+      assetType: asset.assetType,
+      currency: asset.currency,
+    })),
+    preferredAssetId: preferredAsset?.id,
+    preferredAssetName: preferredAsset?.name,
+    model: input.model,
+  });
+
+  if (!parsed.entries.length) {
+    return { ok: false, reason: "I couldn't find a complete portfolio entry with fund/stock name, date, and amount." };
+  }
+
+  const source = input.imageDataUri ? 'screenshot' : 'ai_text';
+  const created: Array<PortfolioTransaction | PortfolioValuation> = [];
+
+  for (const entry of parsed.entries) {
+    if (entry.entryKind === 'valuation') {
+      const clean = removeNullish({
+        ...entry,
+        source,
+        assetId: preferredAsset?.id,
+      });
+      const { entryKind, ...valuation } = clean;
+      created.push(await addPortfolioValuation(valuation as PortfolioValuationInput));
+    } else {
+      const clean = removeNullish({
+        ...entry,
+        source,
+        assetId: preferredAsset?.id,
+      });
+      const { entryKind, ...transaction } = clean;
+      created.push(await addPortfolioTransaction(transaction as PortfolioTransactionInput));
+    }
+  }
+
+  await savePortfolioAIImport({
+    inputType: input.imageDataUri ? 'screenshot' : 'text',
+    rawText: input.text,
+    parsedJson: parsed,
+    createdRecordIds: created.map(item => item.id),
+  });
+
+  revalidatePortfolio(preferredAsset?.id || created[0]?.assetId);
+  return { ok: true, created, summary: parsed.summary };
+}
+
+export async function ensurePortfolioCosmosContainerExists() {
+  const { database } = await getCosmosClientAndDb();
+  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID;
+  if (!containerId) throw new Error("COSMOS_DB_PORTFOLIO_CONTAINER_ID is not configured.");
+  await database.containers.createIfNotExists({
+    id: containerId,
+    partitionKey: { paths: ['/userId'] },
+  });
+}

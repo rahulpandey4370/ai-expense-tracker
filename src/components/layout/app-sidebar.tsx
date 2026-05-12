@@ -18,7 +18,7 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank } from "lucide-react";
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank, LineChart } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +27,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/savings", label: "Savings", icon: PiggyBank },
+  { href: "/portfolio", label: "Portfolio", icon: LineChart },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/yearly-overview", label: "Yearly Overview", icon: TableProperties },
   { href: "/split-expenses", label: "Split Expenses", icon: Users },
