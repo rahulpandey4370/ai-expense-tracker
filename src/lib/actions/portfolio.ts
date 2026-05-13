@@ -13,6 +13,7 @@ import {
   type PortfolioAssetInput,
   type PortfolioDashboardData,
   type PortfolioEntryInput,
+  type PortfolioPreviewEntry,
   type PortfolioTransaction,
   type PortfolioTransactionInput,
   type PortfolioValuation,
@@ -280,6 +281,81 @@ export async function addPortfolioEntry(data: PortfolioEntryInput): Promise<Port
   return addPortfolioTransaction(transaction);
 }
 
+export async function updatePortfolioTransaction(
+  id: string,
+  patch: Partial<PortfolioTransactionInput>,
+): Promise<PortfolioTransaction> {
+  const container = await getPortfolioContainer();
+  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioTransaction>();
+  if (!resource || resource.docType !== 'transaction') throw new Error(`Portfolio transaction ${id} not found.`);
+
+  const merged: PortfolioTransaction = {
+    ...resource,
+    ...patch,
+    assetName: patch.assetName?.trim() || resource.assetName,
+    notes: patch.notes !== undefined ? (cleanOptional(patch.notes) ?? undefined) : resource.notes,
+    quantity: patch.quantity ?? resource.quantity,
+    pricePerUnit: patch.pricePerUnit ?? resource.pricePerUnit,
+    charges: patch.charges ?? resource.charges,
+    taxes: patch.taxes ?? resource.taxes,
+    updatedAt: nowIso(),
+  };
+  PortfolioTransactionInputSchema.parse({
+    assetId: merged.assetId,
+    assetName: merged.assetName,
+    assetType: merged.assetType,
+    type: merged.type,
+    date: merged.date,
+    amount: merged.amount,
+    quantity: merged.quantity,
+    pricePerUnit: merged.pricePerUnit,
+    charges: merged.charges,
+    taxes: merged.taxes,
+    currency: merged.currency,
+    notes: merged.notes,
+    source: merged.source,
+  });
+
+  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  revalidatePortfolio(merged.assetId);
+  return updated as PortfolioTransaction;
+}
+
+export async function updatePortfolioValuation(
+  id: string,
+  patch: Partial<PortfolioValuationInput>,
+): Promise<PortfolioValuation> {
+  const container = await getPortfolioContainer();
+  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioValuation>();
+  if (!resource || resource.docType !== 'valuation') throw new Error(`Portfolio valuation ${id} not found.`);
+
+  const merged: PortfolioValuation = {
+    ...resource,
+    ...patch,
+    assetName: patch.assetName?.trim() || resource.assetName,
+    notes: patch.notes !== undefined ? (cleanOptional(patch.notes) ?? undefined) : resource.notes,
+    quantity: patch.quantity ?? resource.quantity,
+    pricePerUnit: patch.pricePerUnit ?? resource.pricePerUnit,
+    updatedAt: nowIso(),
+  };
+  PortfolioValuationInputSchema.parse({
+    assetId: merged.assetId,
+    assetName: merged.assetName,
+    assetType: merged.assetType,
+    date: merged.date,
+    totalValue: merged.totalValue,
+    quantity: merged.quantity,
+    pricePerUnit: merged.pricePerUnit,
+    currency: merged.currency,
+    notes: merged.notes,
+    source: merged.source,
+  });
+
+  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  revalidatePortfolio(merged.assetId);
+  return updated as PortfolioValuation;
+}
+
 export async function deletePortfolioTransaction(id: string): Promise<void> {
   const container = await getPortfolioContainer();
   const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioTransaction>();
@@ -336,6 +412,159 @@ function removeNullish<T extends Record<string, any>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && entryValue !== '')
   ) as T;
+}
+
+export async function parsePortfolioEntryPreview(input: {
+  text?: string;
+  imageDataUri?: string;
+  preferredAssetId?: string;
+  model?: any;
+}): Promise<{
+  ok: true;
+  entries: PortfolioPreviewEntry[];
+  summary?: string | null;
+  source: 'ai_text' | 'screenshot';
+} | { ok: false; reason: string }> {
+  if (!input.text?.trim() && !input.imageDataUri) {
+    return { ok: false, reason: 'Type a portfolio entry or upload a screenshot first.' };
+  }
+
+  const assets = await getPortfolioAssets();
+  const preferredAsset = input.preferredAssetId
+    ? assets.find(asset => asset.id === input.preferredAssetId)
+    : undefined;
+
+  let parsed;
+  try {
+    parsed = await parsePortfolioEntryWithAI({
+      text: input.text,
+      imageDataUri: input.imageDataUri,
+      existingAssets: assets.map(asset => ({
+        id: asset.id,
+        name: asset.name,
+        assetType: asset.assetType,
+        currency: asset.currency,
+      })),
+      preferredAssetId: preferredAsset?.id,
+      preferredAssetName: preferredAsset?.name,
+      model: input.model,
+    });
+  } catch (err: any) {
+    return { ok: false, reason: err?.message || 'AI parser failed' };
+  }
+
+  const source: 'ai_text' | 'screenshot' = input.imageDataUri ? 'screenshot' : 'ai_text';
+
+  if (!parsed.entries.length) {
+    return { ok: false, reason: parsed.summary || 'No entries extracted. Add manually or refine your text.' };
+  }
+
+  const matchAssetByName = (name: string) => {
+    const wanted = name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    return assets.find(a => a.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === wanted);
+  };
+
+  const previewEntries: PortfolioPreviewEntry[] = parsed.entries.map((entry, index) => {
+    const matched = preferredAsset || (entry.assetName ? matchAssetByName(entry.assetName) : undefined);
+    return {
+      tempId: `${Date.now()}-${index}`,
+      entryKind: entry.entryKind,
+      assetId: matched?.id,
+      assetName: entry.assetName || matched?.name || '',
+      assetType: matched?.assetType || entry.assetType || 'other',
+      type: entry.type ?? undefined,
+      date: entry.date,
+      amount: entry.amount ?? undefined,
+      totalValue: entry.totalValue ?? undefined,
+      quantity: entry.quantity ?? undefined,
+      pricePerUnit: entry.pricePerUnit ?? undefined,
+      charges: entry.charges ?? undefined,
+      taxes: entry.taxes ?? undefined,
+      currency: matched?.currency || entry.currency || 'INR',
+      notes: entry.notes ?? undefined,
+      source,
+    };
+  });
+
+  // Persist the raw AI import for audit, but without created records yet.
+  try {
+    await savePortfolioAIImport({
+      inputType: input.imageDataUri ? 'screenshot' : 'text',
+      rawText: input.text,
+      parsedJson: parsed,
+      createdRecordIds: [],
+    });
+  } catch (err) {
+    console.warn('[portfolio] savePortfolioAIImport (preview) failed:', err);
+  }
+
+  return { ok: true, entries: previewEntries, summary: parsed.summary, source };
+}
+
+export async function applyPortfolioPreviewEntries(
+  entries: PortfolioPreviewEntry[],
+): Promise<{
+  ok: true;
+  created: Array<PortfolioTransaction | PortfolioValuation>;
+} | { ok: false; reason: string }> {
+  if (!entries?.length) return { ok: false, reason: 'No entries to save.' };
+
+  const created: Array<PortfolioTransaction | PortfolioValuation> = [];
+  const errors: string[] = [];
+
+  for (const entry of entries) {
+    try {
+      if (!entry.assetName?.trim()) throw new Error('Asset name is required.');
+      if (!entry.date?.trim()) throw new Error(`${entry.assetName}: date is required.`);
+
+      if (entry.entryKind === 'valuation') {
+        if (!entry.totalValue || entry.totalValue <= 0) {
+          throw new Error(`${entry.assetName}: current value is required and must be > 0.`);
+        }
+        const input = removeNullish({
+          assetId: entry.assetId,
+          assetName: entry.assetName,
+          assetType: entry.assetType,
+          date: entry.date,
+          totalValue: entry.totalValue,
+          quantity: entry.quantity,
+          pricePerUnit: entry.pricePerUnit,
+          currency: entry.currency,
+          notes: entry.notes,
+          source: entry.source,
+        }) as PortfolioValuationInput;
+        created.push(await addPortfolioValuation(input));
+      } else {
+        if (!entry.amount || entry.amount <= 0) {
+          throw new Error(`${entry.assetName}: amount is required and must be > 0.`);
+        }
+        if (!entry.type) throw new Error(`${entry.assetName}: transaction type is required.`);
+        const input = removeNullish({
+          assetId: entry.assetId,
+          assetName: entry.assetName,
+          assetType: entry.assetType,
+          type: entry.type,
+          date: entry.date,
+          amount: entry.amount,
+          quantity: entry.quantity,
+          pricePerUnit: entry.pricePerUnit,
+          charges: entry.charges,
+          taxes: entry.taxes,
+          currency: entry.currency,
+          notes: entry.notes,
+          source: entry.source,
+        }) as PortfolioTransactionInput;
+        created.push(await addPortfolioTransaction(input));
+      }
+    } catch (err: any) {
+      errors.push(err?.message || 'unknown error');
+    }
+  }
+
+  if (created.length === 0) {
+    return { ok: false, reason: errors.join('; ') || 'No entries saved.' };
+  }
+  return { ok: true, created };
 }
 
 export async function parseAndApplyPortfolioEntry(input: {

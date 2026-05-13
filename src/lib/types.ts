@@ -239,6 +239,27 @@ export const PortfolioEntryInputSchema = z.discriminatedUnion('entryKind', [
 ]);
 export type PortfolioEntryInput = z.infer<typeof PortfolioEntryInputSchema>;
 
+// Editable preview of an AI-parsed portfolio entry. Each field is optional except
+// what's absolutely necessary so the user can fix gaps in the UI before saving.
+export interface PortfolioPreviewEntry {
+  tempId: string;
+  entryKind: 'transaction' | 'valuation';
+  assetId?: string;
+  assetName: string;
+  assetType: PortfolioAssetType;
+  type?: PortfolioTransactionType;
+  date: string;
+  amount?: number;
+  totalValue?: number;
+  quantity?: number;
+  pricePerUnit?: number;
+  charges?: number;
+  taxes?: number;
+  currency: PortfolioCurrency;
+  notes?: string;
+  source: PortfolioEntrySource;
+}
+
 export interface PortfolioAssetSummary {
   asset: PortfolioAsset;
   transactions: PortfolioTransaction[];

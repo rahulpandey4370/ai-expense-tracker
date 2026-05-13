@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Camera,
   Loader2,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -40,7 +41,8 @@ import {
   deletePortfolioTransaction,
   deletePortfolioValuation,
   getPortfolioAssetDetail,
-  parseAndApplyPortfolioEntry,
+  getPortfolioAssets,
+  parsePortfolioEntryPreview,
 } from '@/lib/actions/portfolio';
 import type {
   PortfolioAsset,
@@ -48,10 +50,17 @@ import type {
   PortfolioCurrency,
   PortfolioDashboardData,
   PortfolioEntryInput,
+  PortfolioPreviewEntry,
   PortfolioTransaction,
   PortfolioTransactionType,
   PortfolioValuation,
 } from '@/lib/types';
+import { PortfolioPreviewEditor } from '@/components/portfolio/preview-editor';
+import {
+  EditAssetDialog,
+  EditTransactionDialog,
+  EditValuationDialog,
+} from '@/components/portfolio/edit-dialogs';
 
 const TRANSACTION_LABELS: Record<PortfolioTransactionType, string> = {
   buy: 'Buy',
@@ -137,14 +146,24 @@ export default function PortfolioAssetPage() {
   const [aiText, setAiText] = useState('');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [isAiBusy, setIsAiBusy] = useState(false);
+  const [previewEntries, setPreviewEntries] = useState<PortfolioPreviewEntry[]>([]);
+  const [previewSummary, setPreviewSummary] = useState<string | null>(null);
+  const [allAssets, setAllAssets] = useState<PortfolioAsset[]>([]);
+  const [editingAsset, setEditingAsset] = useState<PortfolioAsset | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<PortfolioTransaction | null>(null);
+  const [editingValuation, setEditingValuation] = useState<PortfolioValuation | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!assetId) return;
     setIsLoading(true);
     try {
-      const result = await getPortfolioAssetDetail(assetId);
+      const [result, assetsList] = await Promise.all([
+        getPortfolioAssetDetail(assetId),
+        getPortfolioAssets(),
+      ]);
       setAsset(result.asset);
       setDashboard(result.dashboard);
+      setAllAssets(assetsList);
     } catch (err: any) {
       toast({ title: 'Could not load asset', description: err.message, variant: 'destructive' });
       setAsset(null);
@@ -224,25 +243,37 @@ export default function PortfolioAssetPage() {
     setIsAiBusy(true);
     try {
       const imageDataUri = screenshotFile ? await fileToDataUri(screenshotFile) : undefined;
-      const result = await parseAndApplyPortfolioEntry({
+      const result = await parsePortfolioEntryPreview({
         text,
         imageDataUri,
         preferredAssetId: asset.id,
         model: selectedModel,
       });
       if (!result.ok) {
-        toast({ title: "Couldn't add entry", description: result.reason, variant: 'destructive' });
+        toast({ title: "Couldn't parse entry", description: result.reason, variant: 'destructive' });
         return;
       }
-      toast({ title: 'Added with AI', description: result.summary || `${result.created.length} record(s) saved.` });
+      setPreviewEntries(result.entries);
+      setPreviewSummary(result.summary || null);
       setAiText('');
       setScreenshotFile(null);
-      fetchData();
+      toast({ title: 'Review and edit before saving', description: `${result.entries.length} parsed entry(ies)` });
     } catch (err: any) {
       toast({ title: 'AI import failed', description: err.message, variant: 'destructive' });
     } finally {
       setIsAiBusy(false);
     }
+  };
+
+  const handlePreviewSaved = () => {
+    setPreviewEntries([]);
+    setPreviewSummary(null);
+    fetchData();
+  };
+
+  const handlePreviewCancel = () => {
+    setPreviewEntries([]);
+    setPreviewSummary(null);
   };
 
   const handleDeleteTransaction = async (id: string) => {
@@ -314,6 +345,10 @@ export default function PortfolioAssetPage() {
         <Button variant="outline" size="sm" asChild>
           <Link href="/portfolio"><ArrowLeft className="h-4 w-4 mr-2" /> Portfolio</Link>
         </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditingAsset(asset)}>
+            <Pencil className="h-4 w-4 mr-2" /> Edit asset
+          </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="outline" size="sm" className="text-destructive border-destructive/40">
@@ -333,7 +368,27 @@ export default function PortfolioAssetPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        </div>
       </div>
+
+      <EditAssetDialog
+        asset={editingAsset}
+        open={!!editingAsset}
+        onOpenChange={(open) => { if (!open) setEditingAsset(null); }}
+        onSaved={fetchData}
+      />
+      <EditTransactionDialog
+        transaction={editingTransaction}
+        open={!!editingTransaction}
+        onOpenChange={(open) => { if (!open) setEditingTransaction(null); }}
+        onSaved={fetchData}
+      />
+      <EditValuationDialog
+        valuation={editingValuation}
+        open={!!editingValuation}
+        onOpenChange={(open) => { if (!open) setEditingValuation(null); }}
+        onSaved={fetchData}
+      />
 
       <Card className="shadow-xl border-primary/30 border-2 bg-card/90">
         <CardHeader>
@@ -367,6 +422,16 @@ export default function PortfolioAssetPage() {
             onSubmit={handleAiSubmit}
           />
 
+          {previewEntries.length > 0 && (
+            <PortfolioPreviewEditor
+              entries={previewEntries}
+              assets={allAssets}
+              summary={previewSummary}
+              onCancel={handlePreviewCancel}
+              onSaved={handlePreviewSaved}
+            />
+          )}
+
           <ManualAssetEntry
             form={form}
             update={updateForm}
@@ -384,6 +449,8 @@ export default function PortfolioAssetPage() {
         currency={asset.currency}
         onDeleteTransaction={handleDeleteTransaction}
         onDeleteValuation={handleDeleteValuation}
+        onEditTransaction={setEditingTransaction}
+        onEditValuation={setEditingValuation}
       />
       <LedgerSection
         title="Sell Transactions"
@@ -392,6 +459,8 @@ export default function PortfolioAssetPage() {
         currency={asset.currency}
         onDeleteTransaction={handleDeleteTransaction}
         onDeleteValuation={handleDeleteValuation}
+        onEditTransaction={setEditingTransaction}
+        onEditValuation={setEditingValuation}
       />
       <LedgerSection
         title="Income / Fees"
@@ -400,6 +469,8 @@ export default function PortfolioAssetPage() {
         currency={asset.currency}
         onDeleteTransaction={handleDeleteTransaction}
         onDeleteValuation={handleDeleteValuation}
+        onEditTransaction={setEditingTransaction}
+        onEditValuation={setEditingValuation}
       />
       <LedgerSection
         title="Valuation Updates"
@@ -408,6 +479,8 @@ export default function PortfolioAssetPage() {
         currency={asset.currency}
         onDeleteTransaction={handleDeleteTransaction}
         onDeleteValuation={handleDeleteValuation}
+        onEditTransaction={setEditingTransaction}
+        onEditValuation={setEditingValuation}
       />
     </main>
   );
@@ -550,6 +623,8 @@ function LedgerSection(props: {
   currency: PortfolioCurrency;
   onDeleteTransaction: (id: string) => void;
   onDeleteValuation: (id: string) => void;
+  onEditTransaction: (transaction: PortfolioTransaction) => void;
+  onEditValuation: (valuation: PortfolioValuation) => void;
 }) {
   const hasRows = props.transactions.length > 0 || props.valuations.length > 0;
   return (
@@ -570,7 +645,7 @@ function LedgerSection(props: {
                 <TableHead className="text-right">Units</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead>Notes</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
+                <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -583,9 +658,14 @@ function LedgerSection(props: {
                   <TableCell className="text-right">{tx.pricePerUnit ? formatCurrency(tx.pricePerUnit, props.currency) : '-'}</TableCell>
                   <TableCell className="max-w-[260px] truncate">{tx.notes || '-'}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => props.onDeleteTransaction(tx.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" title="Edit" onClick={() => props.onEditTransaction(tx)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" title="Delete" onClick={() => props.onDeleteTransaction(tx.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -598,9 +678,14 @@ function LedgerSection(props: {
                   <TableCell className="text-right">{v.pricePerUnit ? formatCurrency(v.pricePerUnit, props.currency) : '-'}</TableCell>
                   <TableCell className="max-w-[260px] truncate">{v.notes || '-'}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => props.onDeleteValuation(v.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" title="Edit" onClick={() => props.onEditValuation(v)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" title="Delete" onClick={() => props.onDeleteValuation(v.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

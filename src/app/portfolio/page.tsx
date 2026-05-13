@@ -12,6 +12,7 @@ import {
   Landmark,
   LineChart,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Sparkles,
@@ -30,9 +31,11 @@ import { useAIModel } from '@/contexts/AIModelContext';
 import {
   addPortfolioEntry,
   getPortfolioDashboardData,
-  parseAndApplyPortfolioEntry,
+  parsePortfolioEntryPreview,
 } from '@/lib/actions/portfolio';
 import { PortfolioChat } from '@/components/portfolio-chat';
+import { PortfolioPreviewEditor } from '@/components/portfolio/preview-editor';
+import { EditAssetDialog } from '@/components/portfolio/edit-dialogs';
 import type {
   PortfolioAsset,
   PortfolioAssetSummary,
@@ -40,6 +43,7 @@ import type {
   PortfolioCurrency,
   PortfolioDashboardData,
   PortfolioEntryInput,
+  PortfolioPreviewEntry,
   PortfolioTransactionType,
 } from '@/lib/types';
 
@@ -154,6 +158,9 @@ export default function PortfolioPage() {
   const [aiAssetId, setAiAssetId] = useState('__auto');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [isAiBusy, setIsAiBusy] = useState(false);
+  const [previewEntries, setPreviewEntries] = useState<PortfolioPreviewEntry[]>([]);
+  const [previewSummary, setPreviewSummary] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<PortfolioAsset | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -262,28 +269,37 @@ export default function PortfolioPage() {
     setIsAiBusy(true);
     try {
       const imageDataUri = screenshotFile ? await fileToDataUri(screenshotFile) : undefined;
-      const result = await parseAndApplyPortfolioEntry({
+      const result = await parsePortfolioEntryPreview({
         text,
         imageDataUri,
         preferredAssetId: aiAssetId === '__auto' ? undefined : aiAssetId,
         model: selectedModel,
       });
       if (!result.ok) {
-        toast({ title: "Couldn't add entry", description: result.reason, variant: 'destructive' });
+        toast({ title: "Couldn't parse entry", description: result.reason, variant: 'destructive' });
         return;
       }
-      toast({
-        title: 'Added with AI',
-        description: result.summary || `${result.created.length} portfolio record(s) saved.`,
-      });
+      setPreviewEntries(result.entries);
+      setPreviewSummary(result.summary || null);
       setAiText('');
       setScreenshotFile(null);
-      fetchData();
+      toast({ title: 'Review and edit before saving', description: `${result.entries.length} parsed entry(ies)` });
     } catch (err: any) {
       toast({ title: 'AI import failed', description: err.message, variant: 'destructive' });
     } finally {
       setIsAiBusy(false);
     }
+  };
+
+  const handlePreviewSaved = (count: number) => {
+    setPreviewEntries([]);
+    setPreviewSummary(null);
+    fetchData();
+  };
+
+  const handlePreviewCancel = () => {
+    setPreviewEntries([]);
+    setPreviewSummary(null);
   };
 
   if (isLoading) {
@@ -335,6 +351,15 @@ export default function PortfolioPage() {
               isAiBusy={isAiBusy}
               onSubmit={handleAiSubmit}
             />
+            {previewEntries.length > 0 && (
+              <PortfolioPreviewEditor
+                entries={previewEntries}
+                assets={assets}
+                summary={previewSummary}
+                onCancel={handlePreviewCancel}
+                onSaved={handlePreviewSaved}
+              />
+            )}
             {showManualForm && (
               <ManualEntryForm
                 assets={assets}
@@ -354,6 +379,13 @@ export default function PortfolioPage() {
 
       <PortfolioChat />
 
+      <EditAssetDialog
+        asset={editingAsset}
+        open={!!editingAsset}
+        onOpenChange={(open) => { if (!open) setEditingAsset(null); }}
+        onSaved={fetchData}
+      />
+
       {assets.length === 0 ? (
         <Card className="bg-card/80">
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -370,7 +402,7 @@ export default function PortfolioPage() {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {groupedSummaries[type].map(summary => (
-                  <AssetCard key={summary.asset.id} summary={summary} />
+                  <AssetCard key={summary.asset.id} summary={summary} onEdit={() => setEditingAsset(summary.asset)} />
                 ))}
               </div>
             </section>
@@ -609,7 +641,7 @@ function ManualEntryForm(props: {
   );
 }
 
-function AssetCard({ summary }: { summary: PortfolioAssetSummary }) {
+function AssetCard({ summary, onEdit }: { summary: PortfolioAssetSummary; onEdit: () => void }) {
   const currency = summary.asset.currency;
   const positive = summary.netPnl >= 0;
   return (
@@ -620,7 +652,12 @@ function AssetCard({ summary }: { summary: PortfolioAssetSummary }) {
             <CardTitle className="text-base truncate">{summary.asset.name}</CardTitle>
             <CardDescription>{ASSET_TYPE_LABELS[summary.asset.assetType]}</CardDescription>
           </div>
-          <Badge variant={positive ? 'default' : 'destructive'}>{formatPercent(summary.netPnlPercent)}</Badge>
+          <div className="flex items-center gap-1">
+            <Badge variant={positive ? 'default' : 'destructive'}>{formatPercent(summary.netPnlPercent)}</Badge>
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit asset" onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
