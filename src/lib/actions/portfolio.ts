@@ -20,6 +20,8 @@ import {
 } from '@/lib/types';
 import { buildPortfolioDashboardData } from '@/lib/portfolio-calculations';
 import { parsePortfolioEntryWithAI } from '@/ai/flows/parse-portfolio-entry-flow';
+import { askPortfolioBot, type PortfolioChatMessage } from '@/ai/flows/portfolio-chat-flow';
+import type { AIModel } from '@/lib/types';
 
 const DEFAULT_USER_ID = 'default';
 
@@ -41,11 +43,17 @@ async function getCosmosClientAndDb() {
 async function getPortfolioContainer(): Promise<CosmosContainer> {
   if (portfolioContainerInstance) return portfolioContainerInstance;
   const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID;
-  if (!containerId) {
-    throw new Error("COSMOS_DB_PORTFOLIO_CONTAINER_ID is not configured. Expected value: portfolio");
+  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID || 'portfolio';
+  try {
+    const { container } = await database.containers.createIfNotExists({
+      id: containerId,
+      partitionKey: { paths: ['/userId'] },
+    });
+    portfolioContainerInstance = container;
+  } catch (err) {
+    console.error('[portfolio] createIfNotExists failed, falling back to direct reference:', err);
+    portfolioContainerInstance = database.container(containerId);
   }
-  portfolioContainerInstance = database.container(containerId);
   return portfolioContainerInstance;
 }
 
@@ -103,12 +111,17 @@ export async function getPortfolioValuations(assetId?: string): Promise<Portfoli
 }
 
 export async function getPortfolioDashboardData(): Promise<PortfolioDashboardData> {
-  const [assets, transactions, valuations] = await Promise.all([
-    getPortfolioAssets(),
-    getPortfolioTransactions(),
-    getPortfolioValuations(),
-  ]);
-  return buildPortfolioDashboardData(assets, transactions, valuations);
+  try {
+    const [assets, transactions, valuations] = await Promise.all([
+      getPortfolioAssets(),
+      getPortfolioTransactions(),
+      getPortfolioValuations(),
+    ]);
+    return buildPortfolioDashboardData(assets, transactions, valuations);
+  } catch (err: any) {
+    console.error('[portfolio] getPortfolioDashboardData failed:', err);
+    throw new Error(`Could not load portfolio: ${err?.message || 'unknown error'}`);
+  }
 }
 
 export async function getPortfolioAssetDetail(assetId: string): Promise<{
@@ -367,25 +380,66 @@ export async function parseAndApplyPortfolioEntry(input: {
 
   const source = input.imageDataUri ? 'screenshot' : 'ai_text';
   const created: Array<PortfolioTransaction | PortfolioValuation> = [];
+  const skipped: string[] = [];
 
   for (const entry of parsed.entries) {
-    if (entry.entryKind === 'valuation') {
-      const clean = removeNullish({
-        ...entry,
-        source,
-        assetId: preferredAsset?.id,
-      });
-      const { entryKind, ...valuation } = clean;
-      created.push(await addPortfolioValuation(valuation as PortfolioValuationInput));
-    } else {
-      const clean = removeNullish({
-        ...entry,
-        source,
-        assetId: preferredAsset?.id,
-      });
-      const { entryKind, ...transaction } = clean;
-      created.push(await addPortfolioTransaction(transaction as PortfolioTransactionInput));
+    if (!entry.assetName?.trim()) {
+      skipped.push('missing asset name');
+      continue;
     }
+    if (entry.entryKind === 'valuation') {
+      if (!entry.totalValue || entry.totalValue <= 0) {
+        skipped.push(`${entry.assetName}: missing current value`);
+        continue;
+      }
+      const valuationInput = removeNullish({
+        assetId: preferredAsset?.id,
+        assetName: entry.assetName,
+        assetType: entry.assetType,
+        date: entry.date,
+        totalValue: entry.totalValue,
+        quantity: entry.quantity ?? undefined,
+        pricePerUnit: entry.pricePerUnit ?? undefined,
+        currency: entry.currency,
+        notes: entry.notes ?? undefined,
+        source,
+      }) as PortfolioValuationInput;
+      created.push(await addPortfolioValuation(valuationInput));
+    } else {
+      if (!entry.amount || entry.amount <= 0) {
+        skipped.push(`${entry.assetName}: missing amount`);
+        continue;
+      }
+      if (!entry.type) {
+        skipped.push(`${entry.assetName}: missing transaction type`);
+        continue;
+      }
+      const transactionInput = removeNullish({
+        assetId: preferredAsset?.id,
+        assetName: entry.assetName,
+        assetType: entry.assetType,
+        type: entry.type,
+        date: entry.date,
+        amount: entry.amount,
+        quantity: entry.quantity ?? undefined,
+        pricePerUnit: entry.pricePerUnit ?? undefined,
+        charges: entry.charges ?? undefined,
+        taxes: entry.taxes ?? undefined,
+        currency: entry.currency,
+        notes: entry.notes ?? undefined,
+        source,
+      }) as PortfolioTransactionInput;
+      created.push(await addPortfolioTransaction(transactionInput));
+    }
+  }
+
+  if (created.length === 0) {
+    return {
+      ok: false,
+      reason: skipped.length
+        ? `Skipped: ${skipped.join('; ')}`
+        : "I couldn't extract a complete entry. Make sure the input has a fund/stock name plus an amount or current value.",
+    };
   }
 
   await savePortfolioAIImport({
@@ -397,6 +451,22 @@ export async function parseAndApplyPortfolioEntry(input: {
 
   revalidatePortfolio(preferredAsset?.id || created[0]?.assetId);
   return { ok: true, created, summary: parsed.summary };
+}
+
+export async function askPortfolioChat(input: {
+  query: string;
+  chatHistory?: PortfolioChatMessage[];
+  model?: AIModel;
+  scopedAssetId?: string;
+}) {
+  const dashboard = await getPortfolioDashboardData();
+  return askPortfolioBot({
+    query: input.query,
+    dashboard,
+    chatHistory: input.chatHistory,
+    model: input.model,
+    scopedAssetId: input.scopedAssetId,
+  });
 }
 
 export async function ensurePortfolioCosmosContainerExists() {

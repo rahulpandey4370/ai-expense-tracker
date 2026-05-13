@@ -32,6 +32,7 @@ import {
   getPortfolioDashboardData,
   parseAndApplyPortfolioEntry,
 } from '@/lib/actions/portfolio';
+import { PortfolioChat } from '@/components/portfolio-chat';
 import type {
   PortfolioAsset,
   PortfolioAssetSummary,
@@ -350,6 +351,8 @@ export default function PortfolioPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <PortfolioChat />
 
       {assets.length === 0 ? (
         <Card className="bg-card/80">
