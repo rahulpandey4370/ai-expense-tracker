@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { FinancialHealthCheckInputSchema, FinancialHealthCheckOutputSchema, type FinancialHealthCheckOutput } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export async function getFinancialHealthCheck(
   input: z.infer<typeof FinancialHealthCheckInputSchema>
@@ -151,7 +151,7 @@ const financialHealthCheckFlow = ai.defineFlow(
     };
 
     let output;
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(healthCheckPromptTemplate, promptInput, FinancialHealthCheckOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

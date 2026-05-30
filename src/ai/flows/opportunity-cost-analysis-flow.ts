@@ -6,7 +6,7 @@ import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { OpportunityCostInputSchema, OpportunityCostOutputSchema } from '@/lib/types';
 import type { OpportunityCostInput, OpportunityCostOutput } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export async function analyzeOpportunityCost(input: OpportunityCostInput): Promise<OpportunityCostOutput> {
   const modelToUse = input.model || 'gemini-3-flash-preview';
@@ -69,7 +69,7 @@ const opportunityCostAnalysisFlow = ai.defineFlow(
     const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

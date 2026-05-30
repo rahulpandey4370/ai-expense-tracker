@@ -17,7 +17,7 @@ import {
   type FixedExpenseAnalyzerOutput,
   type AIModel
 } from '@/lib/types';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
 
@@ -101,7 +101,7 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
     const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

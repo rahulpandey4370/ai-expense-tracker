@@ -14,7 +14,7 @@ import type { AppTransaction, AIModel } from '@/lib/types';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { isValid } from 'date-fns';
 import { getCalendarDateParts, getCalendarDateString } from '@/lib/date-utils';
-import { callAzureOpenAIChat } from '@/lib/azure-openai';
+import { callAzureOpenAIChat, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 import { modelNames } from '@/lib/types';
 
 
@@ -294,7 +294,7 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     let responseText = '';
 
-    if (modelToUse === 'gpt-5.2-chat') {
+    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
       responseText = await callAzureOpenAIChat(messages);
     } else {
       const llmResponse = await retryableAIGeneration(() => ai.generate({

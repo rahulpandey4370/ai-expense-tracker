@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -181,7 +181,7 @@ const parseTransactionsFlow = ai.defineFlow(
 
     let output;
     try {
-      if (model === 'gpt-5.2-chat') {
+      if (model === AZURE_DEPLOYMENT_NAME) {
         output = await callAzureOpenAI(parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal);
       } else {
         const prompt = ai.definePrompt({

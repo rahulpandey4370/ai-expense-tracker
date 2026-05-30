@@ -12,7 +12,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
@@ -184,7 +184,7 @@ const financialGoalForecasterFlow = ai.defineFlow(
     };
 
     let output;
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }));
     } else {
       // For Gemini, we still go through definePrompt — but use a non-templated input schema to avoid

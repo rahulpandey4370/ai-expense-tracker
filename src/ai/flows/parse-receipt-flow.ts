@@ -13,7 +13,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
 import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -140,7 +140,7 @@ const parseReceiptImageFlow = ai.defineFlow(
 
     let outputFromAI;
     try {
-      if (model === 'gpt-5.2-chat') {
+      if (model === AZURE_DEPLOYMENT_NAME) {
         const result = await callAzureOpenAI(receiptPromptTemplate, input, z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }));
         outputFromAI = result;
       } else {

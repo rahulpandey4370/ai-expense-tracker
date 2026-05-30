@@ -4,6 +4,7 @@
 import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
 import { generateYearlyFinancialReport, type YearlyFinancialReportInput, type YearlyFinancialReportOutput } from "@/ai/flows/yearly-financial-report-flow";
 import { type AIModel, type AITransactionForAnalysis, type MonthlySummary } from "@/lib/types";
+import { AZURE_DEPLOYMENT_NAME } from "@/lib/azure-openai";
 import { getCalendarDateParts } from "@/lib/date-utils";
 import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
 
@@ -100,7 +101,7 @@ export async function getMonthlyReport(
     monthName: monthNames[month],
     year,
     transactions: relevantTransactions,
-    model: model || 'gpt-5.2-chat',
+    model: model || AZURE_DEPLOYMENT_NAME,
   };
 
   const generated = await generateMonthlyFinancialReport(input);
@@ -230,7 +231,7 @@ export async function getYearlyReport(
     largestTransactions: isAggregated
       ? [...yearTxns].sort((a, b) => b.amount - a.amount).slice(0, LARGEST_TXN_SAMPLE_SIZE)
       : undefined,
-    model: model || 'gpt-5.2-chat',
+    model: model || AZURE_DEPLOYMENT_NAME,
   };
 
   const generated = await generateYearlyFinancialReport(input);

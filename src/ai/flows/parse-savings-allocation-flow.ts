@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 import type { AIModel, SavingsAllocation } from '@/lib/types';
 
 const ParsedSavingsActionSchema = z.object({
@@ -59,7 +59,7 @@ export async function parseSavingsAllocationFromText(input: {
     mode: input.mode || 'auto',
   };
 
-  if (modelToUse === 'gpt-5.2-chat') {
+  if (modelToUse === AZURE_DEPLOYMENT_NAME) {
     return await callAzureOpenAI(promptTemplate, promptInput, ParsedSavingsActionSchema);
   }
 

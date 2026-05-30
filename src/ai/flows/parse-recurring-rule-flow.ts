@@ -8,7 +8,7 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 import type { Category, PaymentMethod, AIModel } from '@/lib/types';
 
 const ParsedRecurringRuleSchema = z.object({
@@ -41,7 +41,7 @@ export async function parseRecurringRuleFromText(input: {
     paymentMethods: pms,
   };
 
-  if (modelToUse === 'gpt-5.2-chat') {
+  if (modelToUse === AZURE_DEPLOYMENT_NAME) {
     return await callAzureOpenAI(promptTemplate, promptInput, ParsedRecurringRuleSchema);
   }
 

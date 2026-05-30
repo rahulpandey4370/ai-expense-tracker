@@ -4,7 +4,7 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 import {
   modelNames,
   PortfolioAssetTypeEnum,
@@ -78,7 +78,7 @@ export async function parsePortfolioEntryWithAI(input: {
   };
 
   try {
-    if (modelToUse === 'gpt-5.2-chat') {
+    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
       return await callAzureOpenAI(promptTemplate, flowInput, ParsePortfolioEntryOutputSchema);
     }
     return await parsePortfolioEntryFlow(flowInput);

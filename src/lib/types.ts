@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 // AI Model Selection
-export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gpt-5.2-chat'] as const;
+export const AZURE_MODEL_NAME = process.env.NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_NAME ?? 'gpt-5.2-chat';
+export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', AZURE_MODEL_NAME] as const;
 export type AIModel = (typeof modelNames)[number];
 
 

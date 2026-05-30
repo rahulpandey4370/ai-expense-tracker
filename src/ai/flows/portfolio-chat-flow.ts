@@ -4,7 +4,7 @@ import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAIChat } from '@/lib/azure-openai';
+import { callAzureOpenAIChat, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 import { modelNames, type AIModel, type PortfolioDashboardData } from '@/lib/types';
 
 const ChatMessageSchema = z.object({
@@ -126,7 +126,7 @@ Omit the block only if nothing useful applies.`;
 
   let responseText = '';
   try {
-    if (modelToUse === 'gpt-5.2-chat') {
+    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
       responseText = await callAzureOpenAIChat(messages);
     } else {
       const llmResponse = await retryableAIGeneration(() => ai.generate({

@@ -5,7 +5,7 @@ import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { AIModel, ComparativeExpenseAnalysisInputSchema, ComparativeExpenseAnalysisOutputSchema } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
@@ -43,7 +43,7 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
     const model = (input as any).model || 'gemini-3-flash-preview';
     let output;
 
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

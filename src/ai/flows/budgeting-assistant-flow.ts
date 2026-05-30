@@ -12,7 +12,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { BudgetingAssistantInputSchema, BudgetingAssistantOutputSchema, type BudgetingAssistantOutput, type AIModel } from '@/lib/types';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export async function suggestBudgetPlan(
   input: z.infer<typeof BudgetingAssistantInputSchema>
@@ -94,7 +94,7 @@ const budgetingAssistantFlow = ai.defineFlow(
     }
 
     let output;
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

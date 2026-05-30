@@ -5,10 +5,10 @@ import { retryableAIGeneration } from '../utils/retry-helper';
 import { YearlyFinancialReportInputSchema, YearlyFinancialReportOutputSchema } from '@/lib/types';
 import type { YearlyFinancialReportInput, YearlyFinancialReportOutput } from '@/lib/types';
 import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 export async function generateYearlyFinancialReport(input: YearlyFinancialReportInput): Promise<YearlyFinancialReportOutput> {
-  const modelToUse = input.model || 'gpt-5.2-chat';
+  const modelToUse = input.model || AZURE_DEPLOYMENT_NAME;
   try {
     const result = await yearlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -105,7 +105,7 @@ const yearlyFinancialReportFlow = ai.defineFlow(
     outputSchema: YearlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || 'gpt-5.2-chat';
+    const model = input.model || AZURE_DEPLOYMENT_NAME;
 
     const promptInput = {
       year: input.year,
@@ -117,7 +117,7 @@ const yearlyFinancialReportFlow = ai.defineFlow(
     };
 
     let output;
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
       output = await callAzureOpenAI(yearlyReportPromptTemplate, promptInput, YearlyFinancialReportOutputSchema.omit({ model: true }));
     } else {
       const prompt = ai.definePrompt({

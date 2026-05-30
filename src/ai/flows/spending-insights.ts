@@ -6,7 +6,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { modelNames, type AIModel, SpendingInsightsOutputSchema } from '@/lib/types';
-import { callAzureOpenAI } from '@/lib/azure-openai';
+import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
 
 
 // --- Input Schema ---
@@ -102,7 +102,7 @@ const spendingInsightsFlow = ai.defineFlow(
     const model = input.model || 'gemini-2.5-flash';
     let output: SpendingInsightsOutput | undefined;
 
-    if (model === 'gpt-5.2-chat') {
+    if (model === AZURE_DEPLOYMENT_NAME) {
         output = await callAzureOpenAI(spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }));
     } else {
         const prompt = ai.definePrompt({
