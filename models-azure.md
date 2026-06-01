@@ -72,13 +72,13 @@ These are your current credentials and must remain set:
 
 ```bash
 # Google Gemini API Key
-GEMINI_API_KEY=AIzaSyDBIW2t4EFbb_cnudRf7Y7hChiSVjIoJxY
+GEMINI_API_KEY=your-gemini-api-key-here
 
 # Shared Azure OpenAI credentials (your original resource)
 # For Azure OpenAI Service endpoints, paste ONLY the base origin:
-#   Correct:   https://rahul-mbuwblo6-eastus2.services.ai.azure.com
-#   Incorrect: https://rahul-mbuwblo6-eastus2.services.ai.azure.com/openai/v1/responses
-AZURE_OPENAI_ENDPOINT=https://rahul-mbuwblo6-eastus2.services.ai.azure.com
+#   Correct:   https://your-resource.services.ai.azure.com
+#   Incorrect: https://your-resource.services.ai.azure.com/openai/v1/responses
+AZURE_OPENAI_ENDPOINT=your-azure-endpoint
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key-here
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-5.4
 NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_NAME=gpt-5.4
@@ -138,22 +138,22 @@ Only add these if a model is hosted in a **different Azure resource** than your 
 # Naming: AI_MODEL_<UPPERCASE_ID_WITH_UNDERSCORES>_<FIELD>
 
 # Example: deepseek-r1 in a separate Azure resource
-AI_MODEL_DEEPSEEK_R1_ENDPOINT=https://deepseek-project.eastus2.services.ai.azure.com
+AI_MODEL_DEEPSEEK_R1_ENDPOINT=your-deepseek-endpoint
 AI_MODEL_DEEPSEEK_R1_API_KEY=your-deepseek-api-key-here
 AI_MODEL_DEEPSEEK_R1_DEPLOYMENT=deepseek-r1
 
 # Example: kimi-k2.6 in a separate Azure resource
-AI_MODEL_KIMI_K2_6_ENDPOINT=https://kimi-project.westus2.services.ai.azure.com
+AI_MODEL_KIMI_K2_6_ENDPOINT=your-kimi-endpoint
 AI_MODEL_KIMI_K2_6_API_KEY=your-kimi-api-key-here
 AI_MODEL_KIMI_K2_6_DEPLOYMENT=kimi-k2.6
 
 # Example: grok-4.3 in a separate Azure resource
-AI_MODEL_GROK_4_3_ENDPOINT=https://grok-project.southcentralus.services.ai.azure.com
+AI_MODEL_GROK_4_3_ENDPOINT=your-grok-endpoint
 AI_MODEL_GROK_4_3_API_KEY=your-grok-api-key-here
 AI_MODEL_GROK_4_3_DEPLOYMENT=grok-4.3
 
 # Example: llama-4 in a separate Azure resource
-AI_MODEL_LLAMA_4_ENDPOINT=https://llama-project.centralus.services.ai.azure.com
+AI_MODEL_LLAMA_4_ENDPOINT=your-llama-endpoint
 AI_MODEL_LLAMA_4_API_KEY=your-llama-api-key-here
 AI_MODEL_LLAMA_4_DEPLOYMENT=llama-4
 ```
