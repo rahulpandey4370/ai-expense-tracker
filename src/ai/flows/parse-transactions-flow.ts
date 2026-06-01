@@ -7,12 +7,11 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { ParsedAITransactionSchema, type ParsedAITransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -34,7 +33,7 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 // Type exported for the wrapper function
 export type ParseTransactionTextInput = z.infer<typeof ParseTransactionTextInputSchemaInternal>;
@@ -56,7 +55,7 @@ export async function parseTransactionsFromText(
   }
 ): Promise<ParseTransactionTextOutput> {
   const currentDate = format(new Date(), 'yyyy-MM-dd');
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('transaction_parsing');
 
   const expenseCategoriesForAI = input.categories
     .filter(c => c.type === 'expense')
@@ -174,35 +173,23 @@ const parseTransactionsFlow = ai.defineFlow(
     outputSchema: ParseTransactionTextOutputSchemaInternal,
   },
   async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
+    const model = input.model || getDefaultModelForTask('transaction_parsing');
     if (!input.naturalLanguageText.trim()) {
       return { parsedTransactions: [], summaryMessage: "Input text was empty." };
     }
 
     let output;
     try {
-      if (model === AZURE_DEPLOYMENT_NAME) {
-        output = await callAzureOpenAI(parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal);
-      } else {
-        const prompt = ai.definePrompt({
-          name: 'parseTransactionsPrompt',
-          input: { schema: ParseTransactionTextInputSchemaInternal.omit({ model: true }) },
-          output: { schema: ParseTransactionTextOutputSchemaInternal },
-          config: {
-            temperature: 0.2,
-            maxOutputTokens: 1500,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: parseTransactionsPromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-        output = result.output;
-      }
+      output = await callStructuredLLM(model, parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal, {
+        temperature: 0.2,
+        maxOutputTokens: 1500,
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        ],
+      });
     } catch (aiError: any) {
       console.error("AI generation failed in parseTransactionsFlow:", aiError);
       if (aiError.message && (aiError.message.includes("unknown helper") || aiError.message.includes("Handlebars error") || (aiError.message.includes("GoogleGenerativeAI Error") && aiError.message.includes("Invalid JSON payload")))) {
@@ -221,7 +208,7 @@ const parseTransactionsFlow = ai.defineFlow(
         {
           code: 'invalid_type',
           expected: 'array',
-          received: output?.parsedTransactions === undefined ? 'undefined' : 'invalid',
+          received: output?.parsedTransactions === undefined ? 'undefined' : 'unknown',
           path: ['parsedTransactions'],
           message: 'Required',
         },

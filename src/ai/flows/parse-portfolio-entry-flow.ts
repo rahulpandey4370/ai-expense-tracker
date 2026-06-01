@@ -1,12 +1,10 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 import {
-  modelNames,
   PortfolioAssetTypeEnum,
   PortfolioCurrencyEnum,
   PortfolioEntrySourceEnum,
@@ -52,7 +50,7 @@ const ParsePortfolioEntryInputSchema = z.object({
     currency: PortfolioCurrencyEnum,
   })),
   preferredAssetName: z.string().default(''),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 
 export type ParsedPortfolioEntry = z.infer<typeof ParsedPortfolioEntrySchema>;
@@ -67,7 +65,7 @@ export async function parsePortfolioEntryWithAI(input: {
   model?: AIModel;
 }): Promise<ParsePortfolioEntryOutput> {
   const today = new Date().toISOString().slice(0, 10);
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('portfolio_entry_parsing');
   const flowInput = {
     text: (input.text || '').trim(),
     receiptImageUri: input.imageDataUri,
@@ -78,9 +76,6 @@ export async function parsePortfolioEntryWithAI(input: {
   };
 
   try {
-    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-      return await callAzureOpenAI(promptTemplate, flowInput, ParsePortfolioEntryOutputSchema);
-    }
     return await parsePortfolioEntryFlow(flowInput);
   } catch (err: any) {
     console.error('[parse-portfolio-entry] AI failure:', err);
@@ -95,15 +90,11 @@ const parsePortfolioEntryFlow = ai.defineFlow(
     outputSchema: ParsePortfolioEntryOutputSchema,
   },
   async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
-    const prompt = ai.definePrompt({
-      name: 'parsePortfolioEntryPrompt',
-      input: { schema: ParsePortfolioEntryInputSchema.omit({ model: true }) },
-      output: { schema: ParsePortfolioEntryOutputSchema },
-      config: { temperature: 0.1, maxOutputTokens: 1400 },
-      prompt: promptTemplate,
+    const model = input.model || getDefaultModelForTask('portfolio_entry_parsing');
+    const output = await callStructuredLLM(model, promptTemplate, input, ParsePortfolioEntryOutputSchema, {
+      temperature: 0.1,
+      maxOutputTokens: 1400,
     });
-    const { output } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 2000);
     if (!output) throw new Error("Portfolio parser returned no output.");
     return output;
   }

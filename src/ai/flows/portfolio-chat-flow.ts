@@ -1,16 +1,14 @@
 'use server';
 
-import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAIChat, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
-import { modelNames, type AIModel, type PortfolioDashboardData } from '@/lib/types';
+import { callChatLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
+import type { AIModel, PortfolioDashboardData } from '@/lib/types';
 
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type PortfolioChatMessage = z.infer<typeof ChatMessageSchema>;
 
@@ -80,7 +78,7 @@ export async function askPortfolioBot(input: {
   model?: AIModel;
   scopedAssetId?: string;
 }): Promise<PortfolioChatOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('portfolio_chat');
   const today = new Date().toISOString().slice(0, 10);
   const data = summarizeDashboardForAI(input.dashboard, input.scopedAssetId);
   const scopedAssetName = input.scopedAssetId
@@ -126,16 +124,10 @@ Omit the block only if nothing useful applies.`;
 
   let responseText = '';
   try {
-    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-      responseText = await callAzureOpenAIChat(messages);
-    } else {
-      const llmResponse = await retryableAIGeneration(() => ai.generate({
-        prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-        model: googleAI.model(modelToUse),
-        config: { temperature: 0.2, maxOutputTokens: 1400 },
-      }));
-      responseText = llmResponse.text;
-    }
+    responseText = await callChatLLM(modelToUse, messages, {
+      temperature: 0.2,
+      maxOutputTokens: 1400,
+    });
   } catch (err: any) {
     console.error('[portfolio-chat] AI generation failed:', err);
     throw new Error(`Portfolio chat failed: ${err?.message || 'unknown AI error'}`);

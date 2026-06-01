@@ -1,14 +1,13 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { retryableAIGeneration } from '../utils/retry-helper';
 import { YearlyFinancialReportInputSchema, YearlyFinancialReportOutputSchema } from '@/lib/types';
 import type { YearlyFinancialReportInput, YearlyFinancialReportOutput } from '@/lib/types';
-import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export async function generateYearlyFinancialReport(input: YearlyFinancialReportInput): Promise<YearlyFinancialReportOutput> {
-  const modelToUse = input.model || AZURE_DEPLOYMENT_NAME;
+  const modelToUse = input.model || getDefaultModelForTask('yearly_report');
   try {
     const result = await yearlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -105,7 +104,7 @@ const yearlyFinancialReportFlow = ai.defineFlow(
     outputSchema: YearlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || AZURE_DEPLOYMENT_NAME;
+    const model = input.model || getDefaultModelForTask('yearly_report');
 
     const promptInput = {
       year: input.year,
@@ -116,19 +115,7 @@ const yearlyFinancialReportFlow = ai.defineFlow(
       isAggregated: input.isAggregated,
     };
 
-    let output;
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(yearlyReportPromptTemplate, promptInput, YearlyFinancialReportOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'yearlyFinancialReportPrompt',
-        input: { schema: YearlyFinancialReportInputSchema.omit({ model: true }) },
-        output: { schema: YearlyFinancialReportOutputSchema.omit({ model: true }) },
-        prompt: yearlyReportPromptTemplate,
-      });
-      const { output: result } = await retryableAIGeneration(() => prompt(promptInput, { model: googleAI.model(model) }));
-      output = result;
-    }
+    let output = await callStructuredLLM(model, yearlyReportPromptTemplate, promptInput, YearlyFinancialReportOutputSchema.omit({ model: true }));
 
     if (!output) {
       throw new Error("Yearly financial report generation failed to produce an output.");

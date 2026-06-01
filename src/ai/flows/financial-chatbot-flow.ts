@@ -8,14 +8,12 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import type { AppTransaction, AIModel } from '@/lib/types';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { isValid } from 'date-fns';
 import { getCalendarDateParts, getCalendarDateString } from '@/lib/date-utils';
-import { callAzureOpenAIChat, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
-import { modelNames } from '@/lib/types';
+import { callChatLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 
 const AITransactionSchema = z.object({
@@ -34,7 +32,7 @@ type AITransaction = z.infer<typeof AITransactionSchema>;
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string(),
-  model: z.enum(modelNames).optional(), // Add model to message
+  model: z.string().optional(), // Add model to message
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
@@ -47,7 +45,7 @@ const FinancialChatbotInputSchemaInternal = z.object({
   transactions: z.array(AITransactionSchema).describe("An array of user's financial transactions relevant to the query context. This might be all transactions or a subset based on selected filters like month/year."),
   chatHistory: z.array(ChatMessageSchema).optional().describe("Previous conversation history, if any."),
   dataScopeMessage: z.string().optional().describe("A message indicating the scope of the transaction data provided, e.g., 'for June 2023' or 'all available transactions'."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
   verbose: z.boolean().optional().describe("If true, the AI should provide detailed, elaborate responses. If false, concise responses."), // Add verbose
   investmentMode: z.boolean().optional().describe("If true, the bot is in investment-analysis mode and the transactions are the year's investment-related transactions only."),
 });
@@ -57,7 +55,7 @@ type FinancialChatbotInputInternal = z.infer<typeof FinancialChatbotInputSchemaI
 const FinancialChatbotOutputSchema = z.object({
   response: z.string().describe("The AI's response to the user's query."),
   followUpQuestions: z.array(z.string()).max(4).optional().describe("Up to 4 short, contextually-relevant follow-up questions the user might want to ask next, derived from the answer above."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type FinancialChatbotOutput = z.infer<typeof FinancialChatbotOutputSchema>;
 
@@ -169,7 +167,7 @@ const financialChatbotFlow = ai.defineFlow(
 
     // Get current date for context
     const currentDate = new Date().toISOString().split('T')[0];
-    const modelToUse = model || 'gemini-3-flash-preview';
+    const modelToUse = model || getDefaultModelForTask('chat');
 
     // RESPONSE STYLE based on verbose flag
     const responseStyleInstruction = verbose
@@ -294,25 +292,16 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     let responseText = '';
 
-    if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-      responseText = await callAzureOpenAIChat(messages);
-    } else {
-      const llmResponse = await retryableAIGeneration(() => ai.generate({
-        prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
-        model: googleAI.model(modelToUse),
-        config: {
-          temperature: 0.1, // Lower temperature for more consistent and accurate responses
-          maxOutputTokens: verbose ? 2000 : 800, // Increased token limit for verbose responses
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          ],
-        },
-      }));
-      responseText = llmResponse.text;
-    }
+    responseText = await callChatLLM(modelToUse, messages, {
+      temperature: 0.1,
+      maxOutputTokens: verbose ? 2000 : 800,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ],
+    });
 
     if (!responseText) {
       console.error("AI model returned no text for financial chatbot query:", query);

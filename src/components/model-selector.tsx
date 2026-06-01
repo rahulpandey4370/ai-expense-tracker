@@ -8,22 +8,18 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Bot, Sparkles, Check } from "lucide-react";
-import type { AIModel } from "@/lib/types";
-import { AZURE_MODEL_NAME } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ModelSelector() {
-  const { selectedModel, setSelectedModel, modelNames } = useAIModel();
+  const { selectedModel, setSelectedModel, availableModels } = useAIModel();
 
-  const geminiModels = modelNames.filter(name => name.startsWith('gemini'));
-  const openAIModels = modelNames.filter(name => name === AZURE_MODEL_NAME);
+  const geminiModels = availableModels.filter(m => m.provider === 'google-ai');
+  const azureModels = availableModels.filter(m => m.provider === 'azure-openai');
 
   return (
     <DropdownMenu>
@@ -43,25 +39,25 @@ export function ModelSelector() {
                 <Sparkles className="h-4 w-4 text-yellow-500"/> Google Gemini
             </DropdownMenuLabel>
             {geminiModels.map(model => (
-                <DropdownMenuItem key={model} onSelect={() => setSelectedModel(model as AIModel)}>
-                    <Check className={cn("mr-2 h-4 w-4", selectedModel === model ? "opacity-100" : "opacity-0")} />
-                    <span>{model}</span>
+                <DropdownMenuItem key={model.id} onSelect={() => setSelectedModel(model.id)}>
+                    <Check className={cn("mr-2 h-4 w-4", selectedModel === model.id ? "opacity-100" : "opacity-0")} />
+                    <span>{model.id}</span>
                 </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
         )}
 
-        {openAIModels.length > 0 && (
+        {azureModels.length > 0 && (
             <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
                 <DropdownMenuLabel className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-green-500"/> OpenAI
+                    <Bot className="h-4 w-4 text-green-500"/> Azure OpenAI
                 </DropdownMenuLabel>
-                 {openAIModels.map(model => (
-                    <DropdownMenuItem key={model} onSelect={() => setSelectedModel(model as AIModel)}>
-                       <Check className={cn("mr-2 h-4 w-4", selectedModel === model ? "opacity-100" : "opacity-0")} />
-                       <span>{model}</span>
+                 {azureModels.map(model => (
+                    <DropdownMenuItem key={model.id} onSelect={() => setSelectedModel(model.id)}>
+                       <Check className={cn("mr-2 h-4 w-4", selectedModel === model.id ? "opacity-100" : "opacity-0")} />
+                       <span>{model.id}</span>
                     </DropdownMenuItem>
                 ))}
             </DropdownMenuGroup>

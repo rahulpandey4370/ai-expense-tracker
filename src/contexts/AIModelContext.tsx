@@ -3,36 +3,47 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { AIModel, modelNames } from '@/lib/types';
+import { AIModel } from '@/lib/types';
+
+export interface ModelInfo {
+  id: string;
+  provider: 'azure-openai' | 'google-ai';
+  label?: string;
+}
 
 interface AIModelContextType {
   selectedModel: AIModel;
   setSelectedModel: (model: AIModel) => void;
-  modelNames: readonly AIModel[];
+  availableModels: ModelInfo[];
 }
 
 const AIModelContext = createContext<AIModelContextType | undefined>(undefined);
 
 const AI_MODEL_STORAGE_KEY = "finwiseAIModel";
-const DEFAULT_MODEL: AIModel = 'gemini-3-flash-preview';
 
-export function AIModelProvider({ children }: { children: ReactNode }) {
-  const [selectedModel, setSelectedModel] = useState<AIModel>(DEFAULT_MODEL);
+function getDefaultModel(models: ModelInfo[]): AIModel {
+  if (models.length > 0) return models[0].id;
+  return 'gpt-5.4';
+}
+
+export function AIModelProvider({ children, availableModels }: { children: ReactNode; availableModels: ModelInfo[] }) {
+  const defaultModel = getDefaultModel(availableModels);
+  const [selectedModel, setSelectedModel] = useState<AIModel>(defaultModel);
   const { toast } = useToast();
 
   useEffect(() => {
     try {
       const storedModel = localStorage.getItem(AI_MODEL_STORAGE_KEY);
-      if (storedModel && modelNames.includes(storedModel as AIModel)) {
-        setSelectedModel(storedModel as AIModel);
+      if (storedModel && availableModels.some(m => m.id === storedModel)) {
+        setSelectedModel(storedModel);
       }
     } catch (error) {
       console.warn("Could not read AI model from localStorage:", error);
     }
-  }, []);
+  }, [availableModels]);
 
   const handleSetSelectedModel = useCallback((model: AIModel) => {
-    if (modelNames.includes(model)) {
+    if (availableModels.some(m => m.id === model)) {
       setSelectedModel(model);
       try {
         localStorage.setItem(AI_MODEL_STORAGE_KEY, model);
@@ -43,10 +54,10 @@ export function AIModelProvider({ children }: { children: ReactNode }) {
     } else {
       toast({ title: "Invalid Model", description: "The selected AI model is not supported.", variant: "destructive" });
     }
-  }, [toast]);
+  }, [availableModels, toast]);
 
   return (
-    <AIModelContext.Provider value={{ selectedModel, setSelectedModel: handleSetSelectedModel, modelNames }}>
+    <AIModelContext.Provider value={{ selectedModel, setSelectedModel: handleSetSelectedModel, availableModels }}>
       {children}
     </AIModelContext.Provider>
   );

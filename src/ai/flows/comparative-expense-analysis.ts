@@ -2,10 +2,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { AIModel, ComparativeExpenseAnalysisInputSchema, ComparativeExpenseAnalysisOutputSchema } from '@/lib/types';
-import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
@@ -14,7 +13,7 @@ export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpense
 export async function comparativeExpenseAnalysis(
   input: ComparativeExpenseAnalysisInput
 ): Promise<ComparativeExpenseAnalysisOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('comparative_analysis');
   const result = await comparativeExpenseAnalysisFlow(input);
   return { ...result, model: modelToUse };
 }
@@ -40,21 +39,8 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
     outputSchema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
-    let output;
-
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'comparativeExpenseAnalysisPrompt',
-        input: { schema: ComparativeExpenseAnalysisInputSchema.omit({ model: true }) },
-        output: { schema: ComparativeExpenseAnalysisOutputSchema.omit({ model: true }) },
-        prompt: universalPromptTemplate,
-      });
-      const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-      output = result;
-    }
+    const model = (input as any).model || getDefaultModelForTask('comparative_analysis');
+    let output = await callStructuredLLM(model, universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid output structure.");

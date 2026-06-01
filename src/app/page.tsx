@@ -74,7 +74,7 @@ export default function DashboardPage() {
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
-  const { selectedModel, setSelectedModel, modelNames } = useAIModel();
+  const { selectedModel, setSelectedModel } = useAIModel();
 
   const handleScrollToForm = useCallback(() => {
     addTransactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });

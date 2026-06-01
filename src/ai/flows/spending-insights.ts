@@ -2,11 +2,11 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { modelNames, type AIModel, SpendingInsightsOutputSchema } from '@/lib/types';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import type { AIModel } from '@/lib/types';
+import { SpendingInsightsOutputSchema } from '@/lib/types';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 
 // --- Input Schema ---
@@ -20,7 +20,7 @@ const SpendingInsightsInputSchema = z.object({
   insightType: z.enum(['default', 'cost_cutter', 'growth_investor']).optional().default('default'),
   selectedMonth: z.number().min(0).max(11).describe("The selected month for analysis (0=Jan, 11=Dec)."),
   selectedYear: z.number().describe("The selected year for analysis."),
-  model: z.enum(modelNames).optional().default('gemini-2.5-flash'),
+  model: z.string().optional().default('gemini-2.5-flash'),
 });
 
 export type SpendingInsightsInput = z.infer<typeof SpendingInsightsInputSchema>;
@@ -99,43 +99,19 @@ const spendingInsightsFlow = ai.defineFlow(
       jsonInput: JSON.stringify(input, null, 2),
     };
     
-    const model = input.model || 'gemini-2.5-flash';
+    const model = input.model || getDefaultModelForTask('insights');
     let output: SpendingInsightsOutput | undefined;
 
-    if (model === AZURE_DEPLOYMENT_NAME) {
-        output = await callAzureOpenAI(spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }));
-    } else {
-        const prompt = ai.definePrompt({
-          name: 'spendingInsightsPrompt',
-          input: {
-            schema: z.object({
-              persona: z.string(),
-              analysisPeriod: z.string(),
-              currentDate: z.string(),
-              jsonInput: z.string(),
-            }),
-          },
-          output: {
-            schema: SpendingInsightsOutputSchema.omit({ model: true }),
-          },
-          config: {
-            temperature: 0.8,
-            maxOutputTokens: 3000,
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-          },
-          prompt: spendingInsightsPromptTemplate,
-        });
-
-        const result = await retryableAIGeneration(() =>
-          prompt(promptInput, { model: googleAI.model(model) })
-        );
-        output = result.output;
-    }
+    output = await callStructuredLLM(model, spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }), {
+      temperature: 0.8,
+      maxOutputTokens: 3000,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ],
+    });
 
     if (!output) {
       console.error("AI model returned invalid structure:", JSON.stringify(output, null, 2));

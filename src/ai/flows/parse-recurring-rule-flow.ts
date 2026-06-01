@@ -4,11 +4,9 @@
  * Returns the fields shaped for the UI form (no id / dates beyond dayOfMonth).
  */
 
-import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 import type { Category, PaymentMethod, AIModel } from '@/lib/types';
 
 const ParsedRecurringRuleSchema = z.object({
@@ -29,7 +27,7 @@ export async function parseRecurringRuleFromText(input: {
   paymentMethods: PaymentMethod[];
   model?: AIModel;
 }): Promise<ParsedRecurringRule> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('recurring_rule_parsing');
   const expenseCats = input.categories.filter(c => c.type === 'expense').map(c => ({ id: c.id, name: c.name }));
   const incomeCats = input.categories.filter(c => c.type === 'income').map(c => ({ id: c.id, name: c.name }));
   const pms = input.paymentMethods.map(p => ({ id: p.id, name: p.name }));
@@ -41,20 +39,10 @@ export async function parseRecurringRuleFromText(input: {
     paymentMethods: pms,
   };
 
-  if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-    return await callAzureOpenAI(promptTemplate, promptInput, ParsedRecurringRuleSchema);
-  }
-
-  const prompt = ai.definePrompt({
-    name: 'parseRecurringRulePrompt',
-    output: { schema: ParsedRecurringRuleSchema },
-    config: {
-      temperature: 0.1,
-      maxOutputTokens: 400,
-    },
-    prompt: promptTemplate,
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedRecurringRuleSchema, {
+    temperature: 0.1,
+    maxOutputTokens: 400,
   });
-  const { output } = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(modelToUse) }));
   if (!output) throw new Error("Recurring rule parser returned no output.");
   return output;
 }

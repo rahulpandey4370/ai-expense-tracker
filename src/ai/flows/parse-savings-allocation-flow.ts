@@ -9,11 +9,9 @@
  * location (e.g. "update emergency fund to ₹60k" → match existing record).
  */
 
-import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 import type { AIModel, SavingsAllocation } from '@/lib/types';
 
 const ParsedSavingsActionSchema = z.object({
@@ -50,7 +48,7 @@ export async function parseSavingsAllocationFromText(input: {
   mode?: SavingsAiMode;
   model?: AIModel;
 }): Promise<ParsedSavingsAction> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('savings_allocation_parsing');
 
   const promptInput = {
     text: input.naturalLanguageText,
@@ -59,17 +57,10 @@ export async function parseSavingsAllocationFromText(input: {
     mode: input.mode || 'auto',
   };
 
-  if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-    return await callAzureOpenAI(promptTemplate, promptInput, ParsedSavingsActionSchema);
-  }
-
-  const prompt = ai.definePrompt({
-    name: 'parseSavingsAllocationPrompt',
-    output: { schema: ParsedSavingsActionSchema },
-    config: { temperature: 0.1, maxOutputTokens: 800 },
-    prompt: promptTemplate,
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedSavingsActionSchema, {
+    temperature: 0.1,
+    maxOutputTokens: 800,
   });
-  const { output } = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(modelToUse) }));
   if (!output) throw new Error("Savings parser returned no output.");
   return output;
 }

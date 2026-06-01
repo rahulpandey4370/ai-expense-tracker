@@ -6,8 +6,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DateSelectionProvider } from '@/contexts/DateSelectionContext';
 import { AuthProvider } from '@/contexts/AuthContext';
-import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper'; // Import the new wrapper
+import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper';
 import { AIModelProvider } from '@/contexts/AIModelContext';
+import { getAvailableModels } from '@/lib/model-registry';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
   description: "Track your expenses intelligently with FinWise AI.",
   manifest: "/manifest.json",
   icons: {
-    apple: "/logo.png", // Use the app logo for apple touch icon
+    apple: "/logo.png",
   },
 };
 
@@ -44,24 +45,26 @@ export const viewport: Viewport = {
   themeColor: '#008080',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const availableModels = getAvailableModels();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${patrickHand.variable} ${caveat.variable} antialiased`}>
-        <AuthProvider> {/* AuthProvider remains high */}
+        <AuthProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="light"
             enableSystem
             disableTransitionOnChange
           >
-            <AIModelProvider>
+            <AIModelProvider availableModels={availableModels}>
               <DateSelectionProvider>
-                <ProtectedLayoutWrapper> {/* Use the new wrapper */}
+                <ProtectedLayoutWrapper>
                   {children}
                 </ProtectedLayoutWrapper>
               </DateSelectionProvider>
@@ -73,5 +76,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-    

@@ -8,18 +8,17 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { GoalForecasterInputSchema, GoalForecasterOutputSchema, type GoalForecasterOutput, type AIModel } from '@/lib/types'; // Import types and schemas
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
 export async function forecastFinancialGoal(
   input: GoalForecasterInput
 ): Promise<GoalForecasterOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('goal_forecast');
   try {
     // Validate input against the main schema before passing to AI
     const validatedInput = GoalForecasterInputSchema.omit({ model: true }).parse(input);
@@ -122,7 +121,7 @@ const financialGoalForecasterFlow = ai.defineFlow(
     outputSchema: GoalForecasterOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
+    const model = (input as any).model || getDefaultModelForTask('goal_forecast');
 
     // ---- 8A/8C: compute timeline & savings deterministically ----
     const netMonthlySavings = Math.max(0, input.averageMonthlyIncome - input.averageMonthlyExpenses);
@@ -183,30 +182,16 @@ const financialGoalForecasterFlow = ai.defineFlow(
       alternativeTimelines,
     };
 
-    let output;
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }));
-    } else {
-      // For Gemini, we still go through definePrompt — but use a non-templated input schema to avoid
-      // breaking strict input validation (the Genkit flow input schema doesn't include our extras).
-      const prompt = ai.definePrompt({
-        name: 'financialGoalPrompt',
-        config: {
-          temperature: 0.4,
-          maxOutputTokens: 800,
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          ],
-        },
-        output: { schema: GoalForecasterOutputSchema.omit({ model: true }) },
-        prompt: financialGoalPromptTemplate,
-      });
-      const result = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(model) }));
-      output = result.output;
-    }
+    let output = await callStructuredLLM(model, financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }), {
+      temperature: 0.4,
+      maxOutputTokens: 800,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ],
+    });
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid goal forecast.");

@@ -2,14 +2,13 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { OpportunityCostInputSchema, OpportunityCostOutputSchema } from '@/lib/types';
 import type { OpportunityCostInput, OpportunityCostOutput } from '@/lib/types';
-import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export async function analyzeOpportunityCost(input: OpportunityCostInput): Promise<OpportunityCostOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('opportunity_cost');
   try {
     const result = await opportunityCostAnalysisFlow(input);
     return { ...result, model: modelToUse };
@@ -66,21 +65,8 @@ const opportunityCostAnalysisFlow = ai.defineFlow(
     outputSchema: OpportunityCostOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
-    let output;
-
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'opportunityCostAnalysisPrompt',
-        input: { schema: OpportunityCostInputSchema.omit({ model: true }) },
-        output: { schema: OpportunityCostOutputSchema.omit({ model: true }) },
-        prompt: analysisPromptTemplate,
-      });
-      const { output: result } = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-      output = result;
-    }
+    const model = (input as any).model || getDefaultModelForTask('opportunity_cost');
+    let output = await callStructuredLLM(model, analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
 
     if (!output) {
       throw new Error("Opportunity cost analysis failed to produce a valid output.");

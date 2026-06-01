@@ -2,16 +2,14 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-import { retryableAIGeneration } from '../utils/retry-helper';
 import { MonthlyFinancialReportInputSchema, MonthlyFinancialReportOutputSchema } from '@/lib/types';
 import type { MonthlyFinancialReportInput, MonthlyFinancialReportOutput } from '@/lib/types';
-import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export async function generateMonthlyFinancialReport(input: MonthlyFinancialReportInput): Promise<MonthlyFinancialReportOutput> {
   // Default to gpt-5.2-chat for the deeper, longer-form monthly report.
-  const modelToUse = input.model || AZURE_DEPLOYMENT_NAME;
+  const modelToUse = input.model || getDefaultModelForTask('monthly_report');
   try {
     const result = await monthlyFinancialReportFlow(input);
     return { ...result, model: modelToUse };
@@ -88,7 +86,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
     outputSchema: MonthlyFinancialReportOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || AZURE_DEPLOYMENT_NAME;
+    const model = input.model || getDefaultModelForTask('monthly_report');
 
     // Create the prompt input, excluding the model property
     const promptInput = {
@@ -97,19 +95,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
       transactions: input.transactions,
     };
 
-    let output;
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'monthlyFinancialReportPrompt',
-        input: { schema: MonthlyFinancialReportInputSchema.omit({ model: true }) },
-        output: { schema: MonthlyFinancialReportOutputSchema.omit({ model: true }) },
-        prompt: reportPromptTemplate,
-      });
-      const { output: result } = await retryableAIGeneration(() => prompt(promptInput, { model: googleAI.model(model) }));
-      output = result;
-    }
+    let output = await callStructuredLLM(model, reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
 
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");

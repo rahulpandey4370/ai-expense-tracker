@@ -8,16 +8,15 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { BudgetingAssistantInputSchema, BudgetingAssistantOutputSchema, type BudgetingAssistantOutput, type AIModel } from '@/lib/types';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export async function suggestBudgetPlan(
   input: z.infer<typeof BudgetingAssistantInputSchema>
 ): Promise<BudgetingAssistantOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('budgeting');
   try {
     // Validate input against internal schema before passing to AI
     const validatedInput = BudgetingAssistantInputSchema.parse(input);
@@ -80,7 +79,7 @@ const budgetingAssistantFlow = ai.defineFlow(
     outputSchema: BudgetingAssistantOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = input.model || 'gemini-3-flash-preview';
+    const model = input.model || getDefaultModelForTask('budgeting');
 
     if (input.statedMonthlyIncome <= 0) {
       return {
@@ -93,29 +92,16 @@ const budgetingAssistantFlow = ai.defineFlow(
       };
     }
 
-    let output;
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'budgetingAssistantPrompt',
-        input: { schema: BudgetingAssistantInputSchema },
-        output: { schema: BudgetingAssistantOutputSchema.omit({ model: true }) },
-        config: {
-          temperature: 0.6,
-          maxOutputTokens: 1000,
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          ],
-        },
-        prompt: budgetPromptTemplate,
-      });
-      const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }));
-      output = result.output;
-    }
+    let output = await callStructuredLLM(model, budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }), {
+      temperature: 0.6,
+      maxOutputTokens: 1000,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ],
+    });
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid budget plan.");

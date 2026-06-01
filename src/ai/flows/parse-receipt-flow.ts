@@ -8,12 +8,11 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { format, parse as parseDateFns } from 'date-fns';
-import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel, modelNames } from '@/lib/types'; // Import from lib/types
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { ParsedReceiptTransactionSchema, type ParsedReceiptTransaction, type AIModel } from '@/lib/types'; // Import from lib/types
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 // Internal schema for AI flow input, not exported
 const CategorySchemaForAIInternal = z.object({
@@ -36,7 +35,7 @@ const ParseReceiptImageInputSchemaInternal = z.object({
   categories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (name, id) to help with mapping."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates if any are ambiguously parsed from the receipt."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 // Type exported for the wrapper function
 export type ParseReceiptImageInput = z.infer<typeof ParseReceiptImageInputSchemaInternal>;
@@ -61,7 +60,7 @@ export async function parseReceiptImage(
     .filter(c => c.type === 'expense')
     .map(({ type, ...rest }) => rest);
 
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('receipt_parsing');
 
   try {
     const result = await parseReceiptImageFlow({
@@ -130,7 +129,7 @@ const parseReceiptImageFlow = ai.defineFlow(
     outputSchema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }),
   },
   async (input) => {
-    const model = input.model || 'gemini-1.5-flash-latest';
+    const model = input.model || getDefaultModelForTask('receipt_parsing');
     if (!input.receiptImageUri) {
       return { parsedTransaction: { error: "Receipt image URI was empty." } };
     }
@@ -140,19 +139,12 @@ const parseReceiptImageFlow = ai.defineFlow(
 
     let outputFromAI;
     try {
-      if (model === AZURE_DEPLOYMENT_NAME) {
-        const result = await callAzureOpenAI(receiptPromptTemplate, input, z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }));
-        outputFromAI = result;
-      } else {
-        const prompt = ai.definePrompt({
-          name: 'parseReceiptImagePrompt',
-          input: { schema: ParseReceiptImageInputSchemaInternal.omit({ model: true }) },
-          output: { schema: z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }) },
-          prompt: receiptPromptTemplate,
-        });
-        const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(model) }), 3, 2000);
-        outputFromAI = result.output;
-      }
+      outputFromAI = await callStructuredLLM(
+        model,
+        receiptPromptTemplate,
+        input,
+        z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() })
+      );
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);
       return { parsedTransaction: { error: `AI model failed to process the receipt: ${aiError.message || 'Unknown AI error'}` } };

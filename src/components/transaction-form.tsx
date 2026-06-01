@@ -716,11 +716,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setLastUsedAIModel(selectedModel);
 
     try {
-      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'})); 
+      const categoryNamesForAI = expenseCategories.map(c => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense'}));
       const paymentMethodNamesForAI = paymentMethods.map(p => ({ id: p.id, name: p.name }));
 
       const result = await parseReceiptImage({
-        receiptImageUri: receiptPreview, 
+        receiptImageUri: receiptPreview,
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
         model: selectedModel,

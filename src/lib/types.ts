@@ -1,9 +1,17 @@
 import { z } from 'zod';
 
 // AI Model Selection
-export const AZURE_MODEL_NAME = process.env.NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_NAME ?? 'gpt-5.2-chat';
-export const modelNames = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', AZURE_MODEL_NAME] as const;
-export type AIModel = (typeof modelNames)[number];
+// Models are now fully dynamic via AI_MODELS env var.
+// AIModel is kept as a string alias for backward compatibility in type signatures.
+export type AIModel = string;
+
+// Deprecated: modelNames is no longer a static const.
+// Use getAvailableModels() from @/lib/model-registry (server) or the AIModelContext (client).
+export const modelNames: readonly string[] = [];
+
+// Deprecated: AZURE_MODEL_NAME is no longer a static const.
+// Use getModelConfig() from @/lib/model-registry or getDefaultModelForTask() from @/lib/task-models.
+export const AZURE_MODEL_NAME = process.env.NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_NAME ?? 'gpt-5.4';
 
 
 // Base types for data stored in Blob / used by app
@@ -320,7 +328,7 @@ export const ParsedAITransactionSchema = z.object({
     participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
     splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
   }).optional().describe("If the text mentions splitting the bill, populate this object."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
@@ -335,7 +343,7 @@ export const ParsedReceiptTransactionSchema = z.object({
   expenseTypeNameGuess: z.enum(['need', 'want', 'investment', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', 'investment', or 'investment_expense'. If not clearly identifiable, leave blank."),
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
   error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;
 
@@ -348,7 +356,7 @@ export const GoalForecasterInputSchema = z.object({
   averageMonthlyIncome: z.number().min(0).describe("The user's average monthly income in INR based on recent data. Can be 0."),
   averageMonthlyExpenses: z.number().min(0).describe("The user's average monthly expenses (excluding dedicated savings/investments for this specific goal) in INR based on recent data. Can be 0."),
   currentSavingsRate: z.number().min(0).max(100).describe("The user's current approximate savings rate as a percentage of income (e.g., 20 for 20%)."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type GoalForecasterInput = z.infer<typeof GoalForecasterInputSchema>;
 
@@ -360,7 +368,7 @@ export const GoalForecasterOutputSchema = z.object({
   motivationalMessage: z.string().optional().describe("A short, encouraging message for the user."),
   estimatedOrProvidedGoalAmount: z.number().min(0.01).describe("The goal amount used for forecasting, either user-provided or AI-estimated, in INR."),
   wasAmountEstimatedByAI: z.boolean().describe("True if the goal amount was estimated by the AI, false if provided by the user."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type GoalForecasterOutput = z.infer<typeof GoalForecasterOutputSchema>;
 
@@ -371,7 +379,7 @@ export const BudgetingAssistantInputSchema = z.object({
   statedMonthlySavingsGoalPercentage: z.number().min(0).max(100).describe("User's desired savings rate as a percentage of income (e.g., 20 for 20%)."),
   averagePastMonthlyExpenses: z.number().min(0).describe("User's average total monthly expenses in INR, calculated from the last 3 months of their transaction data. Can be 0."),
   pastSpendingBreakdown: z.string().describe("A summary of the user's average monthly spending breakdown from the last 3 months. Example: 'Average spending: Needs: ₹30000 (e.g., Rent: ₹15000, Groceries: ₹8000), Wants: ₹15000 (e.g., Dining Out: ₹7000, Shopping: ₹5000), Investments: ₹5000 (e.g., Mutual Funds: ₹5000).' Include specific category examples if available."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type BudgetingAssistantInput = z.infer<typeof BudgetingAssistantInputSchema>;
 
@@ -388,7 +396,7 @@ export const BudgetingAssistantOutputSchema = z.object({
     generalTips: z.array(z.string()).describe("General financial tips to help the user stick to the budget and improve savings. E.g., 'Review subscriptions for potential cuts.' or 'Set up automatic transfers to your savings account on payday.'"),
   }).describe("Actionable advice to help the user achieve their financial plan."),
   analysisSummary: z.string().describe("A brief overall analysis comparing the suggested budget to past spending habits and explaining how it helps achieve the savings goal. Mention any significant changes required."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type BudgetingAssistantOutput = z.infer<typeof BudgetingAssistantOutputSchema>;
 
@@ -431,7 +439,7 @@ export const FinancialHealthCheckInputSchema = z.object({
   previousTotalExpenses: z.number().min(0).describe("Total expenses for the immediately preceding period in INR."),
   currentCategoryTotals: z.record(z.string(), z.number()).optional().describe("Category-name → ₹ amount map for the current period."),
   previousCategoryTotals: z.record(z.string(), z.number()).optional().describe("Category-name → ₹ amount map for the previous period."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type FinancialHealthCheckInput = z.infer<typeof FinancialHealthCheckInputSchema>;
 
@@ -448,7 +456,7 @@ export const FinancialHealthCheckOutputSchema = z.object({
     detail: z.string(),
     severity: z.enum(['info', 'warning', 'critical']).default('info'),
   })).optional().describe("Categories or metrics that moved sharply vs the previous period."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
 
@@ -554,7 +562,7 @@ export const FixedExpenseAnalyzerInputSchema = z.object({
   transactions: z.array(AITransactionForAnalysisSchema).describe("An array of financial transactions for a specific month."),
   monthName: z.string().describe("The name of the month being analyzed (e.g., 'January')."),
   year: z.number().describe("The year being analyzed (e.g., 2024)."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type FixedExpenseAnalyzerInput = z.infer<typeof FixedExpenseAnalyzerInputSchema>;
 
@@ -574,7 +582,7 @@ export const FixedExpenseAnalyzerOutputSchema = z.object({
   identifiedExpenses: z.array(IdentifiedFixedExpenseSchema).describe("A list of all identified fixed/recurring expenses for the month."),
   totalFixedExpenses: z.number().describe("The sum total of all identified fixed expenses in INR."),
   summary: z.string().describe("A brief summary of the findings, mentioning the total amount and the most significant fixed expenses."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type FixedExpenseAnalyzerOutput = z.infer<typeof FixedExpenseAnalyzerOutputSchema>;
 
@@ -604,7 +612,7 @@ export const OpportunityCostInputSchema = z.object({
   workingDaysPerMonth: z.number().min(1).max(31).default(22).describe("The number of days the user works per month."),
   annualReturnRate: z.number().min(0).max(50).default(10).describe("Assumed annual return rate (%) for the investment alternative calculation."),
   investmentYears: z.number().min(1).max(40).default(10).describe("Investment horizon (years) for the future-value calculation."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type OpportunityCostInput = z.infer<typeof OpportunityCostInputSchema>;
 
@@ -613,7 +621,7 @@ export const OpportunityCostOutputSchema = z.object({
   investmentAlternative: z.string().describe("A sentence describing the potential future value if the money were invested instead. E.g., 'If invested, this amount could grow to approximately ₹X in 10 years at a 10% annual return.'"),
   alternativeUses: z.array(z.string()).describe("A list of 3-4 alternative, productive, or enriching ways the money could be spent (e.g., 'A weekend trip to a nearby city', 'An online course on a new skill', 'A high-quality set of professional clothes')."),
   summary: z.string().describe("A concluding, thought-provoking summary to help the user make a decision."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type OpportunityCostOutput = z.infer<typeof OpportunityCostOutputSchema>;
 
@@ -624,13 +632,13 @@ export const ComparativeExpenseAnalysisInputSchema = z.object({
   previousMonthExpenses: z.number().describe('Total expenses for the previous month in INR.'),
   expenseCategoriesCurrent: z.string().describe('A string representation of expense categories and amounts for the current month, e.g., "Food: ₹5000, Transport: ₹3000".'),
   expenseCategoriesPrevious: z.string().describe('A string representation of expense categories and amounts for the previous month, e.g., "Food: ₹4000, Transport: ₹2500".'),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type ComparativeExpenseAnalysisInput = z.infer<typeof ComparativeExpenseAnalysisInputSchema>;
 
 export const ComparativeExpenseAnalysisOutputSchema = z.object({
   analysis: z.string().describe("A concise, insightful summary comparing spending habits between the two months. Use '\\n' for new lines in a single string."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type ComparativeExpenseAnalysisOutput = z.infer<typeof ComparativeExpenseAnalysisOutputSchema>;
 
@@ -638,7 +646,7 @@ export const MonthlyFinancialReportInputSchema = z.object({
   monthName: z.string(),
   year: z.number(),
   transactions: z.array(AITransactionForAnalysisSchema),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type MonthlyFinancialReportInput = z.infer<typeof MonthlyFinancialReportInputSchema>;
 export const MonthlyFinancialReportOutputSchema = z.object({
@@ -647,7 +655,7 @@ export const MonthlyFinancialReportOutputSchema = z.object({
   categoryDeepDive: z.string(),
   savingsAndInvestmentAnalysis: z.string(),
   actionableRecommendations: z.array(z.string()),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type MonthlyFinancialReportOutput = z.infer<typeof MonthlyFinancialReportOutputSchema>;
 
@@ -672,7 +680,7 @@ export const YearlyFinancialReportInputSchema = z.object({
   largestTransactions: z.array(AITransactionForAnalysisSchema).optional().describe("Top largest transactions of the year, used when full set is too large."),
   totalTransactionCount: z.number(),
   isAggregated: z.boolean().describe("True when the AI is being given aggregates + sample due to large data."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type YearlyFinancialReportInput = z.infer<typeof YearlyFinancialReportInputSchema>;
 
@@ -682,13 +690,13 @@ export const YearlyFinancialReportOutputSchema = z.object({
   categoryDeepDive: z.string(),
   savingsAndInvestmentAnalysis: z.string(),
   actionableRecommendations: z.array(z.string()),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type YearlyFinancialReportOutput = z.infer<typeof YearlyFinancialReportOutputSchema>;
 
 // Spending Insights
 export const SpendingInsightsOutputSchema = z.object({
   insights: z.string().describe("A string containing 4-6 numbered insights, separated by \\n."),
-  model: z.enum(modelNames).optional(),
+  model: z.string().optional(),
 });
 export type SpendingInsightsOutput = z.infer<typeof SpendingInsightsOutputSchema>;

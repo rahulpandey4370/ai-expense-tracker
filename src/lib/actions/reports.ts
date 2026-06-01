@@ -1,10 +1,10 @@
 
 'use server';
 
-import { generateMonthlyFinancialReport, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput } from "@/ai/flows/monthly-financial-report-flow";
-import { generateYearlyFinancialReport, type YearlyFinancialReportInput, type YearlyFinancialReportOutput } from "@/ai/flows/yearly-financial-report-flow";
-import { type AIModel, type AITransactionForAnalysis, type MonthlySummary } from "@/lib/types";
-import { AZURE_DEPLOYMENT_NAME } from "@/lib/azure-openai";
+import { generateMonthlyFinancialReport } from "@/ai/flows/monthly-financial-report-flow";
+import { generateYearlyFinancialReport } from "@/ai/flows/yearly-financial-report-flow";
+import { type AIModel, type AITransactionForAnalysis, type MonthlySummary, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput, type YearlyFinancialReportInput, type YearlyFinancialReportOutput } from "@/lib/types";
+import { getDefaultModelForTask } from "@/lib/task-models";
 import { getCalendarDateParts } from "@/lib/date-utils";
 import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
 
@@ -101,7 +101,7 @@ export async function getMonthlyReport(
     monthName: monthNames[month],
     year,
     transactions: relevantTransactions,
-    model: model || AZURE_DEPLOYMENT_NAME,
+    model: model || getDefaultModelForTask('monthly_report'),
   };
 
   const generated = await generateMonthlyFinancialReport(input);
@@ -231,7 +231,7 @@ export async function getYearlyReport(
     largestTransactions: isAggregated
       ? [...yearTxns].sort((a, b) => b.amount - a.amount).slice(0, LARGEST_TXN_SAMPLE_SIZE)
       : undefined,
-    model: model || AZURE_DEPLOYMENT_NAME,
+    model: model || getDefaultModelForTask('yearly_report'),
   };
 
   const generated = await generateYearlyFinancialReport(input);

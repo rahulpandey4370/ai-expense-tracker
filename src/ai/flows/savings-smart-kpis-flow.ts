@@ -13,11 +13,9 @@
  * capital, but the main KPIs are about the cash-savings ledger itself.
  */
 
-import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 import type { AIModel, SavingsAllocation, AITransactionForAnalysis } from '@/lib/types';
 
 const KpiSchema = z.object({
@@ -43,7 +41,7 @@ export async function computeSavingsSmartKpis(input: {
   year: number;
   model?: AIModel;
 }): Promise<SavingsSmartKpisOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('savings_kpis');
 
   const promptInput = {
     allocations: input.allocations.map(a => ({
@@ -54,17 +52,10 @@ export async function computeSavingsSmartKpis(input: {
     year: input.year,
   };
 
-  if (modelToUse === AZURE_DEPLOYMENT_NAME) {
-    return await callAzureOpenAI(promptTemplate, promptInput, SavingsSmartKpisOutputSchema);
-  }
-
-  const prompt = ai.definePrompt({
-    name: 'savingsSmartKpisPrompt',
-    output: { schema: SavingsSmartKpisOutputSchema },
-    config: { temperature: 0.2, maxOutputTokens: 700 },
-    prompt: promptTemplate,
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, SavingsSmartKpisOutputSchema, {
+    temperature: 0.2,
+    maxOutputTokens: 700,
   });
-  const { output } = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(modelToUse) }));
   if (!output) throw new Error("Smart KPIs flow returned no output.");
   return output;
 }

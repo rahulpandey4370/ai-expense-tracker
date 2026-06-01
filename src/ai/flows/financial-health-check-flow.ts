@@ -9,15 +9,14 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { retryableAIGeneration } from '@/ai/utils/retry-helper';
 import { FinancialHealthCheckInputSchema, FinancialHealthCheckOutputSchema, type FinancialHealthCheckOutput } from '@/lib/types';
-import { googleAI } from '@genkit-ai/googleai';
-import { callAzureOpenAI, AZURE_DEPLOYMENT_NAME } from '@/lib/azure-openai';
+import { callStructuredLLM } from '@/lib/ai-client';
+import { getDefaultModelForTask } from '@/lib/task-models';
 
 export async function getFinancialHealthCheck(
   input: z.infer<typeof FinancialHealthCheckInputSchema>
 ): Promise<FinancialHealthCheckOutput> {
-  const modelToUse = input.model || 'gemini-3-flash-preview';
+  const modelToUse = input.model || getDefaultModelForTask('health_check');
   try {
     const validatedInput = FinancialHealthCheckInputSchema.omit({ model: true }).parse(input);
     const result = await financialHealthCheckFlow(input);
@@ -138,7 +137,7 @@ const financialHealthCheckFlow = ai.defineFlow(
     outputSchema: FinancialHealthCheckOutputSchema.omit({ model: true }),
   },
   async (input) => {
-    const model = (input as any).model || 'gemini-3-flash-preview';
+    const model = (input as any).model || getDefaultModelForTask('health_check');
 
     const { total: computedHealthScore, breakdown: scoreBreakdown } = computeHealthScore(input);
     const anomalies = detectAnomalies(input);
@@ -150,28 +149,16 @@ const financialHealthCheckFlow = ai.defineFlow(
       anomalies,
     };
 
-    let output;
-    if (model === AZURE_DEPLOYMENT_NAME) {
-      output = await callAzureOpenAI(healthCheckPromptTemplate, promptInput, FinancialHealthCheckOutputSchema.omit({ model: true }));
-    } else {
-      const prompt = ai.definePrompt({
-        name: 'financialHealthCheckPrompt',
-        output: { schema: FinancialHealthCheckOutputSchema.omit({ model: true }) },
-        config: {
-          temperature: 0.4,
-          maxOutputTokens: 600,
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          ],
-        },
-        prompt: healthCheckPromptTemplate,
-      });
-      const result = await retryableAIGeneration(() => prompt(promptInput as any, { model: googleAI.model(model) }));
-      output = result.output;
-    }
+    const output = await callStructuredLLM(model, healthCheckPromptTemplate, promptInput, FinancialHealthCheckOutputSchema.omit({ model: true }), {
+      temperature: 0.4,
+      maxOutputTokens: 600,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ],
+    });
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid health check summary.");
