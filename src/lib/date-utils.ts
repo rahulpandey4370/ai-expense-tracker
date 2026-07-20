@@ -8,6 +8,31 @@ const pad2 = (value: number) => String(value).padStart(2, "0");
 
 const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
 
+// The calendar timezone the app's dates are interpreted in. This is a
+// single-user (INR/IST) app; override via APP_TIMEZONE if ever needed.
+export const APP_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Kolkata";
+
+/**
+ * Convert an instant (Date or ISO string) to the YYYY-MM-DD calendar day it
+ * falls on **in the app timezone**. This is what must be stored for a
+ * transaction's `date`, so a picked "July 1" (which serializes to
+ * 2026-06-30T18:30:00Z for an IST user) is stored as 2026-07-01, not the
+ * UTC-sliced 2026-06-30. Runs correctly regardless of the server's own
+ * timezone (Vercel = UTC), because it formats explicitly in APP_TIMEZONE.
+ */
+export function getAppCalendarDayString(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (!isValidDate(date)) return null;
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export function getCalendarDateParts(value: Date | string | null | undefined): CalendarDateParts | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);

@@ -3,6 +3,7 @@
 import { getSupabase } from '@/lib/supabase';
 import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types';
+import { getAppCalendarDayString } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
@@ -282,7 +283,9 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   const newItem: RawTransaction = {
     id,
     ...validation.data,
-    date: validation.data.date.toISOString(),
+    // Store the calendar day in the app timezone (not a UTC slice), so a picked
+    // "July 1" isn't rolled back to June 30 for IST users.
+    date: getAppCalendarDayString(validation.data.date)!,
     description: validation.data.description || '',
     createdAt: now,
     updatedAt: now,
@@ -358,7 +361,8 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   const finalItemToUpdate: RawTransaction = {
     id: existingItem.id,
     type: validation.data.type,
-    date: validation.data.date.toISOString(),
+    // App-timezone calendar day (see addTransaction) — avoids the UTC roll-back.
+    date: getAppCalendarDayString(validation.data.date)!,
     amount: validation.data.amount,
     description: validation.data.description || '',
     categoryId: validation.data.categoryId,

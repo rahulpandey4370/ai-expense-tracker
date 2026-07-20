@@ -3,6 +3,16 @@ config();
 
 import { getBlobContainer, readBlobJson, getCosmosContainer, queryAllCosmosItems, batchUpsert, countSupabaseRows } from './lib';
 
+// The transaction `date` must be the calendar day in the app timezone (IST),
+// NOT a UTC slice — an IST-midnight instant like 2026-06-30T18:30:00Z is
+// July 1 locally and must migrate as 2026-07-01, not 2026-06-30.
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Kolkata';
+function appCalendarDay(value: string | Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(value instanceof Date ? value : new Date(value));
+}
+
 async function migrateCategories() {
   const categories = await readBlobJson<any[]>('internal/data/categories.json', []);
   const rows = categories.map(c => ({ id: c.id, name: c.name, type: c.type }));
@@ -26,7 +36,7 @@ async function migrateTransactions() {
   const rows = items.map(t => ({
     id: t.id,
     type: t.type,
-    date: t.date?.slice(0, 10),
+    date: t.date ? appCalendarDay(t.date) : null,
     amount: t.amount,
     description: t.description,
     category_id: t.categoryId ?? null,
