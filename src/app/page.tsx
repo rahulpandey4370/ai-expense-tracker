@@ -76,34 +76,41 @@ export default function DashboardPage() {
     addTransactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  // Fetch only a bounded window covering everything the dashboard renders:
-  // the selected month, the previous month (insights comparison), and the
-  // trailing 3 months from today (trend charts). This replaces loading up to
-  // 10,000 rows on every dashboard visit.
-  const { windowStart, windowEnd } = useMemo(() => {
+  // The dashboard renders two distinct time regions:
+  //  A) the selected month + previous month (KPIs, charts, insights comparison)
+  //  B) the trailing 3 months from *today* (trend charts, anchored on today)
+  // When the selection is an old month (e.g. mid-2025) these regions are far
+  // apart, so we fetch them as two tight ranges instead of one contiguous window
+  // spanning everything in between (which would be huge and needlessly heavy).
+  const { selRange, trendRange } = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, '0');
     const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const today = new Date();
-    const startAnchors = [
-      new Date(today.getFullYear(), today.getMonth() - 2, 1), // trailing 3 months incl. current
-      new Date(selectedYear, selectedMonth - 1, 1),           // previous month of selection
-      new Date(selectedYear, selectedMonth, 1),               // selected month
-    ];
-    const endAnchors = [
-      new Date(today.getFullYear(), today.getMonth() + 1, 0), // end of current month
-      new Date(selectedYear, selectedMonth + 1, 0),           // end of selected month
-    ];
     return {
-      windowStart: ymd(new Date(Math.min(...startAnchors.map(d => d.getTime())))),
-      windowEnd: ymd(new Date(Math.max(...endAnchors.map(d => d.getTime())))),
+      selRange: {
+        start: ymd(new Date(selectedYear, selectedMonth - 1, 1)), // previous month of selection
+        end: ymd(new Date(selectedYear, selectedMonth + 1, 0)),   // end of selected month
+      },
+      trendRange: {
+        start: ymd(new Date(today.getFullYear(), today.getMonth() - 2, 1)), // trailing 3 months
+        end: ymd(new Date(today.getFullYear(), today.getMonth() + 1, 0)),   // end of current month
+      },
     };
   }, [selectedMonth, selectedYear]);
 
-  const txQuery = useTransactionsInRange(windowStart, windowEnd);
-  const transactions = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  const selQuery = useTransactionsInRange(selRange.start, selRange.end);
+  const trendQuery = useTransactionsInRange(trendRange.start, trendRange.end);
+  const transactions = useMemo(() => {
+    // Merge both ranges, de-duped by id (they overlap when selection is recent).
+    const selData = selQuery.data ?? [];
+    const trendData = trendQuery.data ?? [];
+    const byId = new Map<string, AppTransaction>();
+    for (const t of [...selData, ...trendData]) byId.set(t.id, t);
+    return [...byId.values()];
+  }, [selQuery.data, trendQuery.data]);
   const { data: allCategories = [] } = useCategories();
   const { data: budgets = [] } = useBudgets();
-  const isLoadingData = txQuery.isLoading;
+  const isLoadingData = selQuery.isLoading || trendQuery.isLoading;
 
   // Materialize any due recurring transactions once per day (client-rate-limited),
   // then refresh the cached queries so new rows appear.

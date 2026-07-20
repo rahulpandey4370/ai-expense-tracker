@@ -171,20 +171,32 @@ function hydrateExpandedRow(row: any): AppTransaction {
  * Fetch fully-hydrated transactions within an inclusive [startYmd, endYmd] date
  * window (YYYY-MM-DD). Pushes the date filter into Postgres so callers only
  * transfer the rows they actually need instead of the entire table.
+ *
+ * Pages through the results so ranges with more than Supabase's default 1000-row
+ * cap are returned in full (otherwise older rows in a wide window silently drop).
  */
 export async function getTransactionsInRange(startYmd: string, endYmd: string): Promise<AppTransaction[]> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('transactions_expanded')
-    .select('*')
-    .gte('date', startYmd)
-    .lte('date', endYmd)
-    .order('date', { ascending: false });
-  if (error) {
-    console.error('Supabase Error (getTransactionsInRange):', error.message);
-    throw new Error(`Could not fetch transactions in range. Original error: ${error.message}`);
+  const PAGE = 1000;
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('transactions_expanded')
+      .select('*')
+      .gte('date', startYmd)
+      .lte('date', endYmd)
+      .order('date', { ascending: false })
+      .order('id', { ascending: true }) // stable order across pages
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error('Supabase Error (getTransactionsInRange):', error.message);
+      throw new Error(`Could not fetch transactions in range. Original error: ${error.message}`);
+    }
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
   }
-  return (data as any[]).map(hydrateExpandedRow);
+  return rows.map(hydrateExpandedRow);
 }
 
 export interface TransactionQueryOptions {
