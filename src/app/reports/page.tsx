@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import type { AppTransaction, ExpenseType, AIModel, AITransactionForAnalysis } from '@/lib/types';
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
-import { getTransactions } from '@/lib/actions/transactions';
+import { useTransactionsInRange } from '@/hooks/use-finance-queries';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers, RefreshCw, Wand2 } from 'lucide-react';
 import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
@@ -57,9 +57,6 @@ const progressColors = [
 
 export default function ReportsPage() {
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange: contextHandleMonthChange, handleYearChange: contextHandleYearChange, years: contextYears } = useDateSelection();
-  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-
   const [reportYear, setReportYear] = useState<number>(selectedYear);
   const [reportMonth, setReportMonth] = useState<number>(selectedMonth); // -1 for Annual
 
@@ -72,27 +69,28 @@ export default function ReportsPage() {
 
   const { toast } = useToast();
 
-  const fetchInitialData = useCallback(async () => {
-    setIsLoadingData(true);
-    try {
-      const fetchedTransactions = await getTransactions();
-      setAllTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
-    } catch (error) {
-      console.error("Failed to fetch transactions for reports:", error);
-      toast({
-        title: "Error Loading Report Data",
-        description: "Could not fetch transaction data for reports.",
-        variant: "destructive",
-      });
-      setAllTransactions([]);
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, [toast]);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // The report itself needs only the selected period (month or full year).
+  const { periodStart, periodEnd } = useMemo(() => {
+    if (reportMonth === -1) return { periodStart: `${reportYear}-01-01`, periodEnd: `${reportYear}-12-31` };
+    const lastDay = new Date(reportYear, reportMonth + 1, 0).getDate();
+    return { periodStart: `${reportYear}-${pad(reportMonth + 1)}-01`, periodEnd: `${reportYear}-${pad(reportMonth + 1)}-${pad(lastDay)}` };
+  }, [reportYear, reportMonth]);
+  const periodQuery = useTransactionsInRange(periodStart, periodEnd);
+  const isLoadingData = periodQuery.isLoading;
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+  // The trend charts need trailing 12 months from today (independent of the report period).
+  const { trendStart, trendEnd } = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return {
+      trendStart: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`,
+      trendEnd: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
+    };
+  }, []);
+  const trendQuery = useTransactionsInRange(trendStart, trendEnd);
+  const trendTransactions = trendQuery.data ?? [];
 
   const handleYearChange = (yearValue: string) => {
     const year = parseInt(yearValue, 10);
@@ -108,14 +106,8 @@ export default function ReportsPage() {
     }
   };
 
-  const filteredTransactionsForPeriod = useMemo(() => {
-    return allTransactions.filter(t => {
-      if (reportMonth === -1) { // Annual report
-        return isSameCalendarYear(t.date, reportYear);
-      }
-      return isSameCalendarMonth(t.date, reportMonth, reportYear);
-    });
-  }, [allTransactions, reportYear, reportMonth]);
+  // Already scoped to the report period server-side.
+  const filteredTransactionsForPeriod = useMemo(() => periodQuery.data ?? [], [periodQuery.data]);
 
   // Convert in the browser (IST) so the date string is computed in the user's
   // timezone — sending Date objects through to the UTC server would shift
@@ -324,8 +316,8 @@ export default function ReportsPage() {
                     <motion.div variants={cardVariants}><ExpensePaymentMethodChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
-                      <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={allTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
+                      <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={trendTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
+                      <motion.div variants={cardVariants}><IncomeExpenseTrendChart transactions={trendTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>
                   </div>
 
                   {/* New Category Spending Table */}

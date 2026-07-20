@@ -1,52 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
 import { FinancialChatbot } from '@/components/financial-chatbot';
-import { getTransactions } from '@/lib/actions/transactions';
-import type { AppTransaction } from '@/lib/types';
-import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 export default function ChatbotPage() {
-  const [transactions, setTransactions] = useState<AppTransaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
-  const fetchAllTransactions = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // Fetch all transactions, chatbot can filter/use as needed
-      const fetchedTransactions = await getTransactions(); 
-      setTransactions(fetchedTransactions.map(t => ({...t, date: new Date(t.date)})));
-    } catch (error) {
-      console.error("Failed to fetch transactions for chatbot:", error);
-      toast({
-        title: "Error Loading Data",
-        description: "Could not fetch transaction data for the chatbot.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchAllTransactions();
-  }, [fetchAllTransactions]);
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg text-primary">Loading Chatbot...</p>
-      </div>
-    );
-  }
-  
+  // The chatbot fetches exactly the transaction scope each query needs on demand
+  // (see FinancialChatbot), so this page no longer preloads the whole table.
   return (
     // Header is sticky h-16 (4rem). Constrain this view so the chatbot's internal ScrollArea has a real bounded height.
     <div className="flex flex-col h-[calc(100svh-4rem)] overflow-hidden">
-        <FinancialChatbot allTransactions={transactions} isPage={true} />
+      <FinancialChatbot isPage={true} />
     </div>
   );
 }

@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, FlaskConical, Wand2, AlertTriangle, PiggyBank, Target, Trash2, Wallet, Activity, Repeat, FilePlus, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { getTransactions } from '@/lib/actions/transactions';
-import { addGoal, getGoals, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, editAllocation, type Goal, type FundAllocation } from '@/lib/actions/goals';
+import { addGoal, addAllocationToGoal, deleteAllocationFromGoal, deleteGoal, editAllocation } from '@/lib/actions/goals';
+import type { Goal, FundAllocation } from '@/lib/types';
+import { useRecentTransactions, useGoals, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import type { AppTransaction, GoalForecasterInput, GoalForecasterOutput, BudgetingAssistantInput, BudgetingAssistantOutput, GoalInput, FinancialHealthCheckInput, FinancialHealthCheckOutput, AITransactionForAnalysis, FixedExpenseAnalyzerInput, FixedExpenseAnalyzerOutput, IdentifiedFixedExpense, AIModel } from '@/lib/types';
 import { forecastFinancialGoal } from '@/ai/flows/goal-forecaster-flow';
 import { suggestBudgetPlan } from '@/ai/flows/budgeting-assistant-flow';
@@ -56,8 +57,12 @@ type HealthCheckPeriodType = 'current_week' | 'current_month';
 
 export default function AIPlaygroundPage() {
   const { toast } = useToast();
-  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const invalidate = useInvalidateFinance();
+  // Recent transactions + goals via React Query (cached, deduped, auto-refetched
+  // on invalidation) instead of a manual fetch + refetch on every mutation.
+  const txQuery = useRecentTransactions(500);
+  const allTransactions = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  const isLoadingTransactions = txQuery.isLoading;
   const { years: contextYears, monthNamesList } = useDateSelection();
   const { selectedModel } = useAIModel();
 
@@ -77,8 +82,12 @@ export default function AIPlaygroundPage() {
   const [aiBudgetError, setAiBudgetError] = useState<string | null>(null);
 
   // Saved Goals State
-  const [savedGoals, setSavedGoals] = useState<Goal[]>([]);
-  const [isLoadingGoals, setIsLoadingGoals] = useState(false);
+  const goalsQuery = useGoals();
+  const savedGoals = useMemo(
+    () => (goalsQuery.data ?? []).map(g => ({ ...g, createdAt: new Date(g.createdAt), updatedAt: new Date(g.updatedAt) })) as unknown as Goal[],
+    [goalsQuery.data]
+  );
+  const isLoadingGoals = goalsQuery.isLoading;
   const [allocationAmounts, setAllocationAmounts] = useState<Record<string, string>>({});
   const [allocationNames, setAllocationNames] = useState<Record<string, string>>({});
   const [isSavingGoal, setIsSavingGoal] = useState(false);
@@ -102,34 +111,10 @@ export default function AIPlaygroundPage() {
   const [aiFixedExpenseError, setAiFixedExpenseError] = useState<string | null>(null);
 
 
-  const fetchInitialDataCallback = useCallback(async () => {
-    setIsLoadingTransactions(true);
-    setIsLoadingGoals(true);
-    try {
-      const [fetchedTransactions, fetchedGoals] = await Promise.all([
-        getTransactions({ limit: 500 }), // Limit transactions for AI playground averages
-        getGoals({ limit: 50 }) // Limit goals displayed initially
-      ]);
-      setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
-      setSavedGoals(fetchedGoals.map(g => ({...g, createdAt: new Date(g.createdAt), updatedAt: new Date(g.updatedAt) })));
-    } catch (error) {
-      console.error("Failed to fetch initial data for AI Playground:", error);
-      toast({
-        title: "Error Loading Initial Data",
-        description: "Could not fetch transaction or goal data.",
-        variant: "destructive",
-      });
-      setAllTransactions([]);
-      setSavedGoals([]);
-    } finally {
-      setIsLoadingTransactions(false);
-      setIsLoadingGoals(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchInitialDataCallback();
-  }, [fetchInitialDataCallback]);
+  // Transactions + goals load via React Query above; refresh = invalidate cache.
+  const fetchInitialDataCallback = useCallback(() => {
+    invalidate();
+  }, [invalidate]);
   
   const handleGetFixedExpenses = async () => {
     setIsAILoadingFixedExpenses(true);
@@ -325,7 +310,6 @@ export default function AIPlaygroundPage() {
       return;
     }
 
-    setIsLoadingGoals(true); // Re-use loading state to indicate activity
     try {
       await addAllocationToGoal(goalId, nameStr, amountToAllocate);
       toast({ title: "Fund Allocated!", description: `₹${amountToAllocate} allocated to '${nameStr}'.` });
@@ -335,7 +319,6 @@ export default function AIPlaygroundPage() {
       fetchInitialDataCallback(); // Refresh data
     } catch (error: any) {
       toast({ title: "Allocation Error", description: error.message || "Could not allocate savings.", variant: "destructive" });
-      setIsLoadingGoals(false);
     }
   };
 
@@ -354,14 +337,12 @@ export default function AIPlaygroundPage() {
 
 
   const handleDeleteGoal = async (goalId: string, goalDesc: string) => {
-    setIsLoadingGoals(true);
     try {
       await deleteGoal(goalId);
       toast({ title: "Goal Deleted", description: `'${goalDesc}' has been removed.` });
       fetchInitialDataCallback();
     } catch (error: any) {
       toast({ title: "Deletion Error", description: error.message || "Could not delete goal.", variant: "destructive" });
-      setIsLoadingGoals(false);
     }
   };
 

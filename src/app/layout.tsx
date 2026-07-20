@@ -9,6 +9,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper';
 import { AIModelProvider } from '@/contexts/AIModelContext';
 import { getAvailableModels } from '@/lib/model-registry';
+import { QueryProvider } from '@/components/providers/query-provider';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -55,23 +56,25 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${patrickHand.variable} ${caveat.variable} antialiased`}>
-        <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <AIModelProvider availableModels={availableModels}>
-              <DateSelectionProvider>
-                <ProtectedLayoutWrapper>
-                  {children}
-                </ProtectedLayoutWrapper>
-              </DateSelectionProvider>
-            </AIModelProvider>
-            <Toaster />
-          </ThemeProvider>
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <AIModelProvider availableModels={availableModels}>
+                <DateSelectionProvider>
+                  <ProtectedLayoutWrapper>
+                    {children}
+                  </ProtectedLayoutWrapper>
+                </DateSelectionProvider>
+              </AIModelProvider>
+              <Toaster />
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

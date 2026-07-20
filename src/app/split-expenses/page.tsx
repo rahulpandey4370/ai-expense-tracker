@@ -29,8 +29,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { SplitUser, SplitUserInput, SplitExpenseInput, AppSplitExpense, UserBalance, SplitMethod, Category, PaymentMethod } from '@/lib/types';
-import { addSplitUser, getSplitUsers, deleteSplitUser, addSplitExpense, getSplitExpenses, settleParticipantShare, getSplitBalances } from '@/lib/actions/split-expenses';
-import { getCategories, getPaymentMethods } from '@/lib/actions/transactions';
+import { addSplitUser, deleteSplitUser, addSplitExpense, settleParticipantShare } from '@/lib/actions/split-expenses';
+import { useSplitUsers, useSplitExpenses, useSplitBalances, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon, AlertTriangle, ChevronsUpDown, Check } from "lucide-react";
 import { format } from 'date-fns';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -57,57 +57,38 @@ const MAIN_USER_ID = "me";
 
 export default function SplitExpensesPage() {
   const { toast } = useToast();
-  const [splitUsers, setSplitUsers] = useState<SplitUser[]>([]);
+  const invalidate = useInvalidateFinance();
   const [newUserName, setNewUserName] = useState("");
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState<string | null>(null);
-
-  const [splitExpenses, setSplitExpenses] = useState<AppSplitExpense[]>([]);
-  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [isSettling, setIsSettling] = useState<{ expenseId: string, userId: string } | null>(null);
-  const [balances, setBalances] = useState<UserBalance[]>([]);
-  const [isLoadingBalances, setIsLoadingBalances] = useState(true);
-  
-  const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
 
+  // React Query: cached + deduped; mutations call fetchData() → invalidate.
+  const usersQuery = useSplitUsers();
+  const expensesQuery = useSplitExpenses();
+  const balancesQuery = useSplitBalances();
+  const categoriesQuery = useCategories();
+  const paymentMethodsQuery = usePaymentMethods();
 
-  const fetchData = useCallback(async () => {
-    setIsLoadingUsers(true);
-    setIsLoadingExpenses(true);
-    setIsLoadingBalances(true);
-    setIsLoadingDropdowns(true);
-    try {
-      const [users, expenses, fetchedBalances, fetchedCategories, fetchedPaymentMethods] = await Promise.all([
-        getSplitUsers(),
-        getSplitExpenses(),
-        getSplitBalances(),
-        getCategories('expense'),
-        getPaymentMethods(),
-      ]);
-      setSplitUsers(users);
-      setSplitExpenses(expenses);
-      setBalances(fetchedBalances);
-      setExpenseCategories(fetchedCategories);
-      setPaymentMethods(fetchedPaymentMethods);
-    } catch (error: any) {
-      toast({ title: "Error Fetching Data", description: error.message || "Could not load split expense data.", variant: "destructive" });
-      setSplitUsers([]);
-      setSplitExpenses([]);
-      setBalances([]);
-    } finally {
-      setIsLoadingUsers(false);
-      setIsLoadingExpenses(false);
-      setIsLoadingBalances(false);
-      setIsLoadingDropdowns(false);
-    }
-  }, [toast]);
+  const splitUsers = usersQuery.data ?? [];
+  const splitExpenses = expensesQuery.data ?? [];
+  const balances = balancesQuery.data ?? [];
+  const expenseCategories = useMemo(() => (categoriesQuery.data ?? []).filter(c => c.type === 'expense'), [categoriesQuery.data]);
+  const paymentMethods = paymentMethodsQuery.data ?? [];
+
+  const isLoadingUsers = usersQuery.isLoading;
+  const isLoadingExpenses = expensesQuery.isLoading;
+  const isLoadingBalances = balancesQuery.isLoading;
+  const isLoadingDropdowns = categoriesQuery.isLoading || paymentMethodsQuery.isLoading;
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const err = usersQuery.error || expensesQuery.error || balancesQuery.error;
+    if (err) toast({ title: "Error Fetching Data", description: err instanceof Error ? err.message : "Could not load split expense data.", variant: "destructive" });
+  }, [usersQuery.error, expensesQuery.error, balancesQuery.error, toast]);
+
+  const fetchData = useCallback(() => {
+    invalidate();
+  }, [invalidate]);
 
   const handleAddUser = async (e: FormEvent) => {
     e.preventDefault();
@@ -235,7 +216,7 @@ export default function SplitExpensesPage() {
                                             <div>
                                                 <h4 className="font-semibold text-accent">{expense.title}</h4>
                                                 <p className="text-xs text-muted-foreground">{format(expense.date, 'dd MMM, yyyy')} • Total: ₹{expense.totalAmount.toLocaleString()}</p>
-                                                <p className="text-xs text-muted-foreground">Paid by: <strong>{expense.paidById === MAIN_USER_ID ? 'Me' : expense.paidBy?.name || 'Unknown'}</strong></p>
+                                                <p className="text-xs text-muted-foreground">Paid by: <strong>{expense.paidBy?.id === MAIN_USER_ID ? 'Me' : expense.paidBy?.name || 'Unknown'}</strong></p>
                                             </div>
                                             <Badge variant={expense.isFullySettled ? "default" : "secondary"} className={cn(expense.isFullySettled ? "bg-green-600/80" : "bg-orange-500/80", "text-white")}>{expense.isFullySettled ? "Settled" : "Unsettled"}</Badge>
                                         </div>

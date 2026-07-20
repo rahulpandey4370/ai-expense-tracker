@@ -1,6 +1,6 @@
 'use server';
 
-import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
+import { getSupabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 import {
@@ -12,49 +12,48 @@ import {
 } from '@/lib/types';
 import { parseSavingsAllocationFromText, type SavingsAiMode, type ParsedSavingsAction } from '@/ai/flows/parse-savings-allocation-flow';
 
-const SAVINGS_BLOB_PATH = 'internal/data/savings-allocations.json';
-
-let _client: BlobContainerClient | undefined;
-async function blobContainer(): Promise<BlobContainerClient> {
-  if (_client) return _client;
-  const conn = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const name = process.env.AZURE_STORAGE_CONTAINER_NAME;
-  if (!conn || !name) throw new Error("Azure storage env vars missing for savings allocations.");
-  _client = BlobServiceClient.fromConnectionString(conn).getContainerClient(name);
-  return _client;
+function toSavingsAllocation(row: any): SavingsAllocation {
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location,
+    category: row.category,
+    amount: row.amount,
+    asOfDate: row.as_of_date,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream as AsyncIterable<Buffer | string>) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString('utf-8');
+function toSavingsRow(item: SavingsAllocation): Record<string, any> {
+  return {
+    id: item.id,
+    name: item.name,
+    location: item.location,
+    category: item.category,
+    amount: item.amount,
+    as_of_date: item.asOfDate,
+    notes: item.notes ?? null,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+  };
 }
 
 async function readAll(): Promise<SavingsAllocation[]> {
-  try {
-    const c = await blobContainer();
-    const blob = c.getBlobClient(SAVINGS_BLOB_PATH);
-    const dl = await blob.download(0);
-    if (!dl.readableStreamBody) return [];
-    const text = await streamToString(dl.readableStreamBody);
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed as SavingsAllocation[] : [];
-  } catch (error: any) {
-    if (error instanceof RestError && error.statusCode === 404) return [];
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from('savings_allocations').select('*');
+  if (error) {
     console.warn("savings.readAll failed", error.message);
     return [];
   }
+  return (data as any[]).map(toSavingsAllocation);
 }
 
 async function writeAll(items: SavingsAllocation[]): Promise<void> {
-  const c = await blobContainer();
-  const block = c.getBlockBlobClient(SAVINGS_BLOB_PATH);
-  const body = JSON.stringify(items, null, 2);
-  await block.upload(body, Buffer.byteLength(body), {
-    blobHTTPHeaders: { blobContentType: 'application/json' },
-  });
+  const supabase = getSupabase();
+  const { error } = await supabase.from('savings_allocations').upsert(items.map(toSavingsRow));
+  if (error) throw new Error(`Could not save savings allocations. Original error: ${error.message}`);
 }
 
 export async function getSavingsAllocations(): Promise<SavingsAllocation[]> {
@@ -64,25 +63,25 @@ export async function getSavingsAllocations(): Promise<SavingsAllocation[]> {
 export async function addSavingsAllocation(data: SavingsAllocationInput): Promise<SavingsAllocation> {
   const validated = SavingsAllocationInputSchema.parse(data);
   const now = new Date().toISOString();
-  const item: SavingsAllocation = {
-    id: cuid(),
-    ...validated,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const all = await readAll();
-  all.push(item);
-  await writeAll(all);
+  const item: SavingsAllocation = { id: cuid(), ...validated, createdAt: now, updatedAt: now };
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from('savings_allocations').insert(toSavingsRow(item));
+  if (error) throw new Error(`Could not add savings allocation. Original error: ${error.message}`);
+
   revalidatePath('/savings');
   return item;
 }
 
 export async function updateSavingsAllocation(id: string, patch: Partial<SavingsAllocationInput>): Promise<SavingsAllocation> {
-  const all = await readAll();
-  const idx = all.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Savings allocation ${id} not found`);
-  const merged = { ...all[idx], ...patch, updatedAt: new Date().toISOString() };
-  // Re-validate the merged input shape (excluding server fields).
+  const supabase = getSupabase();
+  const { data: existingRows, error: readError } = await supabase.from('savings_allocations').select('*').eq('id', id).limit(1);
+  if (readError) throw new Error(`Could not retrieve savings allocation. Original error: ${readError.message}`);
+  if (!existingRows || existingRows.length === 0) throw new Error(`Savings allocation ${id} not found`);
+
+  const existing = toSavingsAllocation(existingRows[0]);
+  const merged: SavingsAllocation = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+
   SavingsAllocationInputSchema.parse({
     name: merged.name,
     location: merged.location,
@@ -91,17 +90,23 @@ export async function updateSavingsAllocation(id: string, patch: Partial<Savings
     asOfDate: merged.asOfDate,
     notes: merged.notes,
   });
-  all[idx] = merged as SavingsAllocation;
-  await writeAll(all);
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('savings_allocations')
+    .update(toSavingsRow(merged))
+    .eq('id', id)
+    .select();
+  if (updateError) throw new Error(`Could not update savings allocation. Original error: ${updateError.message}`);
+
   revalidatePath('/savings');
-  return all[idx];
+  return toSavingsAllocation(updatedRows![0]);
 }
 
 export async function deleteSavingsAllocation(id: string): Promise<void> {
-  const all = await readAll();
-  const next = all.filter(r => r.id !== id);
-  if (next.length === all.length) throw new Error(`Savings allocation ${id} not found`);
-  await writeAll(next);
+  const supabase = getSupabase();
+  const { error, count } = await supabase.from('savings_allocations').delete({ count: 'exact' }).eq('id', id);
+  if (error) throw new Error(`Could not delete savings allocation. Original error: ${error.message}`);
+  if (!count) throw new Error(`Savings allocation ${id} not found`);
   revalidatePath('/savings');
 }
 

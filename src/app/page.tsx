@@ -11,9 +11,8 @@ import { MonthlySpendingTrendChart } from "@/components/charts/monthly-spending-
 import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-trend-chart";
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
 import type { AppTransaction, Category, Budget, AIModel } from '@/lib/types';
-import { getTransactions, getCategories } from '@/lib/actions/transactions';
-import { getBudgets } from '@/lib/actions/budgets';
 import { materializeRecurringTransactions } from '@/lib/actions/recurring';
+import { useTransactionsInRange, useCategories, useBudgets, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff, MoreVertical, Check } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -64,26 +63,53 @@ const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit", 
 const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Income", "Dividends"];
 
 export default function DashboardPage() {
-  const [transactions, setTransactions] = useState<AppTransaction[]>([]);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isClient, setIsClient] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
   const [kpisVisible, setKpisVisible] = useState(false);
   const addTransactionRef = useRef<HTMLDivElement>(null);
 
   const { selectedDate, selectedMonth, selectedYear, monthNamesList } = useDateSelection();
   const { toast } = useToast();
   const { selectedModel, setSelectedModel } = useAIModel();
+  const invalidate = useInvalidateFinance();
 
   const handleScrollToForm = useCallback(() => {
     addTransactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  const fetchAndSetData = useCallback(async () => {
-    setIsLoadingData(true);
-    try {
-      // Materialize any due recurring transactions before fetching (rate-limited to once per day client-side).
+  // Fetch only a bounded window covering everything the dashboard renders:
+  // the selected month, the previous month (insights comparison), and the
+  // trailing 3 months from today (trend charts). This replaces loading up to
+  // 10,000 rows on every dashboard visit.
+  const { windowStart, windowEnd } = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = new Date();
+    const startAnchors = [
+      new Date(today.getFullYear(), today.getMonth() - 2, 1), // trailing 3 months incl. current
+      new Date(selectedYear, selectedMonth - 1, 1),           // previous month of selection
+      new Date(selectedYear, selectedMonth, 1),               // selected month
+    ];
+    const endAnchors = [
+      new Date(today.getFullYear(), today.getMonth() + 1, 0), // end of current month
+      new Date(selectedYear, selectedMonth + 1, 0),           // end of selected month
+    ];
+    return {
+      windowStart: ymd(new Date(Math.min(...startAnchors.map(d => d.getTime())))),
+      windowEnd: ymd(new Date(Math.max(...endAnchors.map(d => d.getTime())))),
+    };
+  }, [selectedMonth, selectedYear]);
+
+  const txQuery = useTransactionsInRange(windowStart, windowEnd);
+  const transactions = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  const { data: allCategories = [] } = useCategories();
+  const { data: budgets = [] } = useBudgets();
+  const isLoadingData = txQuery.isLoading;
+
+  // Materialize any due recurring transactions once per day (client-rate-limited),
+  // then refresh the cached queries so new rows appear.
+  useEffect(() => {
+    setIsClient(true);
+    (async () => {
       try {
         const todayKey = new Date().toISOString().slice(0, 10);
         const lastRun = typeof window !== 'undefined' ? localStorage.getItem('finwise.recurringLastRun') : todayKey;
@@ -91,50 +117,19 @@ export default function DashboardPage() {
           const result = await materializeRecurringTransactions();
           if (result.inserted > 0) {
             toast({ title: "Recurring transactions added", description: `${result.inserted} due entry/entries auto-created.` });
+            invalidate();
           }
           if (typeof window !== 'undefined') localStorage.setItem('finwise.recurringLastRun', todayKey);
         }
       } catch (err) {
         console.warn("Recurring materialization failed (continuing):", err);
       }
-
-      const [fetchedTransactions, fetchedCategories, fetchedBudgets] = await Promise.all([
-        getTransactions({ limit: 10000 }),
-        getCategories(),
-        getBudgets(),
-      ]);
-      setTransactions(fetchedTransactions.map(t => {
-        // Handle both string and Date object formats
-        if (t.date instanceof Date) {
-          return t; // Already a Date object
-        }
-        return { ...t, date: new Date(t.date) };
-      }));
-      setAllCategories(fetchedCategories);
-      setBudgets(fetchedBudgets);
-    } catch (error) {
-      console.error("Failed to fetch data for dashboard:", error);
-      toast({
-        title: "Error Loading Data",
-        description: error instanceof Error ? error.message : "Could not fetch data. Please try refreshing.",
-        variant: "destructive",
-      });
-      setTransactions([]);
-      setAllCategories([]);
-      setBudgets([]);
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    setIsClient(true);
-    fetchAndSetData();
-  }, [fetchAndSetData]);
+    })();
+  }, [toast, invalidate]);
 
   const handleDataRefresh = useCallback(() => {
-    fetchAndSetData();
-  }, [fetchAndSetData]);
+    invalidate();
+  }, [invalidate]);
 
   const currentMonthTransactions = useMemo(() => {
     return transactions.filter(
@@ -457,7 +452,7 @@ export default function DashboardPage() {
             />
           </motion.div>
           <motion.div variants={itemVariants}>
-            <FinancialChatbot allTransactions={transactions} />
+            <FinancialChatbot />
           </motion.div>
         </motion.div>
 

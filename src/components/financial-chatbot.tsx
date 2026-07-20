@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot, User, SendHorizonal, Zap, Sparkles, Expand, Minimize2, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot, type ChatMessage } from "@/ai/flows/financial-chatbot-flow";
+import { getTransactionsInRange } from "@/lib/actions/transactions";
 import type { AppTransaction } from "@/lib/types";
 import { cn } from '@/lib/utils';
 import { useAIModel } from '@/contexts/AIModelContext';
@@ -22,7 +23,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 interface FinancialChatbotProps {
-  allTransactions: AppTransaction[];
   isPage?: boolean;
 }
 
@@ -80,7 +80,7 @@ function loadSessionFollowUps(): string[] {
   }
 }
 
-export function FinancialChatbot({ allTransactions, isPage = false }: FinancialChatbotProps) {
+export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
   // Hydrate from sessionStorage so navigating between dashboard ↔ /chatbot does not lose context.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
@@ -162,14 +162,9 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
       'Stocks', 'Mutual Funds', 'Recurring Deposit', 'Equity', 'Debt', 'Gold/Silver', 'US Stocks', 'Crypto',
       'Cashback', 'Investment Income', 'Dividends',
     ]);
-    const filteredTransactions = isInvestmentMode
-      ? allTransactions.filter(t =>
-          isSameCalendarYear(t.date, selectedYear) && (
-            t.expenseType === 'investment' ||
-            (t.category?.name ? INVESTMENT_CATEGORIES.has(t.category.name) : false)
-          )
-        )
-      : allTransactions.filter(t => isSameCalendarMonth(t.date, selectedMonth, selectedYear));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const monthStart = `${selectedYear}-${pad(selectedMonth + 1)}-01`;
+    const monthEnd = `${selectedYear}-${pad(selectedMonth + 1)}-${pad(new Date(selectedYear, selectedMonth + 1, 0).getDate())}`;
 
     const userMessage: ChatMessage = { role: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);
@@ -179,6 +174,14 @@ export function FinancialChatbot({ allTransactions, isPage = false }: FinancialC
     setFollowUps([]);
 
     try {
+      // Fetch only the scope the query needs, on demand (no full-table load).
+      const filteredTransactions = isInvestmentMode
+        ? (await getTransactionsInRange(`${selectedYear}-01-01`, `${selectedYear}-12-31`)).filter(t =>
+            t.expenseType === 'investment' ||
+            (t.category?.name ? INVESTMENT_CATEGORIES.has(t.category.name) : false)
+          )
+        : await getTransactionsInRange(monthStart, monthEnd);
+
       const result = await askFinancialBot({
         query: userMessage.content,
         transactions: filteredTransactions,

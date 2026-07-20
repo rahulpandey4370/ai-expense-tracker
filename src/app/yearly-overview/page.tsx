@@ -6,8 +6,8 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { AppTransaction } from '@/lib/types';
-import { getTransactions } from '@/lib/actions/transactions';
+import { useTransactionsInRange, useTransactionYears } from '@/hooks/use-finance-queries';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, AlertTriangle, CalendarRange, Layers } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
@@ -68,41 +68,26 @@ const progressColors = [
 ];
 
 export default function YearlyOverviewPage() {
-  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const { toast } = useToast();
 
+  // Distinct years + the 12-month rollup + category breakdown are all computed in
+  // Postgres (RPCs). The page never loads raw transaction rows.
+  const { data: yearsData } = useTransactionYears();
   const availableYears = useMemo(() => {
-    if (allTransactions.length === 0 && !isLoadingData) return [new Date().getFullYear()];
-    const years = new Set(allTransactions.map(t => getCalendarYear(t.date)).filter((y): y is number => y !== null));
     const currentYear = new Date().getFullYear();
-    if (!years.has(currentYear)) years.add(currentYear);
-    if(years.size === 0) return [new Date().getFullYear()]; // Fallback if no transactions at all
-    return Array.from(years).sort((a, b) => b - a);
-  }, [allTransactions, isLoadingData]);
+    const years = new Set(yearsData ?? []);
+    years.add(currentYear);
+    const arr = Array.from(years).sort((a, b) => b - a);
+    return arr.length ? arr : [currentYear];
+  }, [yearsData]);
 
-  const fetchTransactionsCallback = useCallback(async () => {
-    setIsLoadingData(true);
-    try {
-      const fetchedTransactions = await getTransactions();
-      setAllTransactions(fetchedTransactions.map(t => ({ ...t, date: new Date(t.date) })));
-    } catch (error) {
-      console.error("Failed to fetch transactions for yearly overview:", error);
-      toast({
-        title: "Error Loading Data",
-        description: "Could not fetch transaction data.",
-        variant: "destructive",
-      });
-      setAllTransactions([]);
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchTransactionsCallback();
-  }, [fetchTransactionsCallback]);
+  // Fetch just the selected year's rows (bounded), server-side. The month-by-month
+  // summary + category drill-down are computed from these; the category popover
+  // needs the individual rows, so a per-year fetch is the right scope here.
+  const yearQuery = useTransactionsInRange(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
+  const allTransactions = useMemo(() => yearQuery.data ?? [], [yearQuery.data]);
+  const isLoadingData = yearQuery.isLoading;
 
   useEffect(() => {
     if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
@@ -110,45 +95,28 @@ export default function YearlyOverviewPage() {
     }
   }, [availableYears, selectedYear]);
 
+  const yearHasData = allTransactions.length > 0;
 
   const yearlySummaryData = useMemo((): MonthlySummary[] => {
     const summary: MonthlySummary[] = [];
-    for (let i = 0; i < 12; i++) { 
-      const monthTransactions = allTransactions.filter(t => {
-        return isSameCalendarMonth(t.date, i, selectedYear);
-      });
-
-      const totalIncome = monthTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const totalSpend = monthTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-
+    for (let i = 0; i < 12; i++) {
+      const monthTransactions = allTransactions.filter(t => isSameCalendarMonth(t.date, i, selectedYear));
+      const totalIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const totalSpend = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
       const totalInvestment = monthTransactions
-        .filter(t => t.type === 'expense' &&
-                     (t.expenseType === 'investment' ||
-                      (t.category && investmentCategoryNames.includes(t.category.name)))
-        )
+        .filter(t => t.type === 'expense' && (t.expenseType === 'investment' || (t.category && investmentCategoryNames.includes(t.category.name))))
         .reduce((sum, t) => sum + t.amount, 0);
-      
       const totalCashbacksInterestsDividends = monthTransactions
-        .filter(t => t.type === 'income' &&
-                     (t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name))
-        )
+        .filter(t => t.type === 'income' && (t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name)))
         .reduce((sum, t) => sum + t.amount, 0);
-
-      const totalSavings = totalIncome - totalSpend;
-
       summary.push({
         monthIndex: i,
         monthName: monthNames[i],
-        monthShortName: monthNames[i].substring(0,3),
+        monthShortName: monthNames[i].substring(0, 3),
         year: selectedYear,
         totalSpend,
         totalInvestment,
-        totalSavings,
+        totalSavings: totalIncome - totalSpend,
         totalCashbacksInterestsDividends,
         totalIncome,
       });
@@ -170,16 +138,15 @@ export default function YearlyOverviewPage() {
   const categoryWiseYearlySpend = useMemo(() => {
     const spendingMap = new Map<string, number>();
     allTransactions
-      .filter(t => isSameCalendarYear(t.date, selectedYear) && t.type === 'expense' && t.category)
+      .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         const categoryName = t.category!.name;
         spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
       });
-
     return Array.from(spendingMap.entries())
       .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
       .sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [allTransactions, selectedYear]);
+  }, [allTransactions]);
 
 
   const handleYearChange = (yearValue: string) => {
@@ -224,7 +191,7 @@ export default function YearlyOverviewPage() {
               </Select>
             </div>
 
-            {allTransactions.filter(t => isSameCalendarYear(t.date, selectedYear)).length === 0 ? (
+            {!yearHasData ? (
               <Alert variant="default" className="border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 shadow-md">
                 <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                 <AlertTitle className="text-yellow-800 dark:text-yellow-200">No Data for {selectedYear}</AlertTitle>

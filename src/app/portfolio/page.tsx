@@ -30,9 +30,9 @@ import { cn } from '@/lib/utils';
 import { useAIModel } from '@/contexts/AIModelContext';
 import {
   addPortfolioEntry,
-  getPortfolioDashboardData,
   parsePortfolioEntryPreview,
 } from '@/lib/actions/portfolio';
+import { usePortfolioDashboard, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { PortfolioChat } from '@/components/portfolio-chat';
 import { PortfolioPreviewEditor } from '@/components/portfolio/preview-editor';
 import { EditAssetDialog } from '@/components/portfolio/edit-dialogs';
@@ -149,8 +149,10 @@ function fileToDataUri(file: File): Promise<string> {
 export default function PortfolioPage() {
   const { toast } = useToast();
   const { selectedModel } = useAIModel();
-  const [data, setData] = useState<PortfolioDashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const invalidate = useInvalidateFinance();
+  const dashboardQuery = usePortfolioDashboard();
+  const data = dashboardQuery.data ?? null;
+  const isLoading = dashboardQuery.isLoading;
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualForm, setManualForm] = useState<ManualFormState>(emptyManualForm());
   const [isSavingManual, setIsSavingManual] = useState(false);
@@ -162,21 +164,15 @@ export default function PortfolioPage() {
   const [previewSummary, setPreviewSummary] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<PortfolioAsset | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setData(await getPortfolioDashboardData());
-    } catch (err: any) {
-      toast({ title: 'Could not load portfolio', description: err.message, variant: 'destructive' });
-      setData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+  const fetchData = useCallback(() => {
+    invalidate();
+  }, [invalidate]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (dashboardQuery.error) {
+      toast({ title: 'Could not load portfolio', description: dashboardQuery.error instanceof Error ? dashboardQuery.error.message : 'Unknown error', variant: 'destructive' });
+    }
+  }, [dashboardQuery.error, toast]);
 
   const assets = data?.assets || [];
   const groupedSummaries = useMemo(() => {

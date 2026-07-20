@@ -6,41 +6,19 @@ import { generateYearlyFinancialReport } from "@/ai/flows/yearly-financial-repor
 import { type AIModel, type AITransactionForAnalysis, type MonthlySummary, type MonthlyFinancialReportInput, type MonthlyFinancialReportOutput, type YearlyFinancialReportInput, type YearlyFinancialReportOutput } from "@/lib/types";
 import { getDefaultModelForTask } from "@/lib/task-models";
 import { getCalendarDateParts } from "@/lib/date-utils";
-import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
+import { getSupabase } from '@/lib/supabase';
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const REPORTS_DIR = 'internal/data/monthly-reports/';
-const YEARLY_REPORTS_DIR = 'internal/data/yearly-reports/';
-function reportBlobPath(year: number, month: number) {
-  return `${REPORTS_DIR}${year}-${String(month + 1).padStart(2, '0')}.json`;
+function monthlyReportId(year: number, month: number) {
+  return `monthly:${year}-${String(month + 1).padStart(2, '0')}`;
 }
-function yearlyReportBlobPath(year: number) {
-  return `${YEARLY_REPORTS_DIR}${year}.json`;
+function yearlyReportId(year: number) {
+  return `yearly:${year}`;
 }
 
 const FULL_YEAR_TXN_THRESHOLD = 800;
 const LARGEST_TXN_SAMPLE_SIZE = 200;
-
-let _blobClient: BlobContainerClient | undefined;
-async function getBlobContainer(): Promise<BlobContainerClient> {
-  if (_blobClient) return _blobClient;
-  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
-  if (!connectionString || !containerName) {
-    throw new Error("Azure storage env vars missing for monthly reports.");
-  }
-  _blobClient = BlobServiceClient.fromConnectionString(connectionString).getContainerClient(containerName);
-  return _blobClient;
-}
-
-async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream as AsyncIterable<Buffer | string>) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString('utf-8');
-}
 
 export type StoredMonthlyReport = MonthlyFinancialReportOutput & {
   generatedAt: string; // ISO
@@ -48,29 +26,24 @@ export type StoredMonthlyReport = MonthlyFinancialReportOutput & {
 };
 
 export async function loadStoredMonthlyReport(month: number, year: number): Promise<StoredMonthlyReport | null> {
-  try {
-    const client = await getBlobContainer();
-    const blob = client.getBlobClient(reportBlobPath(year, month));
-    const dl = await blob.download(0);
-    if (!dl.readableStreamBody) return null;
-    const text = await streamToString(dl.readableStreamBody);
-    return JSON.parse(text) as StoredMonthlyReport;
-  } catch (error: any) {
-    if (error instanceof RestError && error.statusCode === 404) return null;
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from('report_cache').select('payload').eq('id', monthlyReportId(year, month)).maybeSingle();
+  if (error) {
     console.warn("loadStoredMonthlyReport: failed to load report", { month, year, message: error.message });
     return null;
   }
+  return (data?.payload as StoredMonthlyReport) ?? null;
 }
 
 async function saveStoredMonthlyReport(month: number, year: number, report: StoredMonthlyReport): Promise<void> {
-  const client = await getBlobContainer();
-  const path = reportBlobPath(year, month);
-  const block = client.getBlockBlobClient(path);
-  const body = JSON.stringify(report, null, 2);
-  // upload() overwrites by default — exactly the "replace on regenerate" behaviour we want.
-  await block.upload(body, Buffer.byteLength(body), {
-    blobHTTPHeaders: { blobContentType: 'application/json' },
+  const supabase = getSupabase();
+  const { error } = await supabase.from('report_cache').upsert({
+    id: monthlyReportId(year, month),
+    period_type: 'monthly',
+    payload: report,
+    created_at: report.generatedAt,
   });
+  if (error) throw new Error(`Could not persist monthly report. Original error: ${error.message}`);
 }
 
 /**
@@ -127,27 +100,24 @@ export type StoredYearlyReport = YearlyFinancialReportOutput & {
 };
 
 export async function loadStoredYearlyReport(year: number): Promise<StoredYearlyReport | null> {
-  try {
-    const client = await getBlobContainer();
-    const blob = client.getBlobClient(yearlyReportBlobPath(year));
-    const dl = await blob.download(0);
-    if (!dl.readableStreamBody) return null;
-    const text = await streamToString(dl.readableStreamBody);
-    return JSON.parse(text) as StoredYearlyReport;
-  } catch (error: any) {
-    if (error instanceof RestError && error.statusCode === 404) return null;
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from('report_cache').select('payload').eq('id', yearlyReportId(year)).maybeSingle();
+  if (error) {
     console.warn("loadStoredYearlyReport: failed to load report", { year, message: error.message });
     return null;
   }
+  return (data?.payload as StoredYearlyReport) ?? null;
 }
 
 async function saveStoredYearlyReport(year: number, report: StoredYearlyReport): Promise<void> {
-  const client = await getBlobContainer();
-  const block = client.getBlockBlobClient(yearlyReportBlobPath(year));
-  const body = JSON.stringify(report, null, 2);
-  await block.upload(body, Buffer.byteLength(body), {
-    blobHTTPHeaders: { blobContentType: 'application/json' },
+  const supabase = getSupabase();
+  const { error } = await supabase.from('report_cache').upsert({
+    id: yearlyReportId(year),
+    period_type: 'yearly',
+    payload: report,
+    created_at: report.generatedAt,
   });
+  if (error) throw new Error(`Could not persist yearly report. Original error: ${error.message}`);
 }
 
 const INVESTMENT_CATEGORIES = new Set([

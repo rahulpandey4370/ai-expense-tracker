@@ -1,6 +1,6 @@
 'use server';
 
-import { BlobServiceClient, RestError, type ContainerClient as BlobContainerClient } from '@azure/storage-blob';
+import { getSupabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 import { addTransaction } from './transactions';
@@ -10,87 +10,94 @@ import {
   type RecurringRuleInput,
 } from '@/lib/types';
 
-const RECURRING_BLOB_PATH = 'internal/data/recurring-rules.json';
-
-let _client: BlobContainerClient | undefined;
-async function blobContainer(): Promise<BlobContainerClient> {
-  if (_client) return _client;
-  const conn = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const name = process.env.AZURE_STORAGE_CONTAINER_NAME;
-  if (!conn || !name) throw new Error("Azure storage env vars missing for recurring rules.");
-  _client = BlobServiceClient.fromConnectionString(conn).getContainerClient(name);
-  return _client;
+function toRecurringRule(row: any): RecurringRule {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: row.amount,
+    description: row.description,
+    categoryId: row.category_id ?? undefined,
+    paymentMethodId: row.payment_method_id ?? undefined,
+    source: row.source ?? undefined,
+    expenseType: row.expense_type ?? undefined,
+    dayOfMonth: row.day_of_month,
+    startDate: row.start_date,
+    endDate: row.end_date ?? undefined,
+    isActive: row.is_active,
+    lastGeneratedDate: row.last_generated_date ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream as AsyncIterable<Buffer | string>) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString('utf-8');
-}
-
-async function readRules(): Promise<RecurringRule[]> {
-  try {
-    const c = await blobContainer();
-    const blob = c.getBlobClient(RECURRING_BLOB_PATH);
-    const dl = await blob.download(0);
-    if (!dl.readableStreamBody) return [];
-    const text = await streamToString(dl.readableStreamBody);
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed as RecurringRule[] : [];
-  } catch (error: any) {
-    if (error instanceof RestError && error.statusCode === 404) return [];
-    console.warn("readRules failed", error.message);
-    return [];
-  }
-}
-
-async function writeRules(rules: RecurringRule[]): Promise<void> {
-  const c = await blobContainer();
-  const block = c.getBlockBlobClient(RECURRING_BLOB_PATH);
-  const body = JSON.stringify(rules, null, 2);
-  await block.upload(body, Buffer.byteLength(body), {
-    blobHTTPHeaders: { blobContentType: 'application/json' },
-  });
+function toRuleRow(rule: RecurringRule): Record<string, any> {
+  return {
+    id: rule.id,
+    type: rule.type,
+    amount: rule.amount,
+    description: rule.description,
+    category_id: rule.categoryId ?? null,
+    payment_method_id: rule.paymentMethodId ?? null,
+    source: rule.source ?? null,
+    expense_type: rule.expenseType ?? null,
+    day_of_month: rule.dayOfMonth,
+    start_date: rule.startDate,
+    end_date: rule.endDate ?? null,
+    is_active: rule.isActive,
+    last_generated_date: rule.lastGeneratedDate ?? null,
+    created_at: rule.createdAt,
+    updated_at: rule.updatedAt,
+  };
 }
 
 export async function getRecurringRules(): Promise<RecurringRule[]> {
-  return readRules();
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from('recurring_rules').select('*');
+  if (error) {
+    console.warn('getRecurringRules failed', error.message);
+    return [];
+  }
+  return (data as any[]).map(toRecurringRule);
 }
 
 export async function addRecurringRule(data: RecurringRuleInput): Promise<RecurringRule> {
   const validated = RecurringRuleInputSchema.parse(data);
   const now = new Date().toISOString();
-  const newRule: RecurringRule = {
-    id: cuid(),
-    ...validated,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const all = await readRules();
-  all.push(newRule);
-  await writeRules(all);
+  const newRule: RecurringRule = { id: cuid(), ...validated, createdAt: now, updatedAt: now };
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from('recurring_rules').insert(toRuleRow(newRule));
+  if (error) throw new Error(`Could not add recurring rule. Original error: ${error.message}`);
+
   revalidatePath('/recurring');
   return newRule;
 }
 
 export async function updateRecurringRule(id: string, patch: Partial<RecurringRuleInput>): Promise<RecurringRule> {
-  const all = await readRules();
-  const idx = all.findIndex(r => r.id === id);
-  if (idx === -1) throw new Error(`Recurring rule ${id} not found`);
-  const merged = { ...all[idx], ...patch, updatedAt: new Date().toISOString() };
-  all[idx] = merged as RecurringRule;
-  await writeRules(all);
+  const supabase = getSupabase();
+  const { data: existingRows, error: readError } = await supabase.from('recurring_rules').select('*').eq('id', id).limit(1);
+  if (readError) throw new Error(`Could not retrieve recurring rule. Original error: ${readError.message}`);
+  if (!existingRows || existingRows.length === 0) throw new Error(`Recurring rule ${id} not found`);
+
+  const existing = toRecurringRule(existingRows[0]);
+  const merged: RecurringRule = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('recurring_rules')
+    .update(toRuleRow(merged))
+    .eq('id', id)
+    .select();
+  if (updateError) throw new Error(`Could not update recurring rule. Original error: ${updateError.message}`);
+
   revalidatePath('/recurring');
-  return all[idx];
+  return toRecurringRule(updatedRows![0]);
 }
 
 export async function deleteRecurringRule(id: string): Promise<void> {
-  const all = await readRules();
-  const next = all.filter(r => r.id !== id);
-  if (next.length === all.length) throw new Error(`Recurring rule ${id} not found`);
-  await writeRules(next);
+  const supabase = getSupabase();
+  const { error, count } = await supabase.from('recurring_rules').delete({ count: 'exact' }).eq('id', id);
+  if (error) throw new Error(`Could not delete recurring rule. Original error: ${error.message}`);
+  if (!count) throw new Error(`Recurring rule ${id} not found`);
   revalidatePath('/recurring');
 }
 
@@ -115,7 +122,6 @@ function* iterateDueDates(rule: RecurringRule, today: Date): Generator<Date> {
   const end = rule.endDate ? new Date(rule.endDate + "T23:59:59") : null;
   const lastGen = rule.lastGeneratedDate ? new Date(rule.lastGeneratedDate + "T00:00:00") : null;
 
-  // Start scanning from one month after the lastGeneratedDate, or from rule.startDate if never generated.
   let cursor: Date;
   if (lastGen) {
     cursor = new Date(lastGen.getFullYear(), lastGen.getMonth() + 1, 1);
@@ -123,7 +129,6 @@ function* iterateDueDates(rule: RecurringRule, today: Date): Generator<Date> {
     cursor = new Date(start.getFullYear(), start.getMonth(), 1);
   }
 
-  // Walk forward month-by-month until we pass `today`.
   while (cursor <= today) {
     const y = cursor.getFullYear();
     const m = cursor.getMonth();
@@ -145,13 +150,13 @@ function* iterateDueDates(rule: RecurringRule, today: Date): Generator<Date> {
  * Returns the number of transactions actually inserted.
  */
 export async function materializeRecurringTransactions(): Promise<{ inserted: number; ruleErrors: number }> {
-  const rules = await readRules();
+  const rules = await getRecurringRules();
   if (rules.length === 0) return { inserted: 0, ruleErrors: 0 };
 
   const today = new Date();
   let inserted = 0;
   let ruleErrors = 0;
-  let mutated = false;
+  const supabase = getSupabase();
 
   for (const rule of rules) {
     if (!rule.isActive) continue;
@@ -173,9 +178,11 @@ export async function materializeRecurringTransactions(): Promise<{ inserted: nu
         lastInsertedYmd = ymd(due);
       }
       if (lastInsertedYmd) {
-        rule.lastGeneratedDate = lastInsertedYmd;
-        rule.updatedAt = new Date().toISOString();
-        mutated = true;
+        const { error } = await supabase
+          .from('recurring_rules')
+          .update({ last_generated_date: lastInsertedYmd, updated_at: new Date().toISOString() })
+          .eq('id', rule.id);
+        if (error) throw error;
       }
     } catch (err: any) {
       console.error(`materializeRecurringTransactions: rule ${rule.id} failed`, err?.message);
@@ -183,7 +190,6 @@ export async function materializeRecurringTransactions(): Promise<{ inserted: nu
     }
   }
 
-  if (mutated) await writeRules(rules);
   return { inserted, ruleErrors };
 }
 
@@ -194,10 +200,11 @@ export async function materializeRecurringTransactions(): Promise<{ inserted: nu
  * lastGeneratedDate so the lazy materializer skips this month going forward.
  */
 export async function triggerRecurringRuleNow(ruleId: string): Promise<{ inserted: boolean; reason?: string }> {
-  const all = await readRules();
-  const idx = all.findIndex(r => r.id === ruleId);
-  if (idx === -1) throw new Error(`Recurring rule ${ruleId} not found`);
-  const rule = all[idx];
+  const supabase = getSupabase();
+  const { data: rows, error: readError } = await supabase.from('recurring_rules').select('*').eq('id', ruleId).limit(1);
+  if (readError) throw new Error(`Could not retrieve recurring rule. Original error: ${readError.message}`);
+  if (!rows || rows.length === 0) throw new Error(`Recurring rule ${ruleId} not found`);
+  const rule = toRecurringRule(rows[0]);
 
   if (!rule.isActive) {
     return { inserted: false, reason: "Rule is paused. Resume it first." };
@@ -215,7 +222,6 @@ export async function triggerRecurringRuleNow(ruleId: string): Promise<{ inserte
     if (today > end) return { inserted: false, reason: `Rule ended on ${rule.endDate}.` };
   }
 
-  // Block double-insertion if this month is already materialized.
   if (rule.lastGeneratedDate) {
     const lastGen = new Date(rule.lastGeneratedDate + "T00:00:00");
     if (lastGen.getFullYear() === today.getFullYear() && lastGen.getMonth() === today.getMonth()) {
@@ -235,11 +241,12 @@ export async function triggerRecurringRuleNow(ruleId: string): Promise<{ inserte
     isSplit: false,
   });
 
-  rule.lastGeneratedDate = ymdToday;
-  rule.updatedAt = new Date().toISOString();
-  all[idx] = rule;
-  await writeRules(all);
-  revalidatePath('/recurring');
+  const { error } = await supabase
+    .from('recurring_rules')
+    .update({ last_generated_date: ymdToday, updated_at: new Date().toISOString() })
+    .eq('id', ruleId);
+  if (error) throw new Error(`Could not update recurring rule after trigger. Original error: ${error.message}`);
 
+  revalidatePath('/recurring');
   return { inserted: true };
 }

@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
-import { getTransactions, deleteTransaction, getCategories, getPaymentMethods, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
+import { deleteTransaction, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance, financeKeys } from '@/hooks/use-finance-queries';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus } from "lucide-react";
@@ -66,12 +68,9 @@ type ViewMode = 'selected_month' | 'full_year';
 type SortableKeys = keyof AppTransaction | 'categoryName' | 'paymentMethodName';
 type SplitFilter = 'all' | 'split' | 'not_split';
 
-export default function TransactionsPage() {
-  const [allTransactions, setAllTransactions] = useState<AppTransaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<AppTransaction[]>([]);
-  const [allCategoriesState, setAllCategoriesState] = useState<Category[]>([]);
-  const [allPaymentMethodsState, setAllPaymentMethodsState] = useState<PaymentMethod[]>([]);
+const PAGE_SIZE = 50;
 
+export default function TransactionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string | 'all'>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
@@ -86,13 +85,34 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const isMobile = useIsMobile();
-  const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false); // For single delete
   const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
   const { selectedMonth, selectedYear, monthNamesList, handleMonthChange, handleYearChange } = useDateSelection();
   const [viewMode, setViewMode] = useState<ViewMode>('selected_month');
+
+  // Fetch only the selected period (month or year) server-side, cached by React
+  // Query. This replaces loading the entire transactions table into the browser.
+  const toYmd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    if (viewMode === 'selected_month') {
+      return {
+        rangeStart: toYmd(new Date(selectedYear, selectedMonth, 1)),
+        rangeEnd: toYmd(new Date(selectedYear, selectedMonth + 1, 0)),
+      };
+    }
+    return { rangeStart: `${selectedYear}-01-01`, rangeEnd: `${selectedYear}-12-31` };
+  }, [viewMode, selectedMonth, selectedYear]);
+
+  const txQuery = useTransactionsInRange(rangeStart, rangeEnd);
+  const allTransactions = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  const { data: allCategoriesState = [] } = useCategories();
+  const { data: allPaymentMethodsState = [] } = usePaymentMethods();
+  const isLoading = txQuery.isLoading;
+  const qc = useQueryClient();
+  const invalidate = useInvalidateFinance();
   
   const searchParams = useSearchParams();
   const paramMonth = searchParams.get('month');
@@ -108,32 +128,16 @@ export default function TransactionsPage() {
   const hasAppliedInitialParams = useRef(false);
   const { selectedModel } = useAIModel();
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    setSelectedTransactionIds(new Set()); // Reset selection on data refresh
-    try {
-      const [fetchedTransactions, fetchedCategories, fetchedPaymentMethods] = await Promise.all([
-        getTransactions(),
-        getCategories(),
-        getPaymentMethods()
-      ]);
-      setAllTransactions(fetchedTransactions);
-      setAllCategoriesState(fetchedCategories);
-      setAllPaymentMethodsState(fetchedPaymentMethods);
-    } catch (error) {
-      console.error("Failed to fetch initial data:", error);
-      toast({ title: "Error Fetching Data", description: error instanceof Error ? error.message : "Could not load initial transaction data, categories, or payment methods. Please try again.", variant: "destructive"});
-      setAllTransactions([]);
-      setAllCategoriesState([]);
-      setAllPaymentMethodsState([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+  // Clear row selection whenever the fetched period changes.
+  useEffect(() => {
+    setSelectedTransactionIds(new Set());
+  }, [rangeStart, rangeEnd]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (txQuery.isError) {
+      toast({ title: "Error Fetching Data", description: txQuery.error instanceof Error ? txQuery.error.message : "Could not load transaction data. Please try again.", variant: "destructive" });
+    }
+  }, [txQuery.isError, txQuery.error, toast]);
 
   useEffect(() => {
     if (!isLoading && !hasAppliedInitialParams.current) {
@@ -159,18 +163,10 @@ export default function TransactionsPage() {
   }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
 
 
-  useEffect(() => {
+  const filteredTransactions = useMemo(() => {
+    // Period scoping already happened server-side (rangeStart..rangeEnd); this
+    // only applies the secondary filters/sort over that bounded slice.
     let tempTransactions = [...allTransactions];
-
-    if (viewMode === 'selected_month') {
-      tempTransactions = tempTransactions.filter(t =>
-        isSameCalendarMonth(t.date, selectedMonth, selectedYear)
-      );
-    } else {
-      tempTransactions = tempTransactions.filter(t =>
-        isSameCalendarYear(t.date, selectedYear)
-      );
-    }
 
     if (searchTerm) {
       tempTransactions = tempTransactions.filter(t =>
@@ -239,8 +235,8 @@ export default function TransactionsPage() {
         return 0;
       });
     }
-    setFilteredTransactions(tempTransactions);
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig, selectedMonth, selectedYear, viewMode]);
+    return tempTransactions;
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -250,8 +246,19 @@ export default function TransactionsPage() {
     return { count, netAmount };
   }, [filteredTransactions]);
 
+  // Render pagination: keep filtering/summary/select-all/export over the full
+  // filtered set, but only render one page of rows at a time for DOM performance.
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig, rangeStart, rangeEnd]);
+  const pagedTransactions = useMemo(
+    () => filteredTransactions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredTransactions, currentPage]
+  );
+
   const handleTransactionUpdateOrAdd = () => {
-    fetchData(); 
+    invalidate();
     setEditingTransaction(null);
   };
 
@@ -260,7 +267,7 @@ export default function TransactionsPage() {
     try {
       await deleteTransaction(transactionId);
       toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
-      fetchData(); 
+      invalidate();
     } catch (error) {
       console.error("Failed to delete transaction:", error);
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
@@ -271,15 +278,19 @@ export default function TransactionsPage() {
 
   const handleToggleSplit = async (transaction: AppTransaction) => {
     const nextSplit = !transaction.isSplit;
-    // Optimistic update so rapid taps don't refetch / unmount the row each time.
-    setAllTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, isSplit: nextSplit } : t));
+    const rangeKey = financeKeys.transactionsRange(rangeStart, rangeEnd);
+    // Optimistic update on the cached page so rapid taps don't refetch each time.
+    qc.setQueryData<AppTransaction[]>(rangeKey, prev =>
+      (prev ?? []).map(t => (t.id === transaction.id ? { ...t, isSplit: nextSplit } : t))
+    );
     setIsTogglingSplit(transaction.id);
     try {
       await updateTransaction(transaction.id, { isSplit: nextSplit });
     } catch (error) {
       console.error("Failed to toggle split status:", error);
-      // Revert on failure
-      setAllTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, isSplit: !nextSplit } : t));
+      qc.setQueryData<AppTransaction[]>(rangeKey, prev =>
+        (prev ?? []).map(t => (t.id === transaction.id ? { ...t, isSplit: !nextSplit } : t))
+      );
       toast({ title: "Update Failed", description: "Could not update the split status.", variant: "destructive" });
     } finally {
       setIsTogglingSplit(prevId => (prevId === transaction.id ? null : prevId));
@@ -299,7 +310,8 @@ export default function TransactionsPage() {
       if (result.errors.length > 0) {
         console.error("Bulk delete errors:", result.errors);
       }
-      fetchData(); // Refreshes list and clears selection
+      setSelectedTransactionIds(new Set());
+      invalidate(); // Refreshes list
     } catch (error) {
       console.error("Failed to bulk delete transactions:", error);
       toast({ title: "Bulk Deletion Failed", description: "An unexpected error occurred.", variant: "destructive" });
@@ -531,7 +543,7 @@ export default function TransactionsPage() {
               {/* Mobile View - Card List */}
               <div className="md:hidden space-y-3 p-2">
                 {filteredTransactions.length > 0 ? (
-                  filteredTransactions.map(t => (
+                  pagedTransactions.map(t => (
                     <motion.div key={t.id} variants={listItemVariants} className="p-3 border rounded-lg bg-card/80 shadow-sm space-y-2">
                       <div className="flex justify-between items-start gap-2">
                         <Checkbox
@@ -609,7 +621,7 @@ export default function TransactionsPage() {
                   </TableHeader>
                   <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
                     {filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((transaction) => (
+                      pagedTransactions.map((transaction) => (
                         <motion.tr
                           key={transaction.id}
                           variants={listItemVariants}
@@ -723,6 +735,21 @@ export default function TransactionsPage() {
                 </Table>
               </div>
             </div>
+            )}
+
+            {!isLoading && filteredTransactions.length > PAGE_SIZE && (
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span className="text-xs sm:text-sm text-muted-foreground">
+                  Showing <strong className="text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}</strong>
+                  –<strong className="text-foreground">{Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)}</strong>
+                  {' '}of <strong className="text-foreground">{filteredTransactions.length}</strong>
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Previous</Button>
+                  <span className="text-xs sm:text-sm text-muted-foreground px-1">Page {currentPage} / {totalPages}</span>
+                  <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

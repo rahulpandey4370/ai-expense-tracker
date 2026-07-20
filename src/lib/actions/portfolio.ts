@@ -1,6 +1,6 @@
 'use server';
 
-import { CosmosClient, type Container as CosmosContainer } from '@azure/cosmos';
+import { getSupabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 import {
@@ -26,38 +26,6 @@ import type { AIModel } from '@/lib/types';
 
 const DEFAULT_USER_ID = 'default';
 
-let portfolioContainerInstance: CosmosContainer | undefined;
-
-async function getCosmosClientAndDb() {
-  const endpoint = process.env.COSMOS_DB_ENDPOINT;
-  const key = process.env.COSMOS_DB_KEY;
-  const databaseId = process.env.COSMOS_DB_DATABASE_ID;
-
-  if (!endpoint || !key || !databaseId) {
-    throw new Error("Cosmos DB core environment variables are not fully configured.");
-  }
-
-  const cosmosClient = new CosmosClient({ endpoint, key });
-  return { database: cosmosClient.database(databaseId) };
-}
-
-async function getPortfolioContainer(): Promise<CosmosContainer> {
-  if (portfolioContainerInstance) return portfolioContainerInstance;
-  const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID || 'portfolio';
-  try {
-    const { container } = await database.containers.createIfNotExists({
-      id: containerId,
-      partitionKey: { paths: ['/userId'] },
-    });
-    portfolioContainerInstance = container;
-  } catch (err) {
-    console.error('[portfolio] createIfNotExists failed, falling back to direct reference:', err);
-    portfolioContainerInstance = database.container(containerId);
-  }
-  return portfolioContainerInstance;
-}
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -80,35 +48,150 @@ function revalidatePortfolio(assetId?: string) {
   if (assetId) revalidatePath(`/portfolio/${assetId}`);
 }
 
+function toAsset(row: any): PortfolioAsset {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    docType: 'asset',
+    name: row.name,
+    assetType: row.asset_type,
+    symbol: row.symbol ?? undefined,
+    isin: row.isin ?? undefined,
+    schemeCode: row.scheme_code ?? undefined,
+    currency: row.currency,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+function assetToRow(asset: PortfolioAsset): Record<string, any> {
+  return {
+    id: asset.id,
+    user_id: asset.userId,
+    name: asset.name,
+    asset_type: asset.assetType,
+    symbol: asset.symbol ?? null,
+    isin: asset.isin ?? null,
+    scheme_code: asset.schemeCode ?? null,
+    currency: asset.currency,
+    notes: asset.notes ?? null,
+    created_at: asset.createdAt,
+    updated_at: asset.updatedAt ?? null,
+  };
+}
+
+function toTransaction(row: any): PortfolioTransaction {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    docType: 'transaction',
+    assetId: row.asset_id,
+    assetName: row.asset_name,
+    assetType: row.asset_type,
+    type: row.type,
+    date: row.date,
+    amount: row.amount,
+    quantity: row.quantity ?? undefined,
+    pricePerUnit: row.price_per_unit ?? undefined,
+    charges: row.charges ?? undefined,
+    taxes: row.taxes ?? undefined,
+    currency: row.currency,
+    notes: row.notes ?? undefined,
+    source: row.source,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+function transactionToRow(tx: PortfolioTransaction): Record<string, any> {
+  return {
+    id: tx.id,
+    user_id: tx.userId,
+    asset_id: tx.assetId,
+    asset_name: tx.assetName,
+    asset_type: tx.assetType,
+    type: tx.type,
+    date: tx.date,
+    amount: tx.amount,
+    quantity: tx.quantity ?? null,
+    price_per_unit: tx.pricePerUnit ?? null,
+    charges: tx.charges ?? null,
+    taxes: tx.taxes ?? null,
+    currency: tx.currency,
+    notes: tx.notes ?? null,
+    source: tx.source,
+    created_at: tx.createdAt,
+    updated_at: tx.updatedAt ?? null,
+  };
+}
+
+function toValuation(row: any): PortfolioValuation {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    docType: 'valuation',
+    assetId: row.asset_id,
+    assetName: row.asset_name,
+    assetType: row.asset_type,
+    date: row.date,
+    totalValue: row.total_value,
+    quantity: row.quantity ?? undefined,
+    pricePerUnit: row.price_per_unit ?? undefined,
+    currency: row.currency,
+    notes: row.notes ?? undefined,
+    source: row.source,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+function valuationToRow(v: PortfolioValuation): Record<string, any> {
+  return {
+    id: v.id,
+    user_id: v.userId,
+    asset_id: v.assetId,
+    asset_name: v.assetName,
+    asset_type: v.assetType,
+    date: v.date,
+    total_value: v.totalValue,
+    quantity: v.quantity ?? null,
+    price_per_unit: v.pricePerUnit ?? null,
+    currency: v.currency,
+    notes: v.notes ?? null,
+    source: v.source,
+    created_at: v.createdAt,
+    updated_at: v.updatedAt ?? null,
+  };
+}
+
 export async function getPortfolioAssets(): Promise<PortfolioAsset[]> {
-  const container = await getPortfolioContainer();
-  const { resources } = await container.items.query({
-    query: "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'asset' ORDER BY c.name ASC",
-    parameters: [{ name: '@userId', value: DEFAULT_USER_ID }],
-  }).fetchAll();
-  return resources as PortfolioAsset[];
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('portfolio_assets')
+    .select('*')
+    .eq('user_id', DEFAULT_USER_ID)
+    .order('name', { ascending: true });
+  if (error) throw new Error(`Could not fetch portfolio assets. Original error: ${error.message}`);
+  return (data as any[]).map(toAsset);
 }
 
 export async function getPortfolioTransactions(assetId?: string): Promise<PortfolioTransaction[]> {
-  const container = await getPortfolioContainer();
-  const query = assetId
-    ? "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'transaction' AND c.assetId = @assetId ORDER BY c.date DESC"
-    : "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'transaction' ORDER BY c.date DESC";
-  const parameters: { name: string; value: string }[] = [{ name: '@userId', value: DEFAULT_USER_ID }];
-  if (assetId) parameters.push({ name: '@assetId', value: assetId });
-  const { resources } = await container.items.query({ query, parameters }).fetchAll();
-  return resources as PortfolioTransaction[];
+  const supabase = getSupabase();
+  let query = supabase.from('portfolio_transactions').select('*').eq('user_id', DEFAULT_USER_ID).order('date', { ascending: false });
+  if (assetId) query = query.eq('asset_id', assetId);
+  const { data, error } = await query;
+  if (error) throw new Error(`Could not fetch portfolio transactions. Original error: ${error.message}`);
+  return (data as any[]).map(toTransaction);
 }
 
 export async function getPortfolioValuations(assetId?: string): Promise<PortfolioValuation[]> {
-  const container = await getPortfolioContainer();
-  const query = assetId
-    ? "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'valuation' AND c.assetId = @assetId ORDER BY c.date DESC"
-    : "SELECT * FROM c WHERE c.userId = @userId AND c.docType = 'valuation' ORDER BY c.date DESC";
-  const parameters: { name: string; value: string }[] = [{ name: '@userId', value: DEFAULT_USER_ID }];
-  if (assetId) parameters.push({ name: '@assetId', value: assetId });
-  const { resources } = await container.items.query({ query, parameters }).fetchAll();
-  return resources as PortfolioValuation[];
+  const supabase = getSupabase();
+  let query = supabase.from('portfolio_valuations').select('*').eq('user_id', DEFAULT_USER_ID).order('date', { ascending: false });
+  if (assetId) query = query.eq('asset_id', assetId);
+  const { data, error } = await query;
+  if (error) throw new Error(`Could not fetch portfolio valuations. Original error: ${error.message}`);
+  return (data as any[]).map(toValuation);
 }
 
 export async function getPortfolioDashboardData(): Promise<PortfolioDashboardData> {
@@ -164,16 +247,25 @@ export async function addPortfolioAsset(data: PortfolioAssetInput): Promise<Port
     updatedAt: now,
   };
 
-  const container = await getPortfolioContainer();
-  await container.items.create(asset);
+  const supabase = getSupabase();
+  const { error } = await supabase.from('portfolio_assets').insert(assetToRow(asset));
+  if (error) throw new Error(`Could not add portfolio asset. Original error: ${error.message}`);
+
   revalidatePortfolio(asset.id);
   return asset;
 }
 
 export async function updatePortfolioAsset(id: string, patch: Partial<PortfolioAssetInput>): Promise<PortfolioAsset> {
-  const container = await getPortfolioContainer();
-  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioAsset>();
-  if (!resource || resource.docType !== 'asset') throw new Error(`Portfolio asset ${id} not found.`);
+  const supabase = getSupabase();
+  const { data: row, error: readError } = await supabase
+    .from('portfolio_assets')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', DEFAULT_USER_ID)
+    .maybeSingle();
+  if (readError) throw new Error(`Could not retrieve portfolio asset. Original error: ${readError.message}`);
+  if (!row) throw new Error(`Portfolio asset ${id} not found.`);
+  const resource = toAsset(row);
 
   const merged: PortfolioAsset = {
     ...resource,
@@ -196,9 +288,16 @@ export async function updatePortfolioAsset(id: string, patch: Partial<PortfolioA
     notes: merged.notes,
   });
 
-  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  const { data: updatedRow, error: updateError } = await supabase
+    .from('portfolio_assets')
+    .update(assetToRow(merged))
+    .eq('id', id)
+    .select()
+    .single();
+  if (updateError) throw new Error(`Could not update portfolio asset. Original error: ${updateError.message}`);
+
   revalidatePortfolio(id);
-  return updated as PortfolioAsset;
+  return toAsset(updatedRow);
 }
 
 async function resolveAssetForEntry(input: {
@@ -207,10 +306,15 @@ async function resolveAssetForEntry(input: {
   assetType: PortfolioAssetInput['assetType'];
   currency?: PortfolioAssetInput['currency'];
 }): Promise<PortfolioAsset> {
-  const container = await getPortfolioContainer();
+  const supabase = getSupabase();
   if (input.assetId) {
-    const { resource } = await container.item(input.assetId, DEFAULT_USER_ID).read<PortfolioAsset>();
-    if (resource && resource.docType === 'asset') return resource;
+    const { data: row } = await supabase
+      .from('portfolio_assets')
+      .select('*')
+      .eq('id', input.assetId)
+      .eq('user_id', DEFAULT_USER_ID)
+      .maybeSingle();
+    if (row) return toAsset(row);
   }
   const existing = await findAssetByName(input.assetName);
   if (existing) return existing;
@@ -240,8 +344,10 @@ export async function addPortfolioTransaction(data: PortfolioTransactionInput): 
     createdAt: now,
     updatedAt: now,
   };
-  const container = await getPortfolioContainer();
-  await container.items.create(item);
+  const supabase = getSupabase();
+  const { error } = await supabase.from('portfolio_transactions').insert(transactionToRow(item));
+  if (error) throw new Error(`Could not add portfolio transaction. Original error: ${error.message}`);
+
   revalidatePortfolio(asset.id);
   return item;
 }
@@ -265,8 +371,10 @@ export async function addPortfolioValuation(data: PortfolioValuationInput): Prom
     createdAt: now,
     updatedAt: now,
   };
-  const container = await getPortfolioContainer();
-  await container.items.create(item);
+  const supabase = getSupabase();
+  const { error } = await supabase.from('portfolio_valuations').insert(valuationToRow(item));
+  if (error) throw new Error(`Could not add portfolio valuation. Original error: ${error.message}`);
+
   revalidatePortfolio(asset.id);
   return item;
 }
@@ -285,9 +393,16 @@ export async function updatePortfolioTransaction(
   id: string,
   patch: Partial<PortfolioTransactionInput>,
 ): Promise<PortfolioTransaction> {
-  const container = await getPortfolioContainer();
-  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioTransaction>();
-  if (!resource || resource.docType !== 'transaction') throw new Error(`Portfolio transaction ${id} not found.`);
+  const supabase = getSupabase();
+  const { data: row, error: readError } = await supabase
+    .from('portfolio_transactions')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', DEFAULT_USER_ID)
+    .maybeSingle();
+  if (readError) throw new Error(`Could not retrieve portfolio transaction. Original error: ${readError.message}`);
+  if (!row) throw new Error(`Portfolio transaction ${id} not found.`);
+  const resource = toTransaction(row);
 
   const merged: PortfolioTransaction = {
     ...resource,
@@ -316,18 +431,32 @@ export async function updatePortfolioTransaction(
     source: merged.source,
   });
 
-  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  const { data: updatedRow, error: updateError } = await supabase
+    .from('portfolio_transactions')
+    .update(transactionToRow(merged))
+    .eq('id', id)
+    .select()
+    .single();
+  if (updateError) throw new Error(`Could not update portfolio transaction. Original error: ${updateError.message}`);
+
   revalidatePortfolio(merged.assetId);
-  return updated as PortfolioTransaction;
+  return toTransaction(updatedRow);
 }
 
 export async function updatePortfolioValuation(
   id: string,
   patch: Partial<PortfolioValuationInput>,
 ): Promise<PortfolioValuation> {
-  const container = await getPortfolioContainer();
-  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioValuation>();
-  if (!resource || resource.docType !== 'valuation') throw new Error(`Portfolio valuation ${id} not found.`);
+  const supabase = getSupabase();
+  const { data: row, error: readError } = await supabase
+    .from('portfolio_valuations')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', DEFAULT_USER_ID)
+    .maybeSingle();
+  if (readError) throw new Error(`Could not retrieve portfolio valuation. Original error: ${readError.message}`);
+  if (!row) throw new Error(`Portfolio valuation ${id} not found.`);
+  const resource = toValuation(row);
 
   const merged: PortfolioValuation = {
     ...resource,
@@ -351,37 +480,42 @@ export async function updatePortfolioValuation(
     source: merged.source,
   });
 
-  const { resource: updated } = await container.item(id, DEFAULT_USER_ID).replace(merged);
+  const { data: updatedRow, error: updateError } = await supabase
+    .from('portfolio_valuations')
+    .update(valuationToRow(merged))
+    .eq('id', id)
+    .select()
+    .single();
+  if (updateError) throw new Error(`Could not update portfolio valuation. Original error: ${updateError.message}`);
+
   revalidatePortfolio(merged.assetId);
-  return updated as PortfolioValuation;
+  return toValuation(updatedRow);
 }
 
 export async function deletePortfolioTransaction(id: string): Promise<void> {
-  const container = await getPortfolioContainer();
-  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioTransaction>();
-  await container.item(id, DEFAULT_USER_ID).delete();
-  revalidatePortfolio(resource?.assetId);
+  const supabase = getSupabase();
+  const { data: row } = await supabase.from('portfolio_transactions').select('asset_id').eq('id', id).maybeSingle();
+  const { error } = await supabase.from('portfolio_transactions').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete portfolio transaction. Original error: ${error.message}`);
+  revalidatePortfolio(row?.asset_id);
 }
 
 export async function deletePortfolioValuation(id: string): Promise<void> {
-  const container = await getPortfolioContainer();
-  const { resource } = await container.item(id, DEFAULT_USER_ID).read<PortfolioValuation>();
-  await container.item(id, DEFAULT_USER_ID).delete();
-  revalidatePortfolio(resource?.assetId);
+  const supabase = getSupabase();
+  const { data: row } = await supabase.from('portfolio_valuations').select('asset_id').eq('id', id).maybeSingle();
+  const { error } = await supabase.from('portfolio_valuations').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete portfolio valuation. Original error: ${error.message}`);
+  revalidatePortfolio(row?.asset_id);
 }
 
 export async function deletePortfolioAsset(id: string): Promise<void> {
-  const container = await getPortfolioContainer();
-  const [transactions, valuations] = await Promise.all([
-    getPortfolioTransactions(id),
-    getPortfolioValuations(id),
-  ]);
-
-  await Promise.all([
-    ...transactions.map(tx => container.item(tx.id, DEFAULT_USER_ID).delete()),
-    ...valuations.map(v => container.item(v.id, DEFAULT_USER_ID).delete()),
-    container.item(id, DEFAULT_USER_ID).delete(),
-  ]);
+  const supabase = getSupabase();
+  const { error: txError } = await supabase.from('portfolio_transactions').delete().eq('asset_id', id);
+  if (txError) throw new Error(`Could not delete portfolio transactions for asset. Original error: ${txError.message}`);
+  const { error: valError } = await supabase.from('portfolio_valuations').delete().eq('asset_id', id);
+  if (valError) throw new Error(`Could not delete portfolio valuations for asset. Original error: ${valError.message}`);
+  const { error: assetError } = await supabase.from('portfolio_assets').delete().eq('id', id);
+  if (assetError) throw new Error(`Could not delete portfolio asset. Original error: ${assetError.message}`);
   revalidatePortfolio(id);
 }
 
@@ -403,8 +537,17 @@ export async function savePortfolioAIImport(data: {
     createdAt: now,
     updatedAt: now,
   };
-  const container = await getPortfolioContainer();
-  await container.items.create(item);
+  const supabase = getSupabase();
+  const { error } = await supabase.from('portfolio_ai_imports').insert({
+    id: item.id,
+    user_id: item.userId,
+    input_type: item.inputType,
+    raw_text: item.rawText ?? null,
+    parsed_json: item.parsedJson,
+    created_record_ids: item.createdRecordIds,
+    created_at: item.createdAt,
+  });
+  if (error) throw new Error(`Could not save portfolio AI import. Original error: ${error.message}`);
   return item;
 }
 
@@ -695,15 +838,5 @@ export async function askPortfolioChat(input: {
     chatHistory: input.chatHistory,
     model: input.model,
     scopedAssetId: input.scopedAssetId,
-  });
-}
-
-export async function ensurePortfolioCosmosContainerExists() {
-  const { database } = await getCosmosClientAndDb();
-  const containerId = process.env.COSMOS_DB_PORTFOLIO_CONTAINER_ID;
-  if (!containerId) throw new Error("COSMOS_DB_PORTFOLIO_CONTAINER_ID is not configured.");
-  await database.containers.createIfNotExists({
-    id: containerId,
-    partitionKey: { paths: ['/userId'] },
   });
 }

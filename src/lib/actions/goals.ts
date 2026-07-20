@@ -1,354 +1,208 @@
-
 'use server';
 
-import { BlobServiceClient, RestError, type ContainerClient } from '@azure/storage-blob';
+import { getSupabase } from '@/lib/supabase';
 import type { Goal, GoalInput, FundAllocation } from '@/lib/types';
 import { GoalInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 
-const GOALS_DIR = 'goals/';
 const AI_PLAYGROUND_PATH = '/ai-playground';
 
-let goalsContainerClientInstance: ContainerClient; 
-
-async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    readableStream.on('data', (data: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
-    });
-    readableStream.on('end', () => {
-      resolve(Buffer.concat(chunks));
-    });
-    readableStream.on('error', reject);
-  });
+function toAllocation(row: any): FundAllocation {
+  return {
+    id: row.id,
+    name: row.name,
+    amount: row.amount,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-async function getAzureGoalsContainerClient(): Promise<ContainerClient> {
-  console.log("Azure Info (goals.ts): Attempting to get Azure Container Client for goals...");
-  if (goalsContainerClientInstance) {
-    console.log("Azure Info (goals.ts): Returning cached container client instance for goals.");
-    return goalsContainerClientInstance;
-  }
-  console.log("Azure Info (goals.ts): No cached client instance for goals, creating new one.");
+function toGoal(row: any, allocations: FundAllocation[]): Goal {
+  const amountSavedSoFar = allocations.reduce((sum, alloc) => sum + alloc.amount, 0);
+  return {
+    id: row.id,
+    description: row.description,
+    targetAmount: row.target_amount,
+    targetDurationMonths: row.target_duration_months,
+    amountSavedSoFar,
+    allocations,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    status: row.status,
+  };
+}
 
-  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
+async function fetchGoalWithAllocations(goalId: string): Promise<{ goalRow: any; allocations: FundAllocation[] }> {
+  const supabase = getSupabase();
+  const [{ data: goalRow, error: goalError }, { data: allocRows, error: allocError }] = await Promise.all([
+    supabase.from('goals').select('*').eq('id', goalId).single(),
+    supabase.from('goal_allocations').select('*').eq('goal_id', goalId),
+  ]);
+  if (goalError || !goalRow) throw new Error(`Goal with ID ${goalId} not found.`);
+  if (allocError) throw new Error(`Could not load allocations for goal. Original error: ${allocError.message}`);
+  return { goalRow, allocations: (allocRows as any[]).map(toAllocation) };
+}
 
-  console.log(`Azure Info (goals.ts): Read AZURE_STORAGE_CONNECTION_STRING. Is present: ${!!connectionString}, Length (if present): ${connectionString?.length || 0}`);
-  console.log(`Azure Info (goals.ts): Read AZURE_STORAGE_CONTAINER_NAME: '${containerName}'. Is present: ${!!containerName}, Type: ${typeof containerName}`);
+async function recalculateAndSaveGoal(goalId: string, allocations: FundAllocation[]): Promise<Goal> {
+  const supabase = getSupabase();
+  const newTotalSaved = allocations.reduce((sum, alloc) => sum + alloc.amount, 0);
 
-  if (!connectionString) {
-    console.error("Azure Critical Error (goals.ts): AZURE_STORAGE_CONNECTION_STRING is not configured or empty. This is required for goals functionality.");
-    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONNECTION_STRING is not configured for goals. Please check Vercel environment variables.");
-  }
-  if (!containerName || typeof containerName !== 'string' || containerName.trim() === '') {
-    console.error(`Azure Critical Error (goals.ts): AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string. Value: '${containerName}'. This is required for goals functionality.`);
-    throw new Error("Azure Storage environment variable AZURE_STORAGE_CONTAINER_NAME is not configured, is empty, or is not a string for goals. Please check Vercel environment variables.");
-  }
+  const { data: goalRow, error: readError } = await supabase.from('goals').select('*').eq('id', goalId).single();
+  if (readError || !goalRow) throw new Error(`Goal with ID ${goalId} not found.`);
 
-  try {
-    console.log(`Azure Info (goals.ts): Attempting to create BlobServiceClient from connection string... (First 30 chars of CS: ${connectionString.substring(0,30)}...)`);
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    console.log(`Azure Info (goals.ts): BlobServiceClient created successfully. Attempting to get container client for '${containerName}'...`);
-    const client = blobServiceClient.getContainerClient(containerName);
-    console.log(`Azure Info (goals.ts): Container client for '${containerName}' (goals) obtained successfully.`);
-    goalsContainerClientInstance = client;
-    return goalsContainerClientInstance;
-  } catch (error: any) {
-    console.error(`Azure CRITICAL Error (goals.ts): Failed to initialize BlobServiceClient or ContainerClient. CS present: ${!!connectionString}, CN: ${containerName}. Error Type: ${error.name}, Message: ${error.message}`, error.stack);
-    if (error.message && error.message.toLowerCase().includes("invalid url")) {
-        console.error("Azure CRITICAL Error (goals.ts): The Azure Storage Connection String appears to be malformed, leading to an 'Invalid URL' error. Please verify its format.");
-    }
-    throw new Error(`Could not connect to Azure Blob Storage for goals. Original error: ${error.message}`);
-  }
+  const newStatus = newTotalSaved >= goalRow.target_amount ? 'completed' : (goalRow.status === 'completed' ? 'active' : goalRow.status);
+
+  const { data: updatedRow, error: updateError } = await supabase
+    .from('goals')
+    .update({ amount_saved_so_far: newTotalSaved, status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', goalId)
+    .select()
+    .single();
+  if (updateError) throw new Error(`Could not update goal. Original error: ${updateError.message}`);
+
+  return toGoal(updatedRow, allocations);
 }
 
 export async function addGoal(data: GoalInput): Promise<Goal> {
-  console.log("Azure Info (goals.ts): Attempting to add goal...");
   const validation = GoalInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
     const readableErrors = Object.entries(errorMessages).map(([field, messages]) => `${field}: ${messages?.join(', ')}`).join('; ');
-    console.error('Azure Error (goals.ts): Add goal validation error:', readableErrors);
     throw new Error(`Invalid goal data: ${readableErrors || "Validation failed."}`);
   }
 
   const id = cuid();
   const now = new Date().toISOString();
-  const newGoal: Goal = { 
-    id, 
-    ...validation.data, 
-    amountSavedSoFar: 0, 
-    allocations: [], // Initialize with empty allocations
-    createdAt: now, 
-    updatedAt: now, 
-    status: 'active' 
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from('goals').insert({
+    id,
+    description: validation.data.description,
+    target_amount: validation.data.targetAmount,
+    target_duration_months: validation.data.targetDurationMonths,
+    amount_saved_so_far: 0,
+    status: 'active',
+    created_at: now,
+    updated_at: now,
+  });
+  if (error) throw new Error(`Could not add goal to Supabase. Original error: ${error.message}`);
+
+  revalidatePath(AI_PLAYGROUND_PATH);
+  return {
+    id,
+    ...validation.data,
+    amountSavedSoFar: 0,
+    allocations: [],
+    createdAt: now,
+    updatedAt: now,
+    status: 'active',
   };
-
-  const client = await getAzureGoalsContainerClient();
-  const filePath = `${GOALS_DIR}${id}.json`;
-  const blockBlobClient = client.getBlockBlobClient(filePath);
-
-  try {
-    console.log(`Azure Info (goals.ts): Adding goal ${id} to ${filePath}`);
-    const content = JSON.stringify(newGoal, null, 2);
-    await blockBlobClient.upload(content, Buffer.byteLength(content), {
-      blobHTTPHeaders: { blobContentType: 'application/json' }
-    });
-    console.log(`Azure Info (goals.ts): Successfully added goal ${id}`);
-    revalidatePath(AI_PLAYGROUND_PATH);
-    return newGoal;
-  } catch (error: any) {
-    console.error(`Azure Error (goals.ts): Failed to add goal ${id} to Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
-    throw new Error(`Could not add goal to Azure blob storage. Original error: ${error.message}`);
-  }
 }
 
 export async function getGoals(options?: { limit?: number }): Promise<Goal[]> {
-  const goals: Goal[] = [];
-  const client = await getAzureGoalsContainerClient();
-  console.log(`Azure Info (goals.ts): Attempting to get goals. Options: ${JSON.stringify(options)}`);
-  const limit = options?.limit;
-  let processedBlobCount = 0;
+  const supabase = getSupabase();
+  let query = supabase.from('goals').select('*').order('created_at', { ascending: false });
+  if (options?.limit) query = query.limit(options.limit);
 
-  try {
-    console.log(`Azure Info (goals.ts): Listing blobs in directory: ${GOALS_DIR}`);
-    const blobsIterator = client.listBlobsFlat({ prefix: GOALS_DIR });
-    for await (const blob of blobsIterator) {
-      processedBlobCount++;
-      if (!blob.name || !blob.name.endsWith('.json') || blob.name === GOALS_DIR) {
-        continue;
-      }
-      try {
-        const blobClient = client.getBlobClient(blob.name);
-        const downloadBlockBlobResponse = await blobClient.download(0);
-        if (!downloadBlockBlobResponse.readableStreamBody) {
-          console.warn(`Azure Warning (goals.ts): Goal blob ${blob.name} has no readable stream body, skipping.`);
-          continue;
-        }
-        const buffer = await streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
-        let goalData: Goal = JSON.parse(buffer.toString());
-        // Ensure allocations array exists for backward compatibility
-        if (!goalData.allocations) {
-            goalData.allocations = [];
-        }
-        // Recalculate amountSavedSoFar from allocations for consistency
-        goalData.amountSavedSoFar = goalData.allocations.reduce((sum, alloc) => sum + alloc.amount, 0);
-
-        goals.push(goalData);
-
-        if (limit && goals.length >= limit) {
-          console.log(`Azure Info (goals.ts): Reached processing limit of ${limit}. Breaking loop after processing ${goals.length} goals from ${processedBlobCount} listed blobs.`);
-          break;
-        }
-      } catch (fetchError: any) {
-        console.error(`Azure Error (goals.ts): Error processing goal blob ${blob.name}. Status: ${fetchError.statusCode}, Message: ${fetchError.message}`, fetchError.stack);
-        if (fetchError instanceof RestError && fetchError.statusCode === 404) {
-             console.warn(`Azure Warning (goals.ts): Goal blob ${blob.name} not found during processing, skipping.`);
-        }
-      }
-    }
-    console.log(`Azure Info (goals.ts): Fetched ${goals.length} goals. Total blobs listed/attempted: ${processedBlobCount}.`);
-  } catch (error: any) {
-    console.error('Azure Error (goals.ts): Failed to list goals from Azure blob.', error.message, error.stack);
-     if (error instanceof RestError && error.statusCode === 404 && error.message.includes("ContainerNotFound")) {
-        console.warn("Azure Warning (goals.ts): Container for goals not found. Returning empty array. The container might need to be created in Azure portal.");
-        return [];
-    }
-    throw new Error(`Could not fetch goals from Azure Blob store. Original error: ${error.message}`);
+  const { data: goalRows, error: goalError } = await query;
+  if (goalError) {
+    console.error('Supabase Error (getGoals):', goalError.message);
+    throw new Error(`Could not fetch goals from Supabase. Original error: ${goalError.message}`);
   }
-  return goals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (!goalRows || goalRows.length === 0) return [];
+
+  const goalIds = goalRows.map(g => g.id);
+  const { data: allocRows, error: allocError } = await supabase.from('goal_allocations').select('*').in('goal_id', goalIds);
+  if (allocError) throw new Error(`Could not fetch goal allocations from Supabase. Original error: ${allocError.message}`);
+
+  const allocationsByGoal = new Map<string, FundAllocation[]>();
+  for (const row of allocRows as any[]) {
+    const list = allocationsByGoal.get(row.goal_id) || [];
+    list.push(toAllocation(row));
+    allocationsByGoal.set(row.goal_id, list);
+  }
+
+  return goalRows.map(row => toGoal(row, allocationsByGoal.get(row.id) || []));
 }
 
 export async function addAllocationToGoal(goalId: string, allocationName: string, allocationAmount: number): Promise<Goal> {
-    if (allocationAmount <= 0) {
-        throw new Error("Allocation amount must be positive.");
-    }
-    if (!allocationName.trim()) {
-        throw new Error("Allocation name is required.");
-    }
+  if (allocationAmount <= 0) throw new Error("Allocation amount must be positive.");
+  if (!allocationName.trim()) throw new Error("Allocation name is required.");
 
-    const client = await getAzureGoalsContainerClient();
-    const filePath = `${GOALS_DIR}${goalId}.json`;
-    const blobClient = client.getBlobClient(filePath);
-    let existingGoal: Goal;
+  const { allocations } = await fetchGoalWithAllocations(goalId);
+  const supabase = getSupabase();
+  const now = new Date().toISOString();
 
-    try {
-        const downloadResponse = await blobClient.download(0);
-        if (!downloadResponse.readableStreamBody) throw new Error("Goal blob has no content.");
-        const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
-        existingGoal = JSON.parse(buffer.toString());
-    } catch (error: any) {
-        if (error instanceof RestError && error.statusCode === 404) {
-            throw new Error(`Goal with ID ${goalId} not found.`);
-        }
-        throw new Error(`Could not retrieve goal. Original error: ${error.message}`);
-    }
+  const existing = allocations.find(alloc => alloc.name.toLowerCase() === allocationName.trim().toLowerCase());
+  let updatedAllocations: FundAllocation[];
 
-    const existingAllocationIndex = (existingGoal.allocations || []).findIndex(alloc => alloc.name.toLowerCase() === allocationName.trim().toLowerCase());
-    let updatedAllocations: FundAllocation[];
+  if (existing) {
+    const { error } = await supabase
+      .from('goal_allocations')
+      .update({ amount: existing.amount + allocationAmount, updated_at: now })
+      .eq('id', existing.id);
+    if (error) throw new Error(`Could not update allocation. Original error: ${error.message}`);
+    updatedAllocations = allocations.map(a => a.id === existing.id ? { ...a, amount: a.amount + allocationAmount, updatedAt: now } : a);
+  } else {
+    const newAllocation: FundAllocation = { id: cuid(), name: allocationName.trim(), amount: allocationAmount, createdAt: now, updatedAt: now };
+    const { error } = await supabase.from('goal_allocations').insert({
+      id: newAllocation.id,
+      goal_id: goalId,
+      name: newAllocation.name,
+      amount: newAllocation.amount,
+      created_at: newAllocation.createdAt,
+      updated_at: newAllocation.updatedAt,
+    });
+    if (error) throw new Error(`Could not add allocation. Original error: ${error.message}`);
+    updatedAllocations = [...allocations, newAllocation];
+  }
 
-    if (existingAllocationIndex > -1) {
-        // Update existing allocation by adding to its amount
-        updatedAllocations = [...(existingGoal.allocations || [])];
-        const existing = updatedAllocations[existingAllocationIndex];
-        updatedAllocations[existingAllocationIndex] = {
-            ...existing,
-            amount: existing.amount + allocationAmount,
-            updatedAt: new Date().toISOString(), // Add/update timestamp
-        };
-    } else {
-        // Add new allocation
-        const newAllocation: FundAllocation = {
-            id: cuid(),
-            name: allocationName.trim(),
-            amount: allocationAmount,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        };
-        updatedAllocations = [...(existingGoal.allocations || []), newAllocation];
-    }
-    
-    const newTotalSaved = updatedAllocations.reduce((sum, alloc) => sum + alloc.amount, 0);
-
-    const updatedGoal: Goal = {
-        ...existingGoal,
-        allocations: updatedAllocations,
-        amountSavedSoFar: newTotalSaved,
-        status: newTotalSaved >= existingGoal.targetAmount ? 'completed' : existingGoal.status,
-        updatedAt: new Date().toISOString(),
-    };
-
-    const blockBlobClient = client.getBlockBlobClient(filePath);
-    try {
-        const content = JSON.stringify(updatedGoal, null, 2);
-        await blockBlobClient.upload(content, Buffer.byteLength(content), {
-            blobHTTPHeaders: { blobContentType: 'application/json' }
-        });
-        revalidatePath(AI_PLAYGROUND_PATH);
-        return updatedGoal;
-    } catch (error: any) {
-        throw new Error(`Could not add/update allocation for goal. Original error: ${error.message}`);
-    }
+  const updatedGoal = await recalculateAndSaveGoal(goalId, updatedAllocations);
+  revalidatePath(AI_PLAYGROUND_PATH);
+  return updatedGoal;
 }
 
 export async function editAllocation(goalId: string, allocationId: string, newAmount: number): Promise<Goal> {
-    if (newAmount <= 0) {
-        throw new Error("Allocation amount must be positive.");
-    }
-    const client = await getAzureGoalsContainerClient();
-    const filePath = `${GOALS_DIR}${goalId}.json`;
-    const blobClient = client.getBlobClient(filePath);
-    let existingGoal: Goal;
+  if (newAmount <= 0) throw new Error("Allocation amount must be positive.");
 
-    try {
-        const downloadResponse = await blobClient.download(0);
-        if (!downloadResponse.readableStreamBody) throw new Error("Goal blob has no content.");
-        const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
-        existingGoal = JSON.parse(buffer.toString());
-    } catch (error: any) {
-        if (error instanceof RestError && error.statusCode === 404) throw new Error(`Goal with ID ${goalId} not found.`);
-        throw new Error(`Could not retrieve goal. Original error: ${error.message}`);
-    }
+  const { allocations } = await fetchGoalWithAllocations(goalId);
+  const allocationIndex = allocations.findIndex(alloc => alloc.id === allocationId);
+  if (allocationIndex === -1) throw new Error("Allocation not found within the goal.");
 
-    const allocationIndex = (existingGoal.allocations || []).findIndex(alloc => alloc.id === allocationId);
-    if (allocationIndex === -1) {
-        throw new Error("Allocation not found within the goal.");
-    }
+  const supabase = getSupabase();
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('goal_allocations').update({ amount: newAmount, updated_at: now }).eq('id', allocationId);
+  if (error) throw new Error(`Could not edit allocation. Original error: ${error.message}`);
 
-    const updatedAllocations = [...(existingGoal.allocations || [])];
-    updatedAllocations[allocationIndex] = {
-        ...updatedAllocations[allocationIndex],
-        amount: newAmount,
-        updatedAt: new Date().toISOString(),
-    };
+  const updatedAllocations = [...allocations];
+  updatedAllocations[allocationIndex] = { ...updatedAllocations[allocationIndex], amount: newAmount, updatedAt: now };
 
-    const newTotalSaved = updatedAllocations.reduce((sum, alloc) => sum + alloc.amount, 0);
-
-    const updatedGoal: Goal = {
-        ...existingGoal,
-        allocations: updatedAllocations,
-        amountSavedSoFar: newTotalSaved,
-        status: newTotalSaved >= existingGoal.targetAmount ? 'completed' : 'active',
-        updatedAt: new Date().toISOString(),
-    };
-
-    const blockBlobClient = client.getBlockBlobClient(filePath);
-    try {
-        const content = JSON.stringify(updatedGoal, null, 2);
-        await blockBlobClient.upload(content, Buffer.byteLength(content), {
-            blobHTTPHeaders: { blobContentType: 'application/json' }
-        });
-        revalidatePath(AI_PLAYGROUND_PATH);
-        return updatedGoal;
-    } catch (error: any) {
-        throw new Error(`Could not edit allocation. Original error: ${error.message}`);
-    }
+  const updatedGoal = await recalculateAndSaveGoal(goalId, updatedAllocations);
+  revalidatePath(AI_PLAYGROUND_PATH);
+  return updatedGoal;
 }
-
 
 export async function deleteAllocationFromGoal(goalId: string, allocationId: string): Promise<Goal> {
-    const client = await getAzureGoalsContainerClient();
-    const filePath = `${GOALS_DIR}${goalId}.json`;
-    const blobClient = client.getBlobClient(filePath);
-    let existingGoal: Goal;
+  const { allocations } = await fetchGoalWithAllocations(goalId);
+  const updatedAllocations = allocations.filter(alloc => alloc.id !== allocationId);
+  if (allocations.length === updatedAllocations.length) throw new Error("Allocation not found within the goal.");
 
-    try {
-        const downloadResponse = await blobClient.download(0);
-        if (!downloadResponse.readableStreamBody) throw new Error("Goal blob has no content.");
-        const buffer = await streamToBuffer(downloadResponse.readableStreamBody);
-        existingGoal = JSON.parse(buffer.toString());
-    } catch (error: any) {
-        if (error instanceof RestError && error.statusCode === 404) {
-            throw new Error(`Goal with ID ${goalId} not found.`);
-        }
-        throw new Error(`Could not retrieve goal. Original error: ${error.message}`);
-    }
+  const supabase = getSupabase();
+  const { error } = await supabase.from('goal_allocations').delete().eq('id', allocationId);
+  if (error) throw new Error(`Could not delete allocation from goal. Original error: ${error.message}`);
 
-    const updatedAllocations = (existingGoal.allocations || []).filter(alloc => alloc.id !== allocationId);
-    if ((existingGoal.allocations || []).length === updatedAllocations.length) {
-        throw new Error("Allocation not found within the goal.");
-    }
-    
-    const newTotalSaved = updatedAllocations.reduce((sum, alloc) => sum + alloc.amount, 0);
-
-    const updatedGoal: Goal = {
-        ...existingGoal,
-        allocations: updatedAllocations,
-        amountSavedSoFar: newTotalSaved,
-        status: newTotalSaved >= existingGoal.targetAmount ? 'completed' : 'active', // Re-evaluate status
-        updatedAt: new Date().toISOString(),
-    };
-
-    const blockBlobClient = client.getBlockBlobClient(filePath);
-    try {
-        const content = JSON.stringify(updatedGoal, null, 2);
-        await blockBlobClient.upload(content, Buffer.byteLength(content), {
-            blobHTTPHeaders: { blobContentType: 'application/json' }
-        });
-        revalidatePath(AI_PLAYGROUND_PATH);
-        return updatedGoal;
-    } catch (error: any) {
-        throw new Error(`Could not delete allocation from goal. Original error: ${error.message}`);
-    }
+  const updatedGoal = await recalculateAndSaveGoal(goalId, updatedAllocations);
+  revalidatePath(AI_PLAYGROUND_PATH);
+  return updatedGoal;
 }
 
-
 export async function deleteGoal(id: string): Promise<{ success: boolean }> {
-  console.log(`Azure Info (goals.ts): Attempting to delete goal ${id}...`);
-  const client = await getAzureGoalsContainerClient();
-  const filePath = `${GOALS_DIR}${id}.json`;
-  const blobClient = client.getBlobClient(filePath);
-  try {
-    console.log(`Azure Info (goals.ts): Deleting goal ${id} from ${filePath}`);
-    await blobClient.deleteIfExists();
-    console.log(`Azure Info (goals.ts): Successfully deleted goal ${id}`);
-    revalidatePath(AI_PLAYGROUND_PATH);
-    return { success: true };
-  } catch (error: any) {
-    console.error(`Azure Error (goals.ts): Failed to delete goal ${id} from Azure blob. Status: ${error.statusCode}, Message: ${error.message}`, error.stack);
-    throw new Error(`Could not delete goal from Azure blob storage. Original error: ${error.message}`);
-  }
+  const supabase = getSupabase();
+  // goal_allocations rows cascade-delete via the goal_id FK (see supabase/schema.sql).
+  const { error } = await supabase.from('goals').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete goal from Supabase. Original error: ${error.message}`);
+
+  revalidatePath(AI_PLAYGROUND_PATH);
+  return { success: true };
 }
