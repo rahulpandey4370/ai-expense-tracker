@@ -12,6 +12,7 @@ import { Loader2, AlertTriangle, CalendarRange, Layers } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { SavingsTrendChart } from '@/components/charts/savings-trend-chart';
+import { formatCurrency, formatCurrencyCompact } from '@/lib/format';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from 'date-fns';
@@ -225,25 +226,42 @@ export default function YearlyOverviewPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {yearlySummaryData.map((data) => (
-                          <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50 text-xs sm:text-sm">
+                        {yearlySummaryData.map((data) => {
+                          // Months that haven't happened yet are rendered as
+                          // dimmed placeholders instead of five columns of
+                          // "₹0.00", which read as real zero-value data.
+                          const isFuture = data.totalIncome === 0 && data.totalSpend === 0
+                            && data.totalInvestment === 0 && data.totalCashbacksInterestsDividends === 0;
+                          if (isFuture) {
+                            return (
+                              <motion.tr key={data.monthIndex} variants={tableRowVariants} className="border-b-border/50 text-xs sm:text-sm">
+                                <TableCell className="whitespace-nowrap font-medium text-muted-foreground/60">{data.monthName}</TableCell>
+                                <TableCell colSpan={5} className="text-center text-xs italic text-muted-foreground/50">
+                                  no activity recorded
+                                </TableCell>
+                              </motion.tr>
+                            );
+                          }
+                          return (
+                          <motion.tr key={data.monthIndex} variants={tableRowVariants} className="hover:bg-accent/5 border-b-border/50 text-xs sm:text-sm tabular-nums">
                             <TableCell className="font-medium text-foreground whitespace-nowrap">{data.monthName}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>₹{data.totalIncome.toFixed(2)}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>₹{data.totalSpend.toFixed(2)}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>₹{data.totalSavings.toFixed(2)}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>₹{data.totalInvestment.toFixed(2)}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>₹{data.totalCashbacksInterestsDividends.toFixed(2)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>{formatCurrency(data.totalIncome)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>{formatCurrency(data.totalSpend)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>{formatCurrency(data.totalSavings)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>{formatCurrency(data.totalInvestment)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>{formatCurrency(data.totalCashbacksInterestsDividends)}</TableCell>
                           </motion.tr>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                       <TableFooter>
                         <TableRow className="bg-primary/10 border-t-2 border-primary/30 text-xs sm:text-sm">
                           <TableHead className="font-bold text-primary whitespace-nowrap">Total ({selectedYear})</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>₹{yearlyTotals.totalIncome.toFixed(2)}</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>₹{yearlyTotals.totalSpend.toFixed(2)}</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>₹{yearlyTotals.totalSavings.toFixed(2)}</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>₹{yearlyTotals.totalInvestment.toFixed(2)}</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>₹{yearlyTotals.totalCashbacksInterestsDividends.toFixed(2)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalIncome)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalSpend)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>{formatCurrency(yearlyTotals.totalSavings)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalInvestment)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalCashbacksInterestsDividends)}</TableHead>
                         </TableRow>
                       </TableFooter>
                     </Table>
@@ -276,7 +294,7 @@ export default function YearlyOverviewPage() {
                                             <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
                                         </div>
                                         <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
-                                        <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        <p className="text-right font-bold text-sm text-primary">{formatCurrency(cat.totalAmount)}</p>
                                       </div>
                                     </PopoverTrigger>
                                      <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
@@ -290,7 +308,7 @@ export default function YearlyOverviewPage() {
                                                   {format(tx.date, 'dd/MM')}: {tx.description}
                                                 </span>
                                                 <span className="flex-shrink-0 font-semibold text-foreground">
-                                                  ₹{tx.amount.toLocaleString()}
+                                                  {formatCurrency(tx.amount)}
                                                 </span>
                                               </li>
                                             ))}
@@ -305,7 +323,7 @@ export default function YearlyOverviewPage() {
                             })}
                           </div>
                            <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
-                              Total Expenses: ₹{yearlyTotals.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              Total Expenses: {formatCurrency(yearlyTotals.totalSpend)}
                            </div>
                         </CardContent>
                     </Card>

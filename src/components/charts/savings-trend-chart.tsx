@@ -84,30 +84,33 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
   
   return (
     <Card className={cn("shadow-lg h-full flex flex-col", glowClass)}>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
-            <div>
-                <CardTitle>Monthly Financial Trends</CardTitle>
-                <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
+      {/* The four series toggles used to sit in the same flex row as the
+          title, which squeezed "Monthly Financial Trends" into a ~90px column
+          that wrapped onto three lines while the switches overlapped it. They
+          are a legend, not a header action, so they belong on their own row
+          underneath and are free to wrap. */}
+      <CardHeader className="pb-3">
+        <CardTitle>Monthly Financial Trends</CardTitle>
+        <CardDescription>Income, spending, investment, and savings for {monthlyData[0]?.year}.</CardDescription>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3">
+          {Object.entries(config).map(([key, value]) => (
+            <div key={key} className="flex items-center gap-1.5">
+              <Switch
+                id={key}
+                checked={!value.inactive}
+                onCheckedChange={() => toggleSeries(key)}
+                style={{ '--switch-bg-checked': value.color } as React.CSSProperties}
+                className="data-[state=checked]:bg-[var(--switch-bg-checked)]"
+              />
+              <Label
+                htmlFor={key}
+                className="cursor-pointer whitespace-nowrap text-xs"
+                style={{ color: value.inactive ? undefined : value.color }}
+              >
+                {value.label}
+              </Label>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 mt-2 sm:mt-0">
-                {Object.entries(config).map(([key, value]) => (
-                   <div key={key} className="flex items-center space-x-2">
-                    <Switch
-                        id={key}
-                        checked={!value.inactive}
-                        onCheckedChange={() => toggleSeries(key)}
-                        style={{
-                            '--switch-bg-checked': value.color,
-                        } as React.CSSProperties}
-                        className="data-[state=checked]:bg-[var(--switch-bg-checked)]"
-                    />
-                    <Label htmlFor={key} className="text-xs" style={{ color: value.inactive ? undefined : value.color }}>
-                        {value.label}
-                    </Label>
-                    </div>
-                ))}
-            </div>
+          ))}
         </div>
       </CardHeader>
       <CardContent className="flex-1">

@@ -103,6 +103,32 @@ body {
   [data-radix-scroll-area-viewport] {
     overflow: auto !important;
   }
+
+  /* Numeric columns shouldn't reflow as digits change. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * Respect the OS "reduce motion" setting.
+ *
+ * The app animates a staggered entrance on essentially every list, table and
+ * card — including a 50-row table that re-animates on each filter change.
+ * For users who have asked their system for less motion (vestibular
+ * disorders, migraine triggers, or simple preference) that is actively
+ * unpleasant, and nothing here was honouring it. Content still renders; it
+ * just arrives immediately.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 

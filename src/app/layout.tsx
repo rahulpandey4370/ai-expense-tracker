@@ -8,7 +8,7 @@ import { DateSelectionProvider } from '@/contexts/DateSelectionContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper';
 import { AIModelProvider } from '@/contexts/AIModelContext';
-import { getAvailableModels } from '@/lib/model-registry';
+import { getPublicModels } from '@/lib/model-registry';
 import { QueryProvider } from '@/components/providers/query-provider';
 
 const geistSans = Geist({
@@ -51,7 +51,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const availableModels = getAvailableModels();
+  // Credential-stripped: this array is serialized into the client payload.
+  const availableModels = getPublicModels();
 
   return (
     <html lang="en" suppressHydrationWarning>

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag, Target, Edit } from "lucide-react";
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -108,13 +109,40 @@ export default function SettingsPage() {
     fetchData();
   }, [fetchData]);
 
+  // Rehydrate locally-stored preferences so the form reflects what was saved.
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem('finwise.userProfile');
+      if (p) setUserProfile(JSON.parse(p));
+      const n = localStorage.getItem('finwise.notifications');
+      if (n) setNotifications(JSON.parse(n));
+    } catch { /* malformed or blocked storage — keep defaults */ }
+  }, []);
 
+
+  /**
+   * Persists to localStorage.
+   *
+   * This used to only console.log and then toast "Settings Saved!" — the
+   * confirmation was reporting something that had not happened, and the values
+   * were gone on the next reload. Better to save them for real, and to say
+   * plainly where they're saved.
+   */
   const handleSaveChanges = () => {
-    console.log("Saving settings:", { userProfile, notifications });
-    toast({
-      title: "Settings Saved!",
-      description: "Your preferences have been updated.",
-    });
+    try {
+      localStorage.setItem('finwise.userProfile', JSON.stringify(userProfile));
+      localStorage.setItem('finwise.notifications', JSON.stringify(notifications));
+      toast({
+        title: "Saved on this device",
+        description: "Your profile and notification preferences will persist here.",
+      });
+    } catch {
+      toast({
+        title: "Could not save",
+        description: "Local storage is blocked, so these preferences won't persist.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAddCategory = async () => {
@@ -272,8 +300,23 @@ export default function SettingsPage() {
               Configure your application preferences for FinWise AI.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-8">
-            
+          <CardContent>
+            {/* Seven sections stacked into an 8,700px scroll with no way to
+                jump between them. Tabs also let the save affordance be
+                honest: budgets, categories and payment methods each persist
+                the moment you use their own buttons, so only Profile and
+                Notifications carry a Save action. */}
+            <Tabs defaultValue="profile" className="w-full">
+              <TabsList className="mb-5 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
+                <TabsTrigger value="profile" className="text-xs"><User className="mr-1.5 h-3.5 w-3.5" />Profile</TabsTrigger>
+                <TabsTrigger value="budgets" className="text-xs"><Target className="mr-1.5 h-3.5 w-3.5" />Budgets</TabsTrigger>
+                <TabsTrigger value="categories" className="text-xs"><Tag className="mr-1.5 h-3.5 w-3.5" />Categories</TabsTrigger>
+                <TabsTrigger value="payments" className="text-xs"><List className="mr-1.5 h-3.5 w-3.5" />Payment</TabsTrigger>
+                <TabsTrigger value="notifications" className="text-xs"><Bell className="mr-1.5 h-3.5 w-3.5" />Alerts</TabsTrigger>
+                <TabsTrigger value="data" className="text-xs"><ShieldCheck className="mr-1.5 h-3.5 w-3.5" />Data</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="profile" className="space-y-6">
             <motion.section variants={sectionVariants}>
               <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><User className="text-accent"/>User Profile</h3>
               <motion.div variants={itemVariants} className="space-y-4">
@@ -287,10 +330,25 @@ export default function SettingsPage() {
                 </div>
               </motion.div>
             </motion.section>
+                <Separator />
+            <motion.section variants={sectionVariants}>
+              <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Palette className="text-accent"/>Appearance</h3>
+              <motion.div variants={itemVariants} className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
+                <Label htmlFor="darkMode" className="text-sm text-foreground">Theme</Label>
+                <ThemeToggle />
+              </motion.div>
+            </motion.section>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Stored on this device only.</p>
+                  <Button onClick={handleSaveChanges} size="sm" className="shrink-0" withMotion>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save profile
+                  </Button>
+                </div>
+              </TabsContent>
 
-            <Separator className="my-6 border-primary/20" />
-
-             {/* Manage Budgets Section */}
+              <TabsContent value="budgets">
+                <p className="mb-3 text-xs text-muted-foreground">Budget changes save immediately.</p>
             <motion.section variants={sectionVariants}>
                 <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Target className="text-accent"/>Manage Budgets</h3>
                  <Card className="bg-background/50 border-primary/10">
@@ -371,11 +429,10 @@ export default function SettingsPage() {
                     </CardContent>
                 </Card>
             </motion.section>
+              </TabsContent>
 
-            <Separator className="my-6 border-primary/20" />
-
-
-            {/* Manage Categories Section */}
+              <TabsContent value="categories">
+                <p className="mb-3 text-xs text-muted-foreground">Category changes save immediately.</p>
             <motion.section variants={sectionVariants}>
                 <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Tag className="text-accent"/>Manage Categories</h3>
                  <Card className="bg-background/50 border-primary/10">
@@ -419,10 +476,10 @@ export default function SettingsPage() {
                     </CardContent>
                 </Card>
             </motion.section>
+              </TabsContent>
 
-             <Separator className="my-6 border-primary/20" />
-
-            {/* Manage Payment Methods Section */}
+              <TabsContent value="payments">
+                <p className="mb-3 text-xs text-muted-foreground">Payment method changes save immediately.</p>
             <motion.section variants={sectionVariants}>
                  <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><List className="text-accent"/>Manage Payment Methods</h3>
                  <Card className="bg-background/50 border-primary/10">
@@ -463,9 +520,9 @@ export default function SettingsPage() {
                      </CardContent>
                  </Card>
              </motion.section>
+              </TabsContent>
 
-            <Separator className="my-6 border-primary/20" />
-            
+              <TabsContent value="notifications" className="space-y-5">
             <motion.section variants={sectionVariants}>
               <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Bell className="text-accent"/>Notifications</h3>
               <motion.div variants={itemVariants} className="space-y-3">
@@ -483,19 +540,16 @@ export default function SettingsPage() {
                 </div>
               </motion.div>
             </motion.section>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Stored on this device only.</p>
+                  <Button onClick={handleSaveChanges} size="sm" className="shrink-0" withMotion>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save preferences
+                  </Button>
+                </div>
+              </TabsContent>
 
-            <Separator className="my-6 border-primary/20" />
-            
-            <motion.section variants={sectionVariants}>
-              <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Palette className="text-accent"/>Appearance</h3>
-              <motion.div variants={itemVariants} className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
-                <Label htmlFor="darkMode" className="text-sm text-foreground">Theme</Label>
-                <ThemeToggle />
-              </motion.div>
-            </motion.section>
-            
-            <Separator className="my-6 border-primary/20" />
-            
+              <TabsContent value="data">
             <motion.section variants={sectionVariants}>
               <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><ShieldCheck className="text-accent"/>Data & Privacy</h3>
               <motion.div variants={itemVariants} className="space-y-3 flex flex-col sm:flex-row sm:space-y-0 sm:space-x-3">
@@ -504,13 +558,8 @@ export default function SettingsPage() {
               </motion.div>
               <p className="text-xs text-muted-foreground mt-2">Be careful, some actions are irreversible!</p>
             </motion.section>
-
-            <div className="mt-8 flex justify-end">
-                <Button onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs md:text-sm" withMotion>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
-            </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </motion.div>

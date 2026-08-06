@@ -34,6 +34,7 @@ import {
 } from '@/lib/actions/portfolio';
 import { usePortfolioDashboard, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { PortfolioChat } from '@/components/portfolio-chat';
+import { PortfolioHoldings } from '@/components/portfolio-holdings';
 import { PortfolioPreviewEditor } from '@/components/portfolio/preview-editor';
 import { EditAssetDialog } from '@/components/portfolio/edit-dialogs';
 import type {
@@ -389,21 +390,14 @@ export default function PortfolioPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
-          {ASSET_TYPE_ORDER.filter(type => groupedSummaries[type].length > 0).map(type => (
-            <section key={type} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">{ASSET_TYPE_LABELS[type]}</h2>
-                <Badge variant="secondary">{groupedSummaries[type].length}</Badge>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {groupedSummaries[type].map(summary => (
-                  <AssetCard key={summary.asset.id} summary={summary} onEdit={() => setEditingAsset(summary.asset)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        <PortfolioHoldings
+          summaries={data?.assetSummaries || []}
+          assetTypeLabels={ASSET_TYPE_LABELS}
+          assetTypeOrder={ASSET_TYPE_ORDER}
+          renderCard={(summary) => (
+            <AssetCard summary={summary} onEdit={() => setEditingAsset(summary.asset)} />
+          )}
+        />
       )}
     </main>
   );

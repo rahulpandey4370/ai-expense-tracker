@@ -1,3 +1,5 @@
+import { resolveCatalog, isProviderConfigured, type ModelTag } from '@/lib/model-catalog';
+
 /**
  * Dynamic AI model registry driven entirely by environment variables.
  *
@@ -12,11 +14,30 @@
  *   are reused for any model that doesn't have per-model overrides.
  */
 
+export type AIProvider = 'azure-openai' | 'google-ai' | 'openai' | 'anthropic';
+
 export interface ModelInfo {
+  /**
+   * Globally unique, provider-qualified identifier — `"<provider>::<id>"`.
+   *
+   * The same model id can legitimately exist on two providers at once: an
+   * Azure deployment named `gpt-5.4` and the first-party OpenAI `gpt-5.4` are
+   * different endpoints with different billing. Selection and routing key off
+   * this, so having both is no longer ambiguous.
+   */
+  key: string;
+  /** The id sent to the provider's API. Not unique across providers. */
   id: string;
-  provider: 'azure-openai' | 'google-ai';
+  provider: AIProvider;
   /** Display label (optional) */
   label?: string;
+  /** Pills shown in the picker: "Most capable", "Cheapest", … */
+  tags?: ModelTag[];
+  /** USD per million tokens, when known — powers the picker's cost hint. */
+  inputPerMTok?: number;
+  outputPerMTok?: number;
+  contextWindow?: number;
+  notes?: string;
   /** Resolved deployment name (Azure only) */
   deployment?: string;
   /** Resolved endpoint (Azure only) */
@@ -28,9 +49,9 @@ export interface ModelInfo {
 }
 
 const DEFAULT_GEMINI_MODELS: ModelInfo[] = [
-  { id: 'gemini-3-flash-preview', provider: 'google-ai' },
-  { id: 'gemini-2.5-flash', provider: 'google-ai' },
-  { id: 'gemini-2.5-flash-lite', provider: 'google-ai' },
+  { key: 'google-ai::gemini-3-flash-preview', id: 'gemini-3-flash-preview', provider: 'google-ai' },
+  { key: 'google-ai::gemini-2.5-flash', id: 'gemini-2.5-flash', provider: 'google-ai' },
+  { key: 'google-ai::gemini-2.5-flash-lite', id: 'gemini-2.5-flash-lite', provider: 'google-ai' },
 ];
 
 /**
@@ -73,8 +94,10 @@ function buildAzureModelInfo(id: string): ModelInfo {
   const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2025-01-01-preview';
 
   return {
+    key: `azure-openai::${id}`,
     id,
     provider: 'azure-openai',
+    label: id,
     deployment,
     endpoint,
     apiKey,
@@ -89,6 +112,26 @@ function buildAzureModelInfo(id: string): ModelInfo {
 export function getAvailableModels(): ModelInfo[] {
   const models: ModelInfo[] = [...DEFAULT_GEMINI_MODELS];
 
+  // Direct OpenAI / Anthropic. Listed only when the provider's key is set, so
+  // the picker never offers a model that is guaranteed to fail on click.
+  for (const provider of ['anthropic', 'openai'] as const) {
+    if (!isProviderConfigured(provider)) continue;
+    for (const m of resolveCatalog(provider)) {
+      models.push({
+        key: `${provider}::${m.id}`,
+        id: m.id,
+        provider,
+        label: m.label,
+        tags: m.tags,
+        inputPerMTok: m.inputPerMTok,
+        outputPerMTok: m.outputPerMTok,
+        contextWindow: m.contextWindow,
+        notes: m.notes,
+        apiKey: provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY,
+      });
+    }
+  }
+
   const customModelsRaw = process.env.AI_MODELS;
   if (customModelsRaw) {
     const ids = customModelsRaw
@@ -97,8 +140,15 @@ export function getAvailableModels(): ModelInfo[] {
       .filter(Boolean);
 
     for (const id of ids) {
-      // Skip if already a known Gemini model
+      // Gemini ids are served by Google, never by Azure — those genuinely are
+      // the same model and must not be double-registered.
       if (DEFAULT_GEMINI_MODELS.some(m => m.id === id)) continue;
+      // Everything else in AI_MODELS is an Azure deployment and is registered
+      // even when a first-party model shares its id. An Azure `gpt-5.4`
+      // deployment is a separate endpoint with separate billing (often free
+      // credits) — deduping it away silently removed a working, cheaper
+      // option from the picker.
+      if (models.some(m => m.key === `azure-openai::${id}`)) continue;
       models.push(buildAzureModelInfo(id));
     }
   } else {
@@ -113,27 +163,77 @@ export function getAvailableModels(): ModelInfo[] {
 }
 
 /**
- * Get configuration for a specific model ID.
+ * Resolve a model from either a provider-qualified key (`"openai::gpt-5.4"`)
+ * or a bare id (`"gpt-5.4"`).
+ *
+ * The bare-id path exists for values that predate keys: a persisted UI choice,
+ * `AI_DEFAULT_MODEL`, or a per-task override like `AI_TASK_CHAT=gpt-5.4`. When
+ * a bare id is ambiguous we prefer the Azure deployment, because AI_MODELS is
+ * an explicit, user-authored list while the direct catalogs are defaults this
+ * app ships — an id you went out of your way to configure should win.
  */
-export function getModelConfig(id: string): ModelInfo | undefined {
-  return getAvailableModels().find(m => m.id === id);
+export function getModelConfig(idOrKey: string): ModelInfo | undefined {
+  const models = getAvailableModels();
+  const exact = models.find(m => m.key === idOrKey);
+  if (exact) return exact;
+  const matches = models.filter(m => m.id === idOrKey);
+  if (matches.length <= 1) return matches[0];
+  return matches.find(m => m.provider === 'azure-openai') ?? matches[0];
+}
+
+/** The subset of ModelInfo that is safe to send to the browser. */
+export interface PublicModelInfo {
+  key: string;
+  id: string;
+  provider: AIProvider;
+  label?: string;
+  tags?: ModelTag[];
+  inputPerMTok?: number;
+  outputPerMTok?: number;
+  contextWindow?: number;
+  notes?: string;
+}
+
+/**
+ * Models with every credential stripped.
+ *
+ * `getAvailableModels()` carries resolved `apiKey` / `endpoint` values. Passing
+ * that array into a client component serializes it into the HTML payload, which
+ * would publish the keys to anyone who views source. Always hand the UI this.
+ */
+export function getPublicModels(): PublicModelInfo[] {
+  return getAvailableModels().map(({ key, id, provider, label, tags, inputPerMTok, outputPerMTok, contextWindow, notes }) => ({
+    key, id, provider, label, tags, inputPerMTok, outputPerMTok, contextWindow, notes,
+  }));
 }
 
 /**
  * Check if a model ID is valid (registered).
  */
-export function isValidModel(id: string): boolean {
-  return getAvailableModels().some(m => m.id === id);
+export function isValidModel(idOrKey: string): boolean {
+  return getModelConfig(idOrKey) !== undefined;
 }
 
 /**
  * Detect the provider for a given model ID.
  */
-export function detectProvider(id: string): 'azure-openai' | 'google-ai' {
-  const config = getModelConfig(id);
+export function detectProvider(idOrKey: string): AIProvider {
+  const config = getModelConfig(idOrKey);
   if (config) return config.provider;
-  // Fallback heuristic: anything starting with "gemini-" is Google
-  if (id.startsWith('gemini-')) return 'google-ai';
-  // Everything else we assume is Azure (better for forward compatibility)
+
+  // Explicit prefix wins even if the model isn't registered.
+  const [maybeProvider] = idOrKey.split('::');
+  if (maybeProvider !== idOrKey) {
+    if (maybeProvider === 'openai' || maybeProvider === 'anthropic'
+      || maybeProvider === 'google-ai' || maybeProvider === 'azure-openai') {
+      return maybeProvider;
+    }
+  }
+
+  // Fallbacks by id shape, for models not in the registry (e.g. a task-level
+  // env override naming something that wasn't registered).
+  if (idOrKey.startsWith('gemini-')) return 'google-ai';
+  if (idOrKey.startsWith('claude-')) return 'anthropic';
+  // Everything else we assume is Azure (better for forward compatibility).
   return 'azure-openai';
 }

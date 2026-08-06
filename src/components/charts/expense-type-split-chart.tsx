@@ -79,7 +79,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
     return (
       <Card className={cn("shadow-lg", glowClass)}>
         <CardHeader>
-          <CardTitle>Expense Split (Need/Want/Investment)</CardTitle>
+          <CardTitle className="break-words">Expense Split</CardTitle>
           <CardDescription>Distribution for {selectedMonthName} {selectedYear}.</CardDescription>
         </CardHeader>
         <CardContent className={cn("flex items-center justify-center", chartHeightClass || "h-[300px]")}>
@@ -92,7 +92,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
   return (
     <Card className={cn("flex flex-col shadow-lg", glowClass)}>
       <CardHeader className="items-center pb-0">
-        <CardTitle>Expense Split (Need/Want/Investment)</CardTitle>
+        <CardTitle className="break-words">Expense Split</CardTitle>
         <CardDescription>
           Distribution for {selectedMonthName} {selectedYear}.
           {topExpenseType && ` Top: ${topExpenseType.name} (${topExpenseType.percentage}%)`}
@@ -101,7 +101,11 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
       <CardContent className="flex-1 pb-0">
         <ChartContainer
           config={chartConfig}
-          className={cn("mx-auto aspect-square", chartHeightClass)}
+          // max-w-full is load-bearing: `aspect-square` combined with a
+          // min-height makes the container derive its WIDTH from its height, so
+          // in a two-up grid between ~768px and ~1100px it computed 400px wide
+          // inside a ~296px column and pushed the page sideways.
+          className={cn("mx-auto aspect-square max-w-full", chartHeightClass)}
         >
           <PieChart>
             <ChartTooltip

@@ -5,10 +5,25 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useToast } from '@/hooks/use-toast';
 import { AIModel } from '@/lib/types';
 
+export type AIProvider = 'azure-openai' | 'google-ai' | 'openai' | 'anthropic';
+export type ModelTag = 'flagship' | 'balanced' | 'cheap' | 'fast' | 'reasoning' | 'legacy';
+
+/**
+ * Client-side mirror of the server registry's ModelInfo, minus the secrets —
+ * credentials never cross into the browser bundle.
+ */
 export interface ModelInfo {
+  /** Provider-qualified unique id — the value used for selection. */
+  key: string;
+  /** The id sent to the provider's API; not unique across providers. */
   id: string;
-  provider: 'azure-openai' | 'google-ai';
+  provider: AIProvider;
   label?: string;
+  tags?: ModelTag[];
+  inputPerMTok?: number;
+  outputPerMTok?: number;
+  contextWindow?: number;
+  notes?: string;
 }
 
 interface AIModelContextType {
@@ -22,7 +37,7 @@ const AIModelContext = createContext<AIModelContextType | undefined>(undefined);
 const AI_MODEL_STORAGE_KEY = "finwiseAIModel";
 
 function getDefaultModel(models: ModelInfo[]): AIModel {
-  if (models.length > 0) return models[0].id;
+  if (models.length > 0) return models[0].key;
   return 'gpt-5.4';
 }
 
@@ -34,20 +49,24 @@ export function AIModelProvider({ children, availableModels }: { children: React
   useEffect(() => {
     try {
       const storedModel = localStorage.getItem(AI_MODEL_STORAGE_KEY);
-      if (storedModel && availableModels.some(m => m.id === storedModel)) {
-        setSelectedModel(storedModel);
-      }
+      if (!storedModel) return;
+      // Accept a key, or migrate a bare id persisted before keys existed.
+      const match = availableModels.find(m => m.key === storedModel)
+        ?? availableModels.find(m => m.id === storedModel);
+      if (match) setSelectedModel(match.key);
     } catch (error) {
       console.warn("Could not read AI model from localStorage:", error);
     }
   }, [availableModels]);
 
   const handleSetSelectedModel = useCallback((model: AIModel) => {
-    if (availableModels.some(m => m.id === model)) {
-      setSelectedModel(model);
+    const match = availableModels.find(m => m.key === model)
+      ?? availableModels.find(m => m.id === model);
+    if (match) {
+      setSelectedModel(match.key);
       try {
-        localStorage.setItem(AI_MODEL_STORAGE_KEY, model);
-        toast({ title: "AI Model Changed", description: `Switched to ${model}.` });
+        localStorage.setItem(AI_MODEL_STORAGE_KEY, match.key);
+        toast({ title: "AI model changed", description: `Now using ${match.label ?? match.id}.` });
       } catch (error) {
         console.warn("Could not save AI model to localStorage:", error);
       }

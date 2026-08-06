@@ -127,18 +127,19 @@ export function PortfolioChat({ scopedAssetId, scopedAssetName, className, defau
     : QUICK_ACTIONS;
 
   return (
-    <Card className={cn("shadow-lg border-accent/30", isExpanded ? "h-[640px]" : "h-[520px]", "flex flex-col", className)}>
-      <CardHeader className="flex flex-row items-center justify-between py-3 px-4 space-y-0">
-        <div className="space-y-1">
+    <Card className={cn("shadow-lg border-accent/30", isExpanded ? "h-[640px]" : messages.length === 0 ? "min-h-[300px]" : "h-[520px]", "flex flex-col", className)}>
+      <CardHeader className="flex flex-row items-center justify-between gap-x-3 gap-y-2 space-y-0 px-4 py-3">
+        <div className="min-w-0 space-y-1">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Bot className="h-5 w-5 text-primary" />
+            <Bot className="h-5 w-5 shrink-0 text-primary" />
             Portfolio Chat
           </CardTitle>
-          <CardDescription className="text-xs">
+          {/* A long asset name shouldn't push the action buttons off the card. */}
+          <CardDescription className="truncate text-xs">
             {scopedAssetName ? `Scoped to ${scopedAssetName}` : 'Scoped to your portfolio data'}
           </CardDescription>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {messages.length > 0 && (
             <Button variant="ghost" size="icon" className="h-8 w-8" title="Clear" onClick={clear}>
               <Trash2 className="h-4 w-4" />

@@ -22,6 +22,7 @@
     "migrate:supabase:all": "npm run migrate:supabase:transactions && npm run migrate:supabase:budgets && npm run migrate:supabase:goals && npm run migrate:supabase:recurring && npm run migrate:supabase:savings && npm run migrate:supabase:reports && npm run migrate:supabase:split-expenses && npm run migrate:supabase:portfolio"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@azure/cosmos": "^4.0.0",
     "@azure/storage-blob": "^12.17.0",
     "@ducanh2912/next-pwa": "^10.2.7",

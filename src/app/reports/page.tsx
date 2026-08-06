@@ -11,10 +11,10 @@ import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear } from '
 import { useTransactionsInRange } from '@/hooks/use-finance-queries';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
 import { Download, FileText, Loader2, AlertTriangle, TrendingUp, BookOpen, Layers, RefreshCw, Wand2 } from 'lucide-react';
-import { ExpenseCategoryChart } from '@/components/charts/expense-category-chart';
+import { RankedBarChart } from '@/components/charts/ranked-bar-chart';
 import { MonthlySpendingTrendChart } from '@/components/charts/monthly-spending-trend-chart';
 import { IncomeExpenseTrendChart } from '@/components/charts/income-expense-trend-chart';
-import { ExpensePaymentMethodChart } from '@/components/charts/expense-payment-method-chart';
+
 import { ExpenseTypeSplitChart } from '@/components/charts/expense-type-split-chart';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
 import { getMonthlyReport, loadStoredMonthlyReport, getYearlyReport, loadStoredYearlyReport, type StoredMonthlyReport, type StoredYearlyReport } from '@/lib/actions/reports';
@@ -108,6 +108,32 @@ export default function ReportsPage() {
 
   // Already scoped to the report period server-side.
   const filteredTransactionsForPeriod = useMemo(() => periodQuery.data ?? [], [periodQuery.data]);
+
+  const reportPeriodLabel = reportMonth === -1
+    ? `${reportYear}`
+    : `${monthNamesList[reportMonth]} ${reportYear}`;
+
+  /** Expense totals per category, for the ranked bar chart. */
+  const categoryBreakdownData = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const t of filteredTransactionsForPeriod) {
+      if (t.type !== 'expense') continue;
+      const name = t.category?.name ?? t.source ?? 'Uncategorised';
+      totals.set(name, (totals.get(name) ?? 0) + t.amount);
+    }
+    return [...totals.entries()].map(([name, value]) => ({ name, value }));
+  }, [filteredTransactionsForPeriod]);
+
+  /** Expense totals per payment method. */
+  const paymentMethodBreakdownData = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const t of filteredTransactionsForPeriod) {
+      if (t.type !== 'expense') continue;
+      const name = t.paymentMethod?.name ?? 'Unspecified';
+      totals.set(name, (totals.get(name) ?? 0) + t.amount);
+    }
+    return [...totals.entries()].map(([name, value]) => ({ name, value }));
+  }, [filteredTransactionsForPeriod]);
 
   // Convert in the browser (IST) so the date string is computed in the user's
   // timezone — sending Date objects through to the UTC server would shift
@@ -312,8 +338,23 @@ export default function ReportsPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <motion.div variants={cardVariants}><IncomeDistributionChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
                     <motion.div variants={cardVariants}><ExpenseTypeSplitChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
-                    <motion.div variants={cardVariants}><ExpenseCategoryChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
-                    <motion.div variants={cardVariants}><ExpensePaymentMethodChart transactions={filteredTransactionsForPeriod} selectedMonthName={reportMonth === -1 ? 'Annual' : monthNamesList[reportMonth]} selectedYear={reportYear} chartHeightClass="max-h-[350px] sm:max-h-[400px] min-h-[300px] sm:min-h-[350px] md:min-h-[400px]" /></motion.div>
+                    {/* Ranked bars, not donuts: six categories where three are
+                        under 6% and share near-identical teals is unreadable
+                        as arcs. */}
+                    <motion.div variants={cardVariants}>
+                      <RankedBarChart
+                        title="Expenses by Category"
+                        description={`Spending for ${reportPeriodLabel}, largest first.`}
+                        data={categoryBreakdownData}
+                      />
+                    </motion.div>
+                    <motion.div variants={cardVariants}>
+                      <RankedBarChart
+                        title="Expenses by Payment Method"
+                        description={`Where the money left from, ${reportPeriodLabel}.`}
+                        data={paymentMethodBreakdownData}
+                      />
+                    </motion.div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <motion.div variants={cardVariants}><MonthlySpendingTrendChart transactions={trendTransactions} numberOfMonths={reportMonth === -1 ? 12 : 6} /></motion.div>

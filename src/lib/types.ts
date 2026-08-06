@@ -668,6 +668,8 @@ export const MonthlySummarySchema = z.object({
   needs: z.number(),
   wants: z.number(),
   investments: z.number(),
+  /** Expenses with no expenseType set — kept out of needs so the split is honest. */
+  uncategorized: z.number().default(0),
   transactionCount: z.number(),
   topCategories: z.array(z.object({ name: z.string(), amount: z.number(), txnCount: z.number() })),
 });

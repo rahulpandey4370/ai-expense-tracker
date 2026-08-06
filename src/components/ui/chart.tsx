@@ -281,7 +281,10 @@ const ChartLegendContent = React.forwardRef<
       <div
         ref={ref}
         className={cn(
-          "flex items-center justify-center gap-4",
+          // flex-wrap + min-w-0: with `flex-nowrap` a legend of 6+ series (the
+          // payment-method and category charts) pushed past the card edge and
+          // dragged the whole page into horizontal overflow at tablet widths.
+          "flex w-full min-w-0 flex-wrap items-center justify-center gap-x-4 gap-y-1.5",
           verticalAlign === "top" ? "pb-3" : "pt-3",
           className
         )}

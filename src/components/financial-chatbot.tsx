@@ -18,6 +18,7 @@ import { ModelInfoBadge } from './model-info-badge';
 import { MarkdownContent } from './markdown-content';
 import Link from 'next/link';
 import { useDateSelection } from '@/contexts/DateSelectionContext';
+import { investmentCategoryNames, cashbackAndInterestAndDividendCategoryNames } from '@/lib/finance-constants';
 import { isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -158,9 +159,13 @@ export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
     if (!query) return;
 
     // Default: month scope. Investment mode: full year, investment-related only.
-    const INVESTMENT_CATEGORIES = new Set([
-      'Stocks', 'Mutual Funds', 'Recurring Deposit', 'Equity', 'Debt', 'Gold/Silver', 'US Stocks', 'Crypto',
-      'Cashback', 'Investment Income', 'Dividends',
+    // Category names come from the shared constants so this can't drift from
+    // what the dashboard KPIs and the yearly rollups count as an investment.
+    // Investment mode deliberately also pulls the *income* side (cashback,
+    // interest, dividends) so the bot can discuss returns, not just outflows.
+    const INVESTMENT_CATEGORIES = new Set<string>([
+      ...investmentCategoryNames,
+      ...cashbackAndInterestAndDividendCategoryNames,
     ]);
     const pad = (n: number) => String(n).padStart(2, '0');
     const monthStart = `${selectedYear}-${pad(selectedMonth + 1)}-01`;
@@ -177,7 +182,11 @@ export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
       // Fetch only the scope the query needs, on demand (no full-table load).
       const filteredTransactions = isInvestmentMode
         ? (await getTransactionsInRange(`${selectedYear}-01-01`, `${selectedYear}-12-31`)).filter(t =>
+            // 'investment_expense' must be included too. Checking only
+            // 'investment' dropped those rows, so investment mode reported
+            // understated totals versus every other screen in the app.
             t.expenseType === 'investment' ||
+            (t.expenseType as string) === 'investment_expense' ||
             (t.category?.name ? INVESTMENT_CATEGORIES.has(t.category.name) : false)
           )
         : await getTransactionsInRange(monthStart, monthEnd);
@@ -217,22 +226,38 @@ export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
     <motion.div variants={cardVariants} initial="hidden" animate="visible" className={cn(isPage && "h-full flex flex-col min-h-0 flex-1")}>
       <Card className={cn(
         "flex flex-col",
-        isPage ? "h-full w-full rounded-none border-none" : "h-[500px] shadow-lg",
+        // An empty transcript doesn't need 500px of blank card — size to the
+        // suggestion chips until there's a conversation to hold.
+        // min-h (not h) while empty: the header wraps to two rows on narrow
+        // cards, and a hard height clipped the suggestion chips. With a
+        // conversation there IS something to scroll, so a fixed height is right.
+        isPage ? "h-full w-full rounded-none border-none"
+               : messages.length === 0 ? "min-h-[340px] shadow-lg" : "h-[500px] shadow-lg",
         glowClass
       )}>
-        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 space-y-0">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 text-primary" /> FinWise AI</CardTitle>
+        {/* flex-wrap, not flex-row: on the dashboard this card sits in a 2-up
+            grid, so between ~768px and ~1000px it is only ~370px wide while the
+            two switches plus the icon buttons need ~330px on their own. The
+            controls used to overflow the card and push the page sideways;
+            now they drop onto their own line instead. */}
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 space-y-0 px-4 py-3">
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 shrink-0 text-primary" /> FinWise AI</CardTitle>
             <CardDescription className="text-xs">Financial Assistant</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center space-x-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <Switch id="investment-mode" checked={isInvestmentMode} onCheckedChange={setIsInvestmentMode} />
-              <Label htmlFor="investment-mode" className="text-xs font-normal cursor-pointer" title={`When on, the chatbot sees only investment-related transactions for ${selectedYear} instead of the selected month.`}>Investment Mode</Label>
+              <Label htmlFor="investment-mode" className="cursor-pointer whitespace-nowrap text-xs font-normal" title={`When on, the chatbot sees only investment-related transactions for ${selectedYear} instead of the selected month.`}>
+                {/* "Investment Mode" is the widest label here; drop the noun
+                    on narrow cards where the switch is self-evident. */}
+                <span className="hidden lg:inline">Investment Mode</span>
+                <span className="lg:hidden">Invest</span>
+              </Label>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <Switch id="verbose-mode" checked={isVerbose} onCheckedChange={setIsVerbose} />
-              <Label htmlFor="verbose-mode" className="text-xs font-normal cursor-pointer">Verbose</Label>
+              <Label htmlFor="verbose-mode" className="cursor-pointer whitespace-nowrap text-xs font-normal">Verbose</Label>
             </div>
             {messages.length > 0 && (
               <Button variant="ghost" size="icon" className="h-8 w-8" title="Clear conversation" onClick={handleClearConversation}>
@@ -281,7 +306,7 @@ export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
             </div>
           </ScrollArea>
           {followUps.length > 0 && !isLoading && (
-            <div className={cn("flex flex-wrap gap-2 px-4 pt-2 border-t bg-background/40", isPage && "px-6")}>
+            <div className={cn("flex flex-wrap gap-2 border-t bg-background/40 px-4 pb-3 pt-2", isPage && "px-6")}>
               <span className="w-full text-[10px] uppercase tracking-wide text-muted-foreground pt-1">Suggested follow-ups</span>
               {followUps.map((q, i) => (
                 <Button key={i} variant="outline" size="sm" className="text-xs h-auto py-1 px-2 whitespace-normal break-words" onClick={() => handleSubmit(q)}>
@@ -291,7 +316,10 @@ export function FinancialChatbot({ isPage = false }: FinancialChatbotProps) {
               ))}
             </div>
           )}
-          <div className={cn("pt-4 border-t mt-auto", isPage && "px-6 pb-4")}>
+          {/* Padding must apply in BOTH variants. It used to be gated behind
+              `isPage`, so on the dashboard the composer had no horizontal or
+              bottom padding and overlapped the card border. */}
+          <div className={cn("mt-auto border-t px-4 pb-4 pt-3", isPage && "px-6")}>
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Textarea value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask a financial question..." className="flex-1 resize-none min-h-[40px]" rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} disabled={isLoading} />
               <Button type="submit" disabled={isLoading || !inputValue.trim()} size="icon" className="bg-primary hover:bg-primary/90" withMotion>{isLoading ? <Zap className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}<span className="sr-only">Send</span></Button>

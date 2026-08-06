@@ -107,7 +107,11 @@ export function IncomeDistributionChart({ transactions, selectedMonthName, selec
       <CardContent className="flex-1 pb-0">
         <ChartContainer
           config={chartConfig}
-          className={cn("mx-auto aspect-square", chartHeightClass)}
+          // max-w-full is load-bearing: `aspect-square` combined with a
+          // min-height makes the container derive its WIDTH from its height, so
+          // in a two-up grid between ~768px and ~1100px it computed 400px wide
+          // inside a ~296px column and pushed the page sideways.
+          className={cn("mx-auto aspect-square max-w-full", chartHeightClass)}
         >
           <PieChart>
             <ChartTooltip

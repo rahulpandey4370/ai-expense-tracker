@@ -13,7 +13,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance, financeKeys } from '@/hooks/use-finance-queries';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus, X, MoreHorizontal, CheckSquare } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { detectMerchant, MERCHANT_RULES } from '@/lib/merchants';
+import { formatCurrency } from '@/lib/format';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -70,7 +79,13 @@ type SplitFilter = 'all' | 'split' | 'not_split';
 
 const PAGE_SIZE = 50;
 
+/** Human-readable merchant name for the active-filter chip. */
+function merchantLabel(id: string): string {
+  return MERCHANT_RULES.find(m => m.id === id)?.name ?? id;
+}
+
 export default function TransactionsPage() {
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string | 'all'>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string | 'all'>('all');
@@ -87,6 +102,9 @@ export default function TransactionsPage() {
   const isMobile = useIsMobile();
   const [isDeleting, setIsDeleting] = useState(false); // For single delete
   const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
+  // One shared confirm dialog instead of an AlertDialog instance mounted for
+  // every visible row.
+  const [pendingDelete, setPendingDelete] = useState<AppTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
@@ -121,9 +139,11 @@ export default function TransactionsPage() {
   const paramExpenseType = searchParams.get('expenseType');
   const paramExpenseTypes = searchParams.get('expenseTypes'); // comma-separated multi-filter from KPI drill-downs
   const paramCategoryNames = searchParams.get('categoryNames'); // comma-separated category-name filter from KPI drill-downs
+  const paramMerchant = searchParams.get('merchant'); // merchant id from the dashboard merchant tiles
 
   const [filterExpenseTypes, setFilterExpenseTypes] = useState<string[]>([]);
   const [filterCategoryNames, setFilterCategoryNames] = useState<string[]>([]);
+  const [filterMerchantId, setFilterMerchantId] = useState<string | null>(null);
 
   const hasAppliedInitialParams = useRef(false);
   const { selectedModel } = useAIModel();
@@ -132,6 +152,20 @@ export default function TransactionsPage() {
   useEffect(() => {
     setSelectedTransactionIds(new Set());
   }, [rangeStart, rangeEnd]);
+
+  // Debounce the search box — it re-filters and re-renders the whole page of
+  // rows, which was happening on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput), 200);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Bulk-select is a mode you opt into, rather than a checkbox column that
+  // sits on every row of every view forever.
+  const [selectMode, setSelectMode] = useState(false);
+  useEffect(() => {
+    if (!selectMode) setSelectedTransactionIds(new Set());
+  }, [selectMode]);
 
   useEffect(() => {
     if (txQuery.isError) {
@@ -155,12 +189,13 @@ export default function TransactionsPage() {
       if (paramExpenseType) setFilterExpenseType(paramExpenseType);
       if (paramExpenseTypes) setFilterExpenseTypes(paramExpenseTypes.split(',').map(s => s.trim()).filter(Boolean));
       if (paramCategoryNames) setFilterCategoryNames(paramCategoryNames.split(',').map(s => s.trim()).filter(Boolean));
+      if (paramMerchant) setFilterMerchantId(paramMerchant);
 
-      if (paramMonth || paramYear || paramType || paramExpenseType || paramExpenseTypes || paramCategoryNames || searchParams.toString() === '') {
+      if (paramMonth || paramYear || paramType || paramExpenseType || paramExpenseTypes || paramCategoryNames || paramMerchant || searchParams.toString() === '') {
          hasAppliedInitialParams.current = true;
       }
     }
-  }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
+  }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, paramMerchant, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
 
 
   const filteredTransactions = useMemo(() => {
@@ -191,6 +226,13 @@ export default function TransactionsPage() {
     if (filterCategoryNames.length > 0) {
       const wanted = new Set(filterCategoryNames.map(s => s.toLowerCase()));
       tempTransactions = tempTransactions.filter(t => t.category?.name && wanted.has(t.category.name.toLowerCase()));
+    }
+
+    if (filterMerchantId) {
+      // Merchant isn't a stored column — it's derived from the description by
+      // the same matcher the dashboard tiles use, so the drill-down total
+      // always agrees with the tile the user clicked.
+      tempTransactions = tempTransactions.filter(t => detectMerchant(t.description)?.id === filterMerchantId);
     }
 
     if (filterCategoryId !== 'all') {
@@ -236,7 +278,7 @@ export default function TransactionsPage() {
       });
     }
     return tempTransactions;
-  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig]);
+  }, [allTransactions, searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterMerchantId, filterSplit, sortConfig]);
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
@@ -251,7 +293,7 @@ export default function TransactionsPage() {
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterSplit, sortConfig, rangeStart, rangeEnd]);
+  }, [searchTerm, filterType, filterCategoryId, filterPaymentMethodId, filterExpenseType, filterExpenseTypes, filterCategoryNames, filterMerchantId, filterSplit, sortConfig, rangeStart, rangeEnd]);
   const pagedTransactions = useMemo(
     () => filteredTransactions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
     [filteredTransactions, currentPage]
@@ -348,12 +390,15 @@ export default function TransactionsPage() {
     setSortConfig({ key, direction });
   };
 
-  const getSortIndicator = (key: SortableKeys) => {
-    if (sortConfig.key === key) {
-      return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
-    }
-    return '';
-  };
+  /**
+   * Rendered in a fixed-width slot so the column label stays put when the
+   * arrow appears — appending a glyph to the text made headers jump on sort.
+   */
+  const SortIndicator = ({ column }: { column: SortableKeys }) => (
+    <span className="ml-1 inline-block w-3 align-middle text-accent">
+      {sortConfig.key === column ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}
+    </span>
+  );
 
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) {
@@ -411,13 +456,26 @@ export default function TransactionsPage() {
           </CardHeader>
           <CardContent>
             <div className="mb-6 space-y-4">
-              <Input
-                type="text"
-                placeholder="Search transactions (e.g., 'Groceries', 'Salary')"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="search"
+                  placeholder="Search description, category or source…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  aria-label="Search transactions"
+                  className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
+                />
+                <Button
+                  variant={selectMode ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectMode(v => !v)}
+                  className="shrink-0 whitespace-nowrap text-xs"
+                  aria-pressed={selectMode}
+                >
+                  <CheckSquare className="mr-1.5 h-4 w-4" />
+                  {selectMode ? 'Done' : 'Select'}
+                </Button>
+              </div>
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="item-1">
                   <AccordionTrigger className="bg-muted/50 hover:bg-muted/70 px-4 rounded-md text-sm sm:text-base">
@@ -493,16 +551,18 @@ export default function TransactionsPage() {
               </div>
               <div className="flex items-center text-xs sm:text-sm text-muted-foreground">
                 <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                <span>Net Total: <strong className={cn("text-foreground", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>₹{filteredSummary.netAmount.toFixed(2)}</strong></span>
+                <span>Net Total: <strong className={cn("tabular-nums", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(filteredSummary.netAmount)}</strong></span>
               </div>
-              {(filterExpenseTypes.length > 0 || filterCategoryNames.length > 0) && (
+              {(filterExpenseTypes.length > 0 || filterCategoryNames.length > 0 || filterMerchantId) && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setFilterExpenseTypes([]); setFilterCategoryNames([]); }}
+                  onClick={() => { setFilterExpenseTypes([]); setFilterCategoryNames([]); setFilterMerchantId(null); }}
                   className="text-xs"
                 >
+                  <X className="mr-1 h-3 w-3" />
                   Clear KPI filter
+                  {filterMerchantId && ` · ${merchantLabel(filterMerchantId)}`}
                   {filterExpenseTypes.length > 0 && ` · ${filterExpenseTypes.join(', ')}`}
                   {filterCategoryNames.length > 0 && ` · ${filterCategoryNames.join(', ')}`}
                 </Button>
@@ -553,11 +613,11 @@ export default function TransactionsPage() {
                           className="mt-1"
                         />
                         <div className="flex-1">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">{t.description}</p>
+                          <p className="line-clamp-2 text-sm font-semibold text-foreground" title={t.description}>{t.description}</p>
                           <p className="text-xs text-muted-foreground">{format(toCalendarDate(t.date) || new Date(t.date), "dd MMM, yyyy")}</p>
                         </div>
-                        <p className={cn("text-lg font-bold", t.type === 'income' ? 'text-green-500' : 'text-red-500')}>
-                          {t.type === 'income' ? '+' : '-'}₹{t.amount.toFixed(2)}
+                        <p className={cn("shrink-0 text-base font-bold tabular-nums", t.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500')}>
+                          {t.type === 'income' ? '+' : '−'}{formatCurrency(t.amount)}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pl-8">
@@ -597,26 +657,31 @@ export default function TransactionsPage() {
                 )}
               </div>
               {/* Desktop View - Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <Table>
-                  <TableHeader>
+              <div className="hidden md:block">
+                {/* table-fixed + explicit widths: with auto layout the browser
+                    collapsed Description to ~130px and wrapped a grocery list
+                    into 15 lines, making rows 300px tall while whitespace sat
+                    unused to the right. */}
+                <Table className="table-fixed">
+                  <TableHeader className="sticky top-14 z-10 bg-card md:top-16">
                     <TableRow className="hover:bg-primary/10 border-b-primary/30">
-                      <TableHead className="w-12 px-2">
-                        <Checkbox
-                          checked={filteredTransactions.length > 0 && selectedTransactionIds.size === filteredTransactions.length}
-                          onCheckedChange={toggleSelectAll}
-                          aria-label="Select all transactions"
-                          disabled={filteredTransactions.length === 0}
-                        />
-                      </TableHead>
-                      <TableHead onClick={() => requestSort('date')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Date{getSortIndicator('date')}</TableHead>
-                      <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Description{getSortIndicator('description')}</TableHead>
-                      <TableHead onClick={() => requestSort('type')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Type{getSortIndicator('type')}</TableHead>
-                      <TableHead onClick={() => requestSort('amount')} className="text-right cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Amount (₹){getSortIndicator('amount')}</TableHead>
-                      <TableHead onClick={() => requestSort('categoryName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Category/Source{getSortIndicator('categoryName')}</TableHead>
-                      <TableHead onClick={() => requestSort('paymentMethodName')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm">Payment Method{getSortIndicator('paymentMethodName')}</TableHead>
-                      <TableHead onClick={() => requestSort('expenseType')} className="cursor-pointer text-muted-foreground font-semibold hover:text-accent text-xs sm:text-sm whitespace-nowrap">Expense Type{getSortIndicator('expenseType')}</TableHead>
-                      <TableHead className="text-muted-foreground font-semibold text-xs sm:text-sm whitespace-nowrap">Actions</TableHead>
+                      {selectMode && (
+                        <TableHead className="w-10 px-2">
+                          <Checkbox
+                            checked={filteredTransactions.length > 0 && selectedTransactionIds.size === filteredTransactions.length}
+                            onCheckedChange={toggleSelectAll}
+                            aria-label="Select all transactions"
+                            disabled={filteredTransactions.length === 0}
+                          />
+                        </TableHead>
+                      )}
+                      <TableHead onClick={() => requestSort('date')} className="w-[92px] cursor-pointer whitespace-nowrap text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Date<SortIndicator column="date" /></TableHead>
+                      <TableHead onClick={() => requestSort('description')} className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Description<SortIndicator column="description" /></TableHead>
+                      <TableHead onClick={() => requestSort('amount')} className="w-[120px] cursor-pointer whitespace-nowrap text-right text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Amount<SortIndicator column="amount" /></TableHead>
+                      <TableHead onClick={() => requestSort('categoryName')} className="w-[130px] cursor-pointer text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Category<SortIndicator column="categoryName" /></TableHead>
+                      <TableHead onClick={() => requestSort('paymentMethodName')} className="w-[140px] cursor-pointer text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Payment<SortIndicator column="paymentMethodName" /></TableHead>
+                      <TableHead onClick={() => requestSort('expenseType')} className="w-[100px] cursor-pointer whitespace-nowrap text-xs font-semibold text-muted-foreground hover:text-accent sm:text-sm">Type<SortIndicator column="expenseType" /></TableHead>
+                      <TableHead className="w-[60px] text-right text-xs font-semibold text-muted-foreground sm:text-sm"><span className="sr-only">Actions</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
@@ -625,109 +690,117 @@ export default function TransactionsPage() {
                         <motion.tr
                           key={transaction.id}
                           variants={listItemVariants}
-                          layout
-                          className={cn("hover:bg-accent/10 border-b-primary/20 text-xs sm:text-sm", selectedTransactionIds.has(transaction.id) && "bg-primary/10 dark:bg-primary/20")}
+                          className={cn(
+                            "group border-b-primary/20 text-xs hover:bg-accent/10 sm:text-sm",
+                            selectedTransactionIds.has(transaction.id) && "bg-primary/10 dark:bg-primary/20"
+                          )}
                         >
-                          <TableCell className="px-2">
-                            <Checkbox
-                              checked={selectedTransactionIds.has(transaction.id)}
-                              onCheckedChange={() => toggleSelectTransaction(transaction.id)}
-                              aria-label={`Select transaction ${transaction.description}`}
-                            />
+                          {selectMode && (
+                            <TableCell className="px-2">
+                              <Checkbox
+                                checked={selectedTransactionIds.has(transaction.id)}
+                                onCheckedChange={() => toggleSelectTransaction(transaction.id)}
+                                aria-label={`Select transaction ${transaction.description}`}
+                              />
+                            </TableCell>
+                          )}
+                          <TableCell className="whitespace-nowrap align-top text-foreground/90 tabular-nums">
+                            {format(toCalendarDate(transaction.date) || new Date(transaction.date), "dd MMM yy")}
                           </TableCell>
-                          <TableCell className="text-foreground/90 whitespace-nowrap">{format(toCalendarDate(transaction.date) || new Date(transaction.date), "dd MMM, yy")}</TableCell>
-                          <TableCell className="font-medium text-foreground min-w-[150px]">{transaction.description}</TableCell>
-                          <TableCell>
-                            <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}
-                                  className={cn(
-                                    "text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5",
-                                    transaction.type === 'income' ?
-                                    'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/30' :
-                                    'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 hover:bg-red-500/30'
-                                  )}>
-                              {transaction.type === 'income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
-                              {transaction.type}
-                            </Badge>
+                          <TableCell className="align-top font-medium text-foreground">
+                            {/* Clamped to two lines with the full text on hover:
+                                a 200-character grocery list is a detail, not a
+                                reason for a 300px-tall row. */}
+                            <span className="line-clamp-2" title={transaction.description}>
+                              {transaction.description}
+                            </span>
+                            {transaction.isSplit && (
+                              <Badge variant="outline" className="mt-1 h-4 border-yellow-500/40 px-1 text-[10px] font-normal text-yellow-700 dark:text-yellow-400">
+                                split
+                              </Badge>
+                            )}
                           </TableCell>
-                          <TableCell className={`text-right font-semibold whitespace-nowrap ${transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toFixed(2)}
+                          <TableCell className={cn(
+                            "whitespace-nowrap text-right align-top font-semibold tabular-nums",
+                            transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          )}>
+                            {transaction.type === 'income' ? '+' : '−'}{formatCurrency(transaction.amount)}
                           </TableCell>
-                          <TableCell className="text-foreground/90 min-w-[120px]">{transaction.category?.name || transaction.source}</TableCell>
-                          <TableCell className="text-foreground/90 min-w-[120px]">{transaction.paymentMethod?.name || 'N/A'}</TableCell>
-                          <TableCell>
+                          <TableCell className="align-top text-foreground/90">
+                            <span className="line-clamp-1" title={transaction.category?.name || transaction.source}>
+                              {transaction.category?.name || transaction.source}
+                            </span>
+                          </TableCell>
+                          <TableCell className="align-top text-foreground/90">
+                            <span className="line-clamp-1" title={transaction.paymentMethod?.name}>
+                              {transaction.paymentMethod?.name || '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="align-top">
                             {transaction.type === 'expense' && transaction.expenseType && (
                               <Badge
-                                variant={'outline'}
+                                variant="outline"
                                 className={cn(
-                                  `capitalize border-opacity-50 text-xs px-1.5 py-0.5 sm:px-2 sm:py-0.5`,
+                                  "px-1.5 py-0.5 text-xs capitalize border-opacity-50",
                                   transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
                                   transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
-                                  transaction.expenseType === 'investment' ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40' :
-                                  'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/40'
+                                  'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40'
                                 )}
                               >
                                 {transaction.expenseType.replace('_expense', '')}
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="space-x-0.5 sm:space-x-1 whitespace-nowrap">
-                            {transaction.type === 'expense' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={cn(
-                                  "h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-accent",
-                                  transaction.isSplit && "text-yellow-400 bg-yellow-900/40 hover:bg-yellow-800/40 hover:text-yellow-300"
-                                )}
-                                onClick={() => handleToggleSplit(transaction)}
-                                disabled={isTogglingSplit === transaction.id}
-                              >
-                                {isTogglingSplit === transaction.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                                ) : (
-                                  <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                )}
-                                <span className="sr-only">Toggle Split Status</span>
-                              </Button>
-                            )}
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
-                              <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(transaction)} className="text-accent hover:text-accent/80 hover:bg-accent/10 h-7 w-7 sm:h-8 sm:w-8">
-                                <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                <span className="sr-only">Edit Transaction</span>
-                              </Button>
-                            </motion.div>
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="inline-block">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-400 hover:bg-red-500/10 h-7 w-7 sm:h-8 sm:w-8">
-                                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                  <span className="sr-only">Delete Transaction</span>
+                          <TableCell className="align-top text-right">
+                            {/* Three always-on icons per row was four targets of
+                                pure noise on every row. One menu, revealed on
+                                hover/focus, always reachable by keyboard. */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                                  aria-label={`Actions for ${transaction.description}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle className="text-accent">Are you sure you want to delete this transaction?</AlertDialogTitle>
-                                  <AlertDialogDescription className="text-muted-foreground">
-                                    This action cannot be undone. This will permanently remove the transaction: "{transaction.description}".
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteSingleTransaction(transaction.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
-                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    {isDeleting ? "Deleting..." : "Delete"}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                            </motion.div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem onSelect={() => setEditingTransaction(transaction)}>
+                                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                {transaction.type === 'expense' && (
+                                  <DropdownMenuItem
+                                    onSelect={() => handleToggleSplit(transaction)}
+                                    disabled={isTogglingSplit === transaction.id}
+                                  >
+                                    <Users className="mr-2 h-4 w-4" />
+                                    {transaction.isSplit ? 'Unmark split' : 'Mark as split'}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onSelect={(e) => { e.preventDefault(); setPendingDelete(transaction); }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </motion.tr>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
-                          No transactions found for {currentPeriodText}. Try adjusting your filters or adding a new transaction.
+                        <TableCell colSpan={selectMode ? 8 : 7} className="py-12 text-center">
+                          <p className="text-sm font-medium text-foreground">No transactions found</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Nothing matches your filters for {currentPeriodText}.
+                          </p>
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsAddingNew(true)}>
+                            <Plus className="mr-1.5 h-4 w-4" /> Add a transaction
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )}
@@ -801,7 +874,32 @@ export default function TransactionsPage() {
         );
       })()}
 
-      <div className="md:hidden fixed bottom-6 right-6 z-40">
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" /> Delete this transaction?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This permanently removes “{pendingDelete?.description}”
+              {pendingDelete && ` (${formatCurrency(pendingDelete.amount)})`}. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (pendingDelete) handleDeleteSingleTransaction(pendingDelete.id); setPendingDelete(null); }}
+              disabled={isDeleting}
+              className="bg-red-600 text-primary-foreground hover:bg-red-700/80"
+            >
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="fixed bottom-20 right-4 z-40 md:hidden">
         <Button
           onClick={() => setIsAddingNew(true)}
           className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"

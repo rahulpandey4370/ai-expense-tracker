@@ -15,6 +15,12 @@ interface DateSelectionContextType {
   handleMonthChange: (monthValue: string) => void;
   handleYearChange: (yearValue: string) => void;
   handleSetToCurrentMonth: () => void;
+  /** Step the period by whole months; negative goes back. Rolls over years. */
+  stepMonth: (delta: number) => void;
+  /** True when the selected period is the calendar month we're actually in. */
+  isCurrentMonth: boolean;
+  /** Guard for the ›  stepper — there's no data in the future. */
+  canStepForward: boolean;
 }
 
 const DateSelectionContext = createContext<DateSelectionContextType | undefined>(undefined);
@@ -46,6 +52,25 @@ export function DateSelectionProvider({ children }: { children: ReactNode }) {
     setSelectedDate(new Date());
   }, []);
 
+  /**
+   * Month-at-a-time navigation. Browsing "last month" used to mean opening a
+   * dropdown, and crossing a year boundary meant opening two — this makes it
+   * one tap and handles the Dec→Jan rollover for free.
+   */
+  const stepMonth = useCallback((delta: number) => {
+    setSelectedDate(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  }, []);
+
+  const { isCurrentMonth, canStepForward } = useMemo(() => {
+    const now = new Date();
+    const isCurrent = selectedMonth === now.getMonth() && selectedYear === now.getFullYear();
+    // Allow forward stepping only up to the present month.
+    const beforeNow =
+      selectedYear < now.getFullYear() ||
+      (selectedYear === now.getFullYear() && selectedMonth < now.getMonth());
+    return { isCurrentMonth: isCurrent, canStepForward: beforeNow };
+  }, [selectedMonth, selectedYear]);
+
   const value = {
     selectedDate,
     selectedMonth,
@@ -55,6 +80,9 @@ export function DateSelectionProvider({ children }: { children: ReactNode }) {
     handleMonthChange,
     handleYearChange,
     handleSetToCurrentMonth,
+    stepMonth,
+    isCurrentMonth,
+    canStepForward,
   };
 
   return (

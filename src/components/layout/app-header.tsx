@@ -1,99 +1,67 @@
-
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useDateSelection } from "@/contexts/DateSelectionContext";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { CalendarDays, CalendarIcon } from "lucide-react";
 import { usePathname } from 'next/navigation';
 import { ModelSelector } from '../model-selector';
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { PeriodPicker } from '../period-picker';
+import { cn } from '@/lib/utils';
+
+/**
+ * Routes where the global month/year selection actually changes what's on
+ * screen. Everywhere else the control was still rendered, silently doing
+ * nothing — Savings, Portfolio, Settings and Split Expenses aren't
+ * month-scoped, so offering a month picker there is a lie about the UI.
+ */
+// /reports is deliberately absent: it has its own period selector that also
+// offers "Annual", so showing the header one too gave two controls for the
+// same idea that disagreed with each other.
+const PERIOD_SCOPED_ROUTES = ['/', '/transactions', '/recurring'];
+
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/transactions': 'Transactions',
+  '/recurring': 'Recurring',
+  '/savings': 'Savings',
+  '/portfolio': 'Portfolio',
+  '/reports': 'Reports',
+  '/yearly-overview': 'Yearly Overview',
+  '/split-expenses': 'Split Expenses',
+  '/settings': 'Settings',
+  '/chatbot': 'AI Chatbot',
+  '/ai-playground': 'AI Playground',
+  '/about': 'About',
+};
 
 export default function AppHeader() {
-  const { 
-    selectedMonth, 
-    selectedYear, 
-    years, 
-    monthNamesList, 
-    handleMonthChange, 
-    handleYearChange, 
-    handleSetToCurrentMonth 
-  } = useDateSelection();
-
   const pathname = usePathname();
   const isDemoRoute = pathname.startsWith('/demo');
-
-  const formattedDate = `${monthNamesList[selectedMonth].substring(0,3)} ${selectedYear}`;
-
-  const dateSelectionControls = (
-    <>
-      <Select value={selectedMonth.toString()} onValueChange={handleMonthChange}>
-        <SelectTrigger className="w-[110px] h-8 text-xs sm:w-[120px] sm:text-sm">
-          <SelectValue placeholder="Month" />
-        </SelectTrigger>
-        <SelectContent>
-          {monthNamesList.map((month, index) => (
-            <SelectItem key={month} value={index.toString()} className="text-xs sm:text-sm">
-              {month.substring(0,3)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
-        <SelectTrigger className="w-[75px] h-8 text-xs sm:w-[85px] sm:text-sm">
-          <SelectValue placeholder="Year" />
-        </SelectTrigger>
-        <SelectContent>
-          {years.map(year => (
-            <SelectItem key={year} value={year.toString()} className="text-xs sm:text-sm">
-              {year}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button onClick={handleSetToCurrentMonth} variant="outline" size="icon" className="h-8 w-8">
-        <CalendarDays className="h-3.5 w-3.5" />
-        <span className="sr-only">Current Month</span>
-      </Button>
-    </>
-  );
+  const showPeriod = PERIOD_SCOPED_ROUTES.includes(pathname);
+  const title = PAGE_TITLES[pathname] ?? (pathname.startsWith('/portfolio') ? 'Portfolio' : '');
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-x-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
-      <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-x-3 border-b bg-background/85 px-3 backdrop-blur-sm md:h-16 md:px-6">
+      <div className="flex min-w-0 items-center gap-2">
         <SidebarTrigger />
-        
-        {/* Date Selector for Mobile (in Popover) */}
-        <div className="md:hidden">
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("h-8 w-auto min-w-[90px] justify-start text-left font-normal")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formattedDate}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-2 space-y-2" align="start">
-                    <div className="text-sm font-semibold text-center text-primary p-2">Select Period</div>
-                    <div className="flex items-center gap-2">
-                        {dateSelectionControls}
-                    </div>
-                </PopoverContent>
-            </Popover>
-        </div>
-
-        {/* Date Selector for Desktop */}
-        <div className="hidden md:flex items-center gap-1.5">
-          {dateSelectionControls}
-        </div>
-
+        {/* The header never used to say where you were. On a phone the bottom
+            nav already answers that, and the period control needs the room —
+            so the title yields below `sm`. */}
+        {title && (
+          <h1 className={cn(
+            'truncate text-sm font-semibold text-foreground md:text-base',
+            showPeriod && 'hidden sm:block'
+          )}>
+            {title}
+          </h1>
+        )}
       </div>
-      
-      <div className="flex flex-1 items-center justify-end gap-2">
-        <ThemeToggle />
+
+      <div className="flex shrink-0 items-center gap-1 md:gap-2">
+        {showPeriod && <PeriodPicker />}
+        {/* Theme is a set-once preference — it doesn't earn a permanent slot
+            in a 390px header. It stays reachable from Settings › Appearance. */}
+        <div className="hidden sm:block"><ThemeToggle /></div>
         {!isDemoRoute && <ModelSelector />}
         {!isDemoRoute && <UserNav />}
       </div>

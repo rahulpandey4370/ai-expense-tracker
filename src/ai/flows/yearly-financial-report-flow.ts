@@ -35,6 +35,11 @@ Output MUST be valid JSON conforming to the supplied schema. Use markdown inside
 Transactions (when present) include: \`type\` ('income'|'expense'), \`amount\`, \`date\`, \`description\`, \`categoryName\`, \`paymentMethodName\`, \`expenseType\` (expenses only), \`source\` (income only). When \`type\` is set, use it directly — do NOT re-infer from descriptions.
 
 ## MONTHLY SUMMARIES
+Each month carries \`needs\`, \`wants\`, \`investments\` and \`uncategorized\`.
+\`uncategorized\` is expense spend with no Needs/Wants/Investment tag set, so
+\`needs + wants + investments + uncategorized = totalExpenses\`. Do NOT treat
+uncategorized as Needs, and if it is a material share of a month's spend, say so
+and recommend tagging those transactions rather than silently ignoring them.
 \`\`\`json
 {{{json monthlySummaries}}}
 \`\`\`

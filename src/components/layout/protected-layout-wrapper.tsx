@@ -1,6 +1,7 @@
 
 "use client";
 
+import { MotionConfig } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -9,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/layout/app-sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 import AppHeader from '@/components/layout/app-header';
+import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 
 export default function ProtectedLayoutWrapper({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoadingAuth } = useAuth();
@@ -38,13 +40,18 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
   // If it's a demo route, render the main app layout without checking auth
   if (isDemoRoute) {
     return (
+      <MotionConfig reducedMotion="user">
       <SidebarProvider defaultOpen>
         <AppSidebar isDemoMode={true} />
-        <SidebarInset>
+        <SidebarInset className="min-w-0">
           <AppHeader />
-          {children}
+          {/* Bottom padding clears the fixed mobile nav so the last card
+              isn't permanently hidden behind it. */}
+          <div className="min-w-0 pb-16 md:pb-0">{children}</div>
+          <MobileBottomNav />
         </SidebarInset>
       </SidebarProvider>
+      </MotionConfig>
     );
   }
 
@@ -58,12 +65,15 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
 
   // If authenticated and not on the login page, render the main app layout
   return (
+    <MotionConfig reducedMotion="user">
     <SidebarProvider defaultOpen>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <AppHeader />
-        {children}
+        <div className="min-w-0 pb-16 md:pb-0">{children}</div>
+        <MobileBottomNav />
       </SidebarInset>
     </SidebarProvider>
+    </MotionConfig>
   );
 }

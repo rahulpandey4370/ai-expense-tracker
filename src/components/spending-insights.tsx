@@ -118,6 +118,10 @@ export function SpendingInsights({
   const { selectedModel } = useAIModel();
 
   // Carousel state: [index, direction]
+  // Drives the card's height: only reserve the tall panel once there is
+  // something (or a spinner, or an error) to put in it.
+  const hasContent = insights !== null || isLoading || error !== null;
+
   const [[currentInsightIndex, direction], setCurrentInsightIndex] = useState<
     [number, number]
   >([0, 0]);
@@ -234,7 +238,9 @@ export function SpendingInsights({
 
   return (
     <motion.div variants={cardVariants} initial="hidden" animate="visible">
-      <Card className={cn("shadow-lg flex flex-col h-[500px]", glowClass)}>
+      {/* Collapses to the height of its controls until an analysis has been
+          run, instead of reserving 500px for an empty panel. */}
+      <Card className={cn("flex flex-col", hasContent ? "h-[500px]" : "min-h-[300px]", glowClass)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Lightbulb className="h-6 w-6 text-accent" /> AI Spending Insights

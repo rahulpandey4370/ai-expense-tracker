@@ -19,6 +19,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 import { mockTransactions, mockCategories, mockPaymentMethods } from '@/lib/mock-data';
 import { isSameCalendarMonth } from '@/lib/date-utils';
+import { formatCurrencyWhole, formatCurrencyCompact, formatPercent } from '@/lib/format';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -169,18 +170,20 @@ export default function DemoDashboardPage() {
         </AlertDescription>
       </Alert>
       <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
+        className="grid grid-cols-2 gap-3 lg:grid-cols-3"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Total Income" 
-            value={`₹${monthlyMetrics.income.toFixed(2)}`} 
-            icon={Banknote} 
-            description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
-            className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-700/50 dark:bg-green-900/20 dark:hover:bg-green-800/30"
+          <KpiCard
+            title="Total Income"
+            value={formatCurrencyWhole(monthlyMetrics.income)}
+            isVisible
+            icon={Banknote}
+            tone="income"
+            emphasis
+            description="All earnings this month"
             kpiKey="totalIncome"
             insightText="Total earnings received this month from all sources."
             selectedMonth={selectedMonth}
@@ -188,100 +191,112 @@ export default function DemoDashboardPage() {
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Core Expenses" 
-            value={`₹${monthlyMetrics.coreExpenses.toFixed(2)}`} 
-            icon={TrendingDown} 
-            description="Needs & Wants this month"
-            valueClassName="text-red-500 dark:text-red-400" 
-            className="border-red-500/30 bg-red-500/10 hover:bg-red-500/20 dark:border-red-700/50 dark:bg-red-900/20 dark:hover:bg-red-800/30"
+          <KpiCard
+            title="Core Expenses"
+            value={formatCurrencyWhole(monthlyMetrics.coreExpenses)}
+            isVisible
+            icon={TrendingDown}
+            tone="expense"
+            emphasis
+            description="Needs & wants"
             kpiKey="coreExpenses"
             insightText="Spending on daily necessities and discretionary items."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
         </motion.div>
-         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Total Investments" 
-            value={`₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
-            icon={Landmark} 
-            description="Dedicated investment outflows"
-            valueClassName="text-blue-500 dark:text-blue-400"
-            className="border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 dark:border-blue-700/50 dark:bg-blue-900/20 dark:hover:bg-blue-800/30"
+        <motion.div variants={itemVariants} className="col-span-2 lg:col-span-1">
+          <KpiCard
+            title="Cash Savings"
+            value={formatCurrencyWhole(monthlyMetrics.netMonthlyCashflow)}
+            isVisible
+            icon={Wallet}
+            tone="savings"
+            emphasis
+            description={`${formatPercent(monthlyMetrics.cashSavingsPercentage)} of income kept`}
+            valueClassName={monthlyMetrics.netMonthlyCashflow >= 0
+              ? "text-green-600 dark:text-green-500"
+              : "text-red-600 dark:text-red-500"}
+            kpiKey="cashSavings"
+            insightText="Actual cash saved after all income and all outgoings, including investments."
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+          />
+        </motion.div>
+      </motion.div>
+
+      <motion.div
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants}>
+          <KpiCard
+            title="Investments"
+            value={formatCurrencyWhole(monthlyMetrics.totalInvestments)}
+            isVisible
+            icon={Landmark}
+            tone="investment"
+            description="Invested this month"
             kpiKey="totalInvestmentsAmount"
-            insightText="Outflows towards investment assets like stocks, mutual funds, etc."
+            insightText="Outflows towards investment assets like stocks and mutual funds."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Total Outgoings" 
-            value={`₹${monthlyMetrics.totalOutgoings.toFixed(2)}`} 
-            icon={Sigma} 
-            description={`Core: ₹${monthlyMetrics.coreExpenses.toFixed(0)} + Invest: ₹${monthlyMetrics.totalInvestments.toFixed(0)}`}
-            valueClassName="text-orange-500 dark:text-orange-400" 
-            className="border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 dark:border-orange-700/50 dark:bg-orange-900/20 dark:hover:bg-orange-800/30"
+          <KpiCard
+            title="Total Outgoings"
+            value={formatCurrencyWhole(monthlyMetrics.totalOutgoings)}
+            isVisible
+            icon={Sigma}
+            tone="outgoings"
+            description="Expenses + investments"
             kpiKey="totalOutgoings"
-            insightText="Sum of all spending: daily expenses plus investments."
+            insightText="Sum of all money leaving your accounts."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-           <KpiCard
-            title="Cash Savings %"
-            value={`${monthlyMetrics.cashSavingsPercentage.toFixed(1)}%`}
-            icon={Percent}
-            description={`Of total income: ₹${monthlyMetrics.income.toFixed(0)}`}
-            valueClassName={monthlyMetrics.cashSavingsPercentage >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}
-            className="border-green-500/30 bg-green-500/10 hover:bg-green-500/20 dark:border-green-400/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
-            kpiKey="savingsPercentage" 
-            insightText="Percentage of income saved as cash after all expenses and investments."
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            secondaryTitle="Total Saved/Invested %"
-            secondaryValue={`${monthlyMetrics.totalSavingsAndInvestmentPercentage.toFixed(1)}%`}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Cashback/Interests" 
-            value={`₹${monthlyMetrics.totalCashbackInterestsDividends.toFixed(2)}`} 
-            icon={HandCoins} 
-            description={`${monthNamesList[selectedMonth]} ${selectedYear}`} 
-            className="border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 dark:border-yellow-700/50 dark:bg-yellow-900/20 dark:hover:bg-yellow-800/30"
-            kpiKey="cashbackInterests"
-            insightText="Extra income from rewards, interest, and dividends."
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Investment Rate %" 
-            value={`${monthlyMetrics.investmentPercentage.toFixed(1)}%`} 
-            icon={Target} 
-            description={`Amount: ₹${monthlyMetrics.totalInvestments.toFixed(2)}`} 
-            valueClassName="text-indigo-500 dark:text-indigo-400"
-            className="border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-800/30"
+          <KpiCard
+            title="Investment Rate"
+            value={formatPercent(monthlyMetrics.investmentPercentage)}
+            isVisible
+            icon={Target}
+            tone="investment"
+            description={`of ${formatCurrencyCompact(monthlyMetrics.income)} income`}
             kpiKey="investmentRate"
-            insightText="Percentage of total income allocated to investments."
+            insightText="Share of total income allocated to investments."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <KpiCard 
-            title="Cash Savings" 
-            value={`₹${monthlyMetrics.netMonthlyCashflow.toFixed(2)}`} 
-            icon={Wallet} 
-            description="Actual cash saved after all outgoings"
-            valueClassName={monthlyMetrics.netMonthlyCashflow >=0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"} 
-            className="border-green-600/30 bg-green-600/10 hover:bg-green-600/20 dark:border-green-500/50 dark:bg-green-800/20 dark:hover:bg-green-700/30"
-            kpiKey="cashSavings" 
-            insightText="Actual cash saved after all income and all outgoings (including investments)."
+          <KpiCard
+            title="Saved + Invested"
+            value={formatPercent(monthlyMetrics.totalSavingsAndInvestmentPercentage)}
+            isVisible
+            icon={Percent}
+            tone="savings"
+            description="of income retained"
+            kpiKey="savingsPercentage"
+            insightText="Share of income not consumed by needs and wants."
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+          />
+        </motion.div>
+        <motion.div variants={itemVariants} className="col-span-2 sm:col-span-1">
+          <KpiCard
+            title="Cashback & Interest"
+            value={formatCurrencyWhole(monthlyMetrics.totalCashbackInterestsDividends)}
+            isVisible
+            icon={HandCoins}
+            tone="rewards"
+            description="Rewards, interest, dividends"
+            kpiKey="cashbackInterests"
+            insightText="Extra income from card rewards, bank interest, and dividends."
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />

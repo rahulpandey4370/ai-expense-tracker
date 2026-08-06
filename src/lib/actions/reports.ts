@@ -7,6 +7,22 @@ import { type AIModel, type AITransactionForAnalysis, type MonthlySummary, type 
 import { getDefaultModelForTask } from "@/lib/task-models";
 import { getCalendarDateParts } from "@/lib/date-utils";
 import { getSupabase } from '@/lib/supabase';
+import { investmentCategoryNames } from '@/lib/finance-constants';
+import { createHash } from 'crypto';
+
+/**
+ * Stable fingerprint of the exact data a report was generated from.
+ *
+ * Sorted so an unrelated reordering doesn't force a regeneration, and built
+ * from every field the report reasons about — change an amount, a category, a
+ * date or a type and the hash moves, which correctly invalidates the cache.
+ */
+function fingerprintTransactions(txns: AITransactionForAnalysis[]): string {
+  const rows = txns
+    .map(t => [t.date, t.amount, t.type ?? '', t.categoryName ?? '', t.expenseType ?? '', t.description ?? ''].join('\u0001'))
+    .sort();
+  return createHash('sha1').update(`${rows.length}\u0002${rows.join('\u0003')}`).digest('hex');
+}
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -21,6 +37,8 @@ const FULL_YEAR_TXN_THRESHOLD = 800;
 const LARGEST_TXN_SAMPLE_SIZE = 200;
 
 export type StoredMonthlyReport = MonthlyFinancialReportOutput & {
+  /** Absent on reports cached before fingerprinting existed → regenerate once. */
+  dataFingerprint?: string;
   generatedAt: string; // ISO
   transactionCount: number;
 };
@@ -61,9 +79,10 @@ export async function getMonthlyReport(
 ): Promise<StoredMonthlyReport> {
   if (!options?.forceRegenerate) {
     const cached = await loadStoredMonthlyReport(month, year);
-    // Treat the cache as stale if the transaction count has changed (e.g., user
-    // added/edited/deleted transactions since the report was generated).
-    if (cached && cached.transactionCount === relevantTransactions.length) return cached;
+    // Count alone is not enough: editing an amount, category or date leaves the
+    // count unchanged, so a stale report with the OLD numbers was served as if
+    // it were current. Compare a fingerprint of the actual data instead.
+    if (cached && cached.dataFingerprint === fingerprintTransactions(relevantTransactions)) return cached;
   }
 
   if (relevantTransactions.length === 0) {
@@ -82,6 +101,7 @@ export async function getMonthlyReport(
     ...generated,
     generatedAt: new Date().toISOString(),
     transactionCount: relevantTransactions.length,
+    dataFingerprint: fingerprintTransactions(relevantTransactions),
   };
 
   // Best-effort persist; don't fail the whole call if storage write fails.
@@ -95,6 +115,8 @@ export async function getMonthlyReport(
 }
 
 export type StoredYearlyReport = YearlyFinancialReportOutput & {
+  /** Absent on reports cached before fingerprinting existed → regenerate once. */
+  dataFingerprint?: string;
   generatedAt: string;
   transactionCount: number;
 };
@@ -120,16 +142,20 @@ async function saveStoredYearlyReport(year: number, report: StoredYearlyReport):
   if (error) throw new Error(`Could not persist yearly report. Original error: ${error.message}`);
 }
 
-const INVESTMENT_CATEGORIES = new Set([
-  'Stocks', 'Mutual Funds', 'Recurring Deposit', 'Equity', 'Debt', 'Gold/Silver', 'US Stocks', 'Crypto',
-]);
+/**
+ * Sourced from the shared constants rather than re-listed here. This file used
+ * to hard-code its own copy of the same eight names, which meant a category
+ * added to the dashboard's definition of "investment" would silently not count
+ * in the AI report — the report and the on-screen table would disagree.
+ */
+const INVESTMENT_CATEGORIES = new Set<string>(investmentCategoryNames);
 
 function buildMonthlySummaries(txns: AITransactionForAnalysis[], year: number): MonthlySummary[] {
   const monthNamesArr = monthNames;
   const summaries: MonthlySummary[] = monthNamesArr.map((name, idx) => ({
     monthName: name, monthIndex: idx,
     totalIncome: 0, totalExpenses: 0,
-    needs: 0, wants: 0, investments: 0,
+    needs: 0, wants: 0, investments: 0, uncategorized: 0,
     transactionCount: 0,
     topCategories: [],
   }));
@@ -152,7 +178,11 @@ function buildMonthlySummaries(txns: AITransactionForAnalysis[], year: number): 
         || (t.categoryName ? INVESTMENT_CATEGORIES.has(t.categoryName) : false);
       if (isInvestment) s.investments += t.amount;
       else if (t.expenseType === 'want') s.wants += t.amount;
-      else s.needs += t.amount; // default unknown to needs
+      else if (t.expenseType === 'need') s.needs += t.amount;
+      // An expense with no expenseType is not a "need" — folding it in there
+      // silently inflated needs and made the AI's needs/wants split disagree
+      // with the rest of the app. Track it separately so the prompt can say so.
+      else s.uncategorized += t.amount;
       if (t.categoryName) {
         const map = perMonthCategoryAgg[m];
         const existing = map.get(t.categoryName) || { amount: 0, count: 0 };
@@ -182,7 +212,7 @@ export async function getYearlyReport(
 ): Promise<StoredYearlyReport> {
   if (!options?.forceRegenerate) {
     const cached = await loadStoredYearlyReport(year);
-    if (cached && cached.transactionCount === yearTxns.length) return cached;
+    if (cached && cached.dataFingerprint === fingerprintTransactions(yearTxns)) return cached;
   }
 
   if (yearTxns.length === 0) {
@@ -209,6 +239,7 @@ export async function getYearlyReport(
     ...generated,
     generatedAt: new Date().toISOString(),
     transactionCount: yearTxns.length,
+    dataFingerprint: fingerprintTransactions(yearTxns),
   };
 
   try {
