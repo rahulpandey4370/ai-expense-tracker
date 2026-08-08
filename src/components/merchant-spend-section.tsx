@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Store, ChevronDown, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import type { AppTransaction } from '@/lib/types';
-import { detectMerchant, MERCHANT_GROUP_LABELS, type MerchantGroup } from '@/lib/merchants';
+import { detectMerchant, MERCHANT_GROUP_LABELS, getMerchantBrand, type MerchantGroup } from '@/lib/merchants';
 import { formatCurrencyWhole, formatCurrencyCompact, formatDelta, percentChange, formatCount } from '@/lib/format';
 import { isSameCalendarMonth } from '@/lib/date-utils';
 import { netAmount } from '@/lib/split-utils';
@@ -132,40 +132,70 @@ export function MerchantSpendSection({
       )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         <AnimatePresence initial={false}>
-          {visible.map((m, i) => (
-            <motion.button
-              key={m.id}
-              type="button"
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, delay: Math.min(i, INITIAL_VISIBLE) * 0.02 }}
-              onClick={() => handleDrillDown(m)}
-              aria-label={`${m.name}: ${formatCurrencyWhole(m.total)} across ${m.count} transactions. View transactions.`}
-              className={cn(
-                'group flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left',
-                'transition-colors hover:border-accent/50 hover:bg-accent/5',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
-              )}
-            >
-              <div className="flex items-start justify-between gap-1">
-                <span className="truncate text-xs font-medium text-muted-foreground" title={m.name}>
-                  {m.name}
+          {visible.map((m, i) => {
+            const brand = getMerchantBrand(m.id, m.group);
+            return (
+              <motion.button
+                key={m.id}
+                type="button"
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18, delay: Math.min(i, INITIAL_VISIBLE) * 0.02 }}
+                onClick={() => handleDrillDown(m)}
+                aria-label={`${m.name}: ${formatCurrencyWhole(m.total)} across ${m.count} transactions. View transactions.`}
+                // The brand's own colours are per-merchant data, not a fixed set
+                // of classes, so they come in as CSS variables and the classes
+                // below stay static (and Tailwind-purge-safe).
+                style={{
+                  '--brand-from': brand.from,
+                  '--brand-to': brand.to ?? brand.from,
+                  '--brand-fg': brand.fg,
+                  '--brand-fg-dark': brand.fgDark,
+                } as React.CSSProperties}
+                className={cn(
+                  'group relative flex flex-col gap-1 overflow-hidden rounded-lg border p-3 pl-4 text-left',
+                  'border-border bg-background/60',
+                  'transition-all hover:-translate-y-0.5 hover:shadow-md',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
+                )}
+              >
+                {/* Brand stripe — the two-stop gradient is what carries the
+                    two-tone brands (Flipkart, Rapido, Uber, Star Bazaar…). */}
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 w-1.5"
+                  style={{ background: 'linear-gradient(to bottom, var(--brand-from), var(--brand-to))' }}
+                />
+                {/* Barely-there wash of the brand colour, deepening on hover. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 opacity-[0.07] transition-opacity group-hover:opacity-[0.14]"
+                  style={{ background: 'linear-gradient(135deg, var(--brand-from), var(--brand-to))' }}
+                />
+
+                <div className="relative flex items-start justify-between gap-1">
+                  <span
+                    className="truncate text-xs font-semibold text-[color:var(--brand-fg)] dark:text-[color:var(--brand-fg-dark)]"
+                    title={m.name}
+                  >
+                    {m.name}
+                  </span>
+                  <ArrowUpRight className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
+                </div>
+
+                <span className="relative text-base font-semibold tabular-nums text-foreground sm:text-lg">
+                  {isVisible ? formatCurrencyCompact(m.total) : '•••••'}
                 </span>
-                <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-accent" />
-              </div>
 
-              <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
-                {isVisible ? formatCurrencyCompact(m.total) : '•••••'}
-              </span>
-
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span>{formatCount(m.count)} txn{m.count === 1 ? '' : 's'}</span>
-                {isVisible && <ChangeChip change={m.change} isNew={m.previousTotal === 0} />}
-              </div>
-            </motion.button>
-          ))}
+                <div className="relative flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span>{formatCount(m.count)} txn{m.count === 1 ? '' : 's'}</span>
+                  {isVisible && <ChangeChip change={m.change} isNew={m.previousTotal === 0} />}
+                </div>
+              </motion.button>
+            );
+          })}
         </AnimatePresence>
       </div>
 

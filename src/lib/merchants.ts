@@ -157,3 +157,106 @@ export const MERCHANT_GROUP_LABELS: Record<MerchantGroup, string> = {
   travel: 'Travel & rides',
   other: 'Other',
 };
+
+// ---------------------------------------------------------------------------
+// Brand identity
+//
+// A merchant tile is far easier to find at a glance when it wears the colour
+// you already associate with the brand. Each entry carries the brand's own
+// hues, kept as raw CSS colours (not Tailwind classes) so a tile can render a
+// two-stop gradient for the brands that genuinely have two.
+//
+// `fg` is chosen for contrast against a very light tint of `from`, and is
+// nudged darker than the true brand colour where the real one would fail
+// contrast on white (e.g. Rapido's yellow, Amazon's beige).
+// ---------------------------------------------------------------------------
+export interface MerchantBrand {
+  /** Primary brand colour — drives the accent bar and the tinted background. */
+  from: string;
+  /** Second colour for genuinely two-tone brands. Omit for single-colour ones. */
+  to?: string;
+  /** Readable text/icon colour in light mode. */
+  fg: string;
+  /** Readable text/icon colour in dark mode. */
+  fgDark: string;
+}
+
+const BRAND_COLORS: Record<string, MerchantBrand> = {
+  // --- Explicitly specified ---
+  swiggy:             { from: '#FC8019', fg: '#B4530A', fgDark: '#FDA05A' },
+  'swiggy-instamart': { from: '#FC8019', to: '#1E4FCC', fg: '#1E4FCC', fgDark: '#8FAEFF' },
+  zomato:             { from: '#E23744', fg: '#C0202D', fgDark: '#FF8590' },
+  blinkit:            { from: '#F8CB46', fg: '#8A6D08', fgDark: '#F5D372' },
+  zepto:              { from: '#7C3AED', fg: '#6D28D9', fgDark: '#C4A6FF' },
+  airtel:             { from: '#FF0000', fg: '#D40000', fgDark: '#FF7373' },
+  'act-fibernet':     { from: '#E31E24', to: '#FFFFFF', fg: '#C0181D', fgDark: '#FF8A8E' },
+  'star-bazaar':      { from: '#12A150', to: '#FC8019', fg: '#0E7C3E', fgDark: '#5FD68F' },
+  rapido:             { from: '#FFCE00', to: '#111111', fg: '#8A6D00', fgDark: '#FFDE59' },
+  uber:               { from: '#000000', to: '#FFFFFF', fg: '#1F2937', fgDark: '#E5E7EB' },
+  amazon:             { from: '#E3C9A0', fg: '#8A6A38', fgDark: '#E3C9A0' },
+  'amazon-now':       { from: '#E3C9A0', to: '#146EB4', fg: '#146EB4', fgDark: '#7FC0F5' },
+  flipkart:           { from: '#F9D423', to: '#2874F0', fg: '#2874F0', fgDark: '#8FBBFF' },
+  'flipkart-minutes': { from: '#800000', fg: '#800000', fgDark: '#E58A8A' },
+
+  // --- Everything else: the brand's actual colour where it has one ---
+  'zepto-cafe':       { from: '#7C3AED', to: '#C2410C', fg: '#6D28D9', fgDark: '#C4A6FF' },
+  'bigbasket-now':    { from: '#84C225', to: '#E4002B', fg: '#5C8A1A', fgDark: '#A9DE5F' },
+  bigbasket:          { from: '#84C225', fg: '#5C8A1A', fgDark: '#A9DE5F' },
+  dunzo:              { from: '#00D290', fg: '#028A60', fgDark: '#4FE3B8' },
+  eatsure:            { from: '#E8452C', fg: '#C22F1A', fgDark: '#FF9382' },
+  dominos:            { from: '#006491', to: '#E31837', fg: '#006491', fgDark: '#6FC2E8' },
+  kfc:                { from: '#A2242F', fg: '#A2242F', fgDark: '#F09099' },
+  mcdonalds:          { from: '#FFC72C', to: '#DA291C', fg: '#9A7200', fgDark: '#FFD65E' },
+  starbucks:          { from: '#00704A', fg: '#00704A', fgDark: '#4FBF95' },
+  'third-wave':       { from: '#4A2C2A', fg: '#4A2C2A', fgDark: '#D2A6A2' },
+  chaayos:            { from: '#F26B21', fg: '#C34F0F', fgDark: '#FBA46E' },
+  myntra:             { from: '#FF3F6C', fg: '#D81E4A', fgDark: '#FF8FAB' },
+  ajio:               { from: '#2C4152', fg: '#2C4152', fgDark: '#9DB6C9' },
+  nykaa:              { from: '#FC2779', fg: '#D40E5C', fgDark: '#FF7FAF' },
+  meesho:             { from: '#570D63', fg: '#570D63', fgDark: '#D19EDB' },
+  jiomart:            { from: '#0F3CC9', fg: '#0F3CC9', fgDark: '#8FAEFF' },
+  dmart:              { from: '#00953B', fg: '#00762F', fgDark: '#4FD183' },
+  'reliance-fresh':   { from: '#0057A8', fg: '#0057A8', fgDark: '#84BCF0' },
+  licious:            { from: '#D32F2F', fg: '#B71C1C', fgDark: '#FF8A80' },
+  'country-delight':  { from: '#00A650', fg: '#00803D', fgDark: '#5FD68F' },
+  milkbasket:         { from: '#4CAF50', fg: '#2E7D32', fgDark: '#8FD694' },
+  ola:                { from: '#B4D22B', to: '#000000', fg: '#6B7F0F', fgDark: '#CBE05F' },
+  irctc:              { from: '#1B5E9E', fg: '#1B5E9E', fgDark: '#8CBEE8' },
+  makemytrip:         { from: '#EB2226', to: '#0B7EC8', fg: '#0B7EC8', fgDark: '#7FC0F5' },
+  indigo:             { from: '#09209A', fg: '#09209A', fgDark: '#93A5F5' },
+  redbus:             { from: '#D84E55', fg: '#B93038', fgDark: '#F49AA0' },
+  bookmyshow:         { from: '#C4242B', fg: '#C4242B', fgDark: '#F09499' },
+  netflix:            { from: '#E50914', fg: '#C00810', fgDark: '#FF7B84' },
+  spotify:            { from: '#1DB954', fg: '#12833A', fgDark: '#5FE08D' },
+  hotstar:            { from: '#0F1B4C', to: '#E8117F', fg: '#1A2A6B', fgDark: '#A7B4E8' },
+  'prime-video':      { from: '#00A8E1', fg: '#0077A0', fgDark: '#6FD3F5' },
+  jio:                { from: '#0A2885', fg: '#0A2885', fgDark: '#93A5F5' },
+  cultfit:            { from: '#FF3E5F', fg: '#D91C3C', fgDark: '#FF8FA2' },
+  google:             { from: '#4285F4', to: '#EA4335', fg: '#1A73E8', fgDark: '#8AB4F8' },
+  yatra:              { from: '#EE2E24', fg: '#C81E15', fgDark: '#FF8C86' },
+};
+
+/**
+ * Fallback palette for merchants with no brand entry, keyed off the group so
+ * an unrecognised food place still reads as "food". Deterministic per id so a
+ * tile keeps the same colour between renders and sessions.
+ */
+const GROUP_FALLBACKS: Record<MerchantGroup, MerchantBrand[]> = {
+  quick_commerce: [{ from: '#8B5CF6', fg: '#6D28D9', fgDark: '#C4A6FF' }, { from: '#06B6D4', fg: '#0E7490', fgDark: '#67E8F9' }],
+  food_delivery:  [{ from: '#F97316', fg: '#C2410C', fgDark: '#FDBA74' }, { from: '#EF4444', fg: '#B91C1C', fgDark: '#FCA5A5' }],
+  ecommerce:      [{ from: '#3B82F6', fg: '#1D4ED8', fgDark: '#93C5FD' }, { from: '#6366F1', fg: '#4338CA', fgDark: '#A5B4FC' }],
+  grocery:        [{ from: '#22C55E', fg: '#15803D', fgDark: '#86EFAC' }, { from: '#84CC16', fg: '#4D7C0F', fgDark: '#BEF264' }],
+  travel:         [{ from: '#0EA5E9', fg: '#0369A1', fgDark: '#7DD3FC' }, { from: '#14B8A6', fg: '#0F766E', fgDark: '#5EEAD4' }],
+  other:          [{ from: '#64748B', fg: '#475569', fgDark: '#CBD5E1' }, { from: '#A855F7', fg: '#7E22CE', fgDark: '#D8B4FE' }],
+};
+
+/** The brand palette for a merchant tile. Always returns something usable. */
+export function getMerchantBrand(id: string, group: MerchantGroup = 'other'): MerchantBrand {
+  const exact = BRAND_COLORS[id];
+  if (exact) return exact;
+  const options = GROUP_FALLBACKS[group] ?? GROUP_FALLBACKS.other;
+  // Stable hash so the same merchant always lands on the same fallback colour.
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return options[hash % options.length];
+}

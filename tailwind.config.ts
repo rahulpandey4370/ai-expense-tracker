@@ -108,6 +108,27 @@ export default {
   				'50%': {
   					transform: 'scaleY(1)'
   				}
+  			},
+  			// Light sweeping across the primary CTA, so the one thing you're
+  			// meant to do every day keeps catching the eye.
+  			'shimmer': {
+  				'0%': {
+  					transform: 'translateX(-120%) skewX(-18deg)'
+  				},
+  				'100%': {
+  					transform: 'translateX(320%) skewX(-18deg)'
+  				}
+  			},
+  			// Soft outward halo on the same CTA.
+  			'glow-pulse': {
+  				'0%, 100%': {
+  					opacity: '0.35',
+  					transform: 'scale(1)'
+  				},
+  				'50%': {
+  					opacity: '0.7',
+  					transform: 'scale(1.02)'
+  				}
   			}
   		},
   		animation: {
@@ -115,7 +136,9 @@ export default {
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'collapsible-down': 'collapsible-down 0.2s ease-out',
   			'collapsible-up': 'collapsible-up 0.2s ease-out',
-  			'waveform': 'waveform 0.9s ease-in-out infinite'
+  			'waveform': 'waveform 0.9s ease-in-out infinite',
+  			'shimmer': 'shimmer 2.8s ease-in-out infinite',
+  			'glow-pulse': 'glow-pulse 2.8s ease-in-out infinite'
   		}
   	}
   },

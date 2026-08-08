@@ -71,6 +71,28 @@ const cashbackAndInterestAndDividendCategoryNames = ["Cashback", "Investment Inc
 
 const BALANCES_HIDDEN_KEY = 'finwise.balancesHidden';
 
+/**
+ * Payment-method tiles are colour-coded by instrument so a card, a UPI handle
+ * and cash are never confused at a glance. `highlight` is reserved for the
+ * card the user watches most closely (CC Tanshu), which is also pinned first.
+ */
+const PAYMENT_METHOD_TONES = {
+  highlight: { bar: 'bg-fuchsia-500', border: 'border-fuchsia-500/30', bg: 'bg-fuchsia-500/[0.06]', label: 'text-fuchsia-700 dark:text-fuchsia-400' },
+  card:      { bar: 'bg-indigo-500',  border: 'border-indigo-500/30',  bg: 'bg-indigo-500/[0.06]',  label: 'text-indigo-700 dark:text-indigo-400' },
+  upi:       { bar: 'bg-teal-500',    border: 'border-teal-500/30',    bg: 'bg-teal-500/[0.06]',    label: 'text-teal-700 dark:text-teal-400' },
+  cash:      { bar: 'bg-lime-500',    border: 'border-lime-500/30',    bg: 'bg-lime-500/[0.06]',    label: 'text-lime-700 dark:text-lime-400' },
+  other:     { bar: 'bg-slate-400',   border: 'border-slate-400/30',   bg: 'bg-slate-400/[0.06]',   label: 'text-slate-600 dark:text-slate-300' },
+} as const;
+
+/** Infers the instrument from the method's name, which is free text in settings. */
+function toneForPaymentMethod(name: string): keyof typeof PAYMENT_METHOD_TONES {
+  const n = name.toLowerCase();
+  if (n.includes('upi')) return 'upi';
+  if (n.includes('cash')) return 'cash';
+  if (n.startsWith('cc') || n.includes('credit') || n.includes('card')) return 'card';
+  return 'other';
+}
+
 export default function DashboardPage() {
   const [isClient, setIsClient] = useState(false);
   // Balances are visible by default. Landing on your own finance dashboard and
@@ -251,6 +273,13 @@ export default function DashboardPage() {
     return { lastMonthCoreExpenses, lastMonthSpendingByCategory };
   }, [transactions, selectedDate]);
 
+  // The card the user watches most closely: pinned first and given its own
+  // colour so it stands out from the other instruments.
+  const tanshuCardId = useMemo(
+    () => paymentMethods.find(pm => pm.name.toLowerCase().includes('tanshu'))?.id,
+    [paymentMethods]
+  );
+
   // Per-card spend this month, gross (a card statement counts every charge on
   // it, mine or not) — CC Tanshu pinned first since it's the one most watched.
   const paymentMethodMonthly = useMemo(() => {
@@ -273,12 +302,11 @@ export default function DashboardPage() {
       totals.set(t.paymentMethod.id, entry);
     }
 
-    const tanshu = paymentMethods.find(pm => pm.name.toLowerCase().includes('tanshu'));
     return [...totals.entries()]
       .map(([id, v]) => ({ id, ...v, change: percentChange(v.current, v.previous) }))
       .filter(v => v.current > 0)
-      .sort((a, b) => (a.id === tanshu?.id ? -1 : b.id === tanshu?.id ? 1 : b.current - a.current));
-  }, [currentMonthTransactions, transactions, selectedDate, paymentMethods]);
+      .sort((a, b) => (a.id === tanshuCardId ? -1 : b.id === tanshuCardId ? 1 : b.current - a.current));
+  }, [currentMonthTransactions, transactions, selectedDate, tanshuCardId]);
 
   // What others charged on my cards this month, and how much of that is still
   // unsettled across all time — the two numbers that answer "am I owed money?".
@@ -497,81 +525,107 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* Secondary KPI groups — collapsed by default, right under the main
-            numbers rather than buried at the bottom of the page. */}
-        <div className="space-y-3">
-          <CollapsibleKpiGroup id="merchants" title="Where your money went" icon={<Store className="h-4 w-4 text-accent" />}>
-            <MerchantSpendSection
-              transactions={transactions}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              selectedMonthName={monthNamesList[selectedMonth]}
-              isVisible={kpisVisible}
-              bare
-            />
-          </CollapsibleKpiGroup>
-
-          <CollapsibleKpiGroup
-            id="payment-methods"
-            title="Cards & Payment Methods"
-            icon={<CreditCard className="h-4 w-4 text-accent" />}
-            badge={paymentMethodMonthly.length || undefined}
-          >
-            {paymentMethodMonthly.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No card or payment method activity this month.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {paymentMethodMonthly.map(pm => (
+        {/* Secondary KPI groups — one icon row, one panel. Closed by default;
+            these are supporting detail, not the headline. */}
+        <CollapsibleKpiGroup
+          panels={[
+            {
+              id: 'merchants',
+              title: 'Where your money went',
+              icon: <Store className="h-4 w-4" />,
+              activeClassName: 'text-violet-600 dark:text-violet-400',
+              content: (
+                <MerchantSpendSection
+                  transactions={transactions}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
+                  selectedMonthName={monthNamesList[selectedMonth]}
+                  isVisible={kpisVisible}
+                  bare
+                />
+              ),
+            },
+            {
+              id: 'payment-methods',
+              title: 'Cards & payment methods',
+              icon: <CreditCard className="h-4 w-4" />,
+              activeClassName: 'text-sky-600 dark:text-sky-400',
+              badge: paymentMethodMonthly.length || undefined,
+              content:
+                paymentMethodMonthly.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No card or payment method activity this month.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {paymentMethodMonthly.map(pm => {
+                      const tone = PAYMENT_METHOD_TONES[pm.id === tanshuCardId ? 'highlight' : toneForPaymentMethod(pm.name)];
+                      return (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => router.push(`/transactions?month=${selectedMonth}&year=${selectedYear}&type=expense&paymentMethodId=${pm.id}`)}
+                          className={cn(
+                            'group relative flex flex-col gap-1 overflow-hidden rounded-lg border p-3 pl-4 text-left',
+                            'transition-all hover:-translate-y-0.5 hover:shadow-md',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
+                            tone.border, tone.bg
+                          )}
+                        >
+                          <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', tone.bar)} />
+                          <span className={cn('truncate text-xs font-semibold', tone.label)} title={pm.name}>
+                            {pm.name}
+                          </span>
+                          <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
+                            {kpisVisible ? formatCurrencyCompact(pm.current) : '•••••'}
+                          </span>
+                          {kpisVisible && pm.change !== null && (
+                            <span className={cn('text-[11px]', pm.change > 0 ? 'text-red-500' : pm.change < 0 ? 'text-green-500' : 'text-muted-foreground')}>
+                              {formatDelta(pm.change)} vs last month
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ),
+            },
+            {
+              id: 'reimbursements',
+              title: 'Reimbursements',
+              icon: <HeartHandshake className="h-4 w-4" />,
+              activeClassName: 'text-emerald-600 dark:text-emerald-400',
+              content: (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
-                    key={pm.id}
                     type="button"
-                    onClick={() => router.push(`/transactions?month=${selectedMonth}&year=${selectedYear}&type=expense&paymentMethodId=${pm.id}`)}
-                    className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                    onClick={() => router.push('/split-expenses')}
+                    className="group relative flex flex-col gap-1 overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-3 pl-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
                   >
-                    <span className="truncate text-xs font-medium text-muted-foreground" title={pm.name}>{pm.name}</span>
-                    <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
-                      {kpisVisible ? formatCurrencyCompact(pm.current) : '•••••'}
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-amber-500" />
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Spent by others on my card</span>
+                    <span className="text-lg font-semibold tabular-nums text-foreground">
+                      {kpisVisible ? formatCurrencyWhole(reimbursements.spentByOthersThisMonth) : '•••••'}
                     </span>
-                    {kpisVisible && pm.change !== null && (
-                      <span className={cn("text-[11px]", pm.change > 0 ? "text-red-500" : pm.change < 0 ? "text-green-500" : "text-muted-foreground")}>
-                        {formatDelta(pm.change)} vs last month
-                      </span>
-                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {kpisVisible ? `${formatCurrencyWhole(reimbursements.openThisMonth)} still unsettled` : ' '}
+                    </span>
                   </button>
-                ))}
-              </div>
-            )}
-          </CollapsibleKpiGroup>
-
-          <CollapsibleKpiGroup id="reimbursements" title="Reimbursements" icon={<HeartHandshake className="h-4 w-4 text-accent" />}>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => router.push('/split-expenses')}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-              >
-                <span className="text-xs font-medium text-muted-foreground">Spent by others on my card this month</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">
-                  {kpisVisible ? formatCurrencyWhole(reimbursements.spentByOthersThisMonth) : '•••••'}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  {kpisVisible ? `${formatCurrencyWhole(reimbursements.openThisMonth)} still unsettled` : ' '}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/split-expenses')}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-              >
-                <span className="text-xs font-medium text-muted-foreground">Total open receivables</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">
-                  {kpisVisible ? formatCurrencyWhole(reimbursements.openAllTime) : '•••••'}
-                </span>
-                <span className="text-[11px] text-muted-foreground">Across all unsettled splits</span>
-              </button>
-            </div>
-          </CollapsibleKpiGroup>
-        </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/split-expenses')}
+                    className="group relative flex flex-col gap-1 overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] p-3 pl-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                  >
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500" />
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Total open receivables</span>
+                    <span className="text-lg font-semibold tabular-nums text-foreground">
+                      {kpisVisible ? formatCurrencyWhole(reimbursements.openAllTime) : '•••••'}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">Across all unsettled splits</span>
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+        />
 
          {(kpisVisible && monthlyMetrics.totalOutgoings > monthlyMetrics.income) && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -613,14 +667,35 @@ export default function DashboardPage() {
               <TransactionForm onTransactionAdded={() => { handleDataRefresh(); setFormOpen(false); }} />
             </Card>
           ) : (
-            <Button
-              variant="outline"
+            /* Logging a transaction is the one thing this app needs you to do
+               every single day, so the CTA is the brightest thing on the page:
+               a live gradient with a breathing halo and a light sweep. Both
+               animations are transform/opacity only, so they stay on the
+               compositor, and both are dropped under prefers-reduced-motion. */
+            <button
+              type="button"
               onClick={() => setFormOpen(true)}
-              className="h-12 w-full justify-center gap-2 border-dashed text-sm text-muted-foreground hover:border-accent/50 hover:text-foreground"
+              className={cn(
+                'group relative isolate flex h-12 w-full items-center justify-center gap-2',
+                'overflow-hidden rounded-lg text-sm font-semibold text-white shadow-lg',
+                'bg-[linear-gradient(110deg,hsl(var(--primary)),hsl(var(--accent)),hsl(var(--primary)))]',
+                'transition-transform hover:scale-[1.01] active:scale-[0.99]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2'
+              )}
             >
-              <Plus className="h-4 w-4" />
+              {/* Breathing halo sitting behind the button. */}
+              <span
+                aria-hidden
+                className="absolute -inset-1 -z-10 animate-glow-pulse rounded-xl bg-[linear-gradient(110deg,hsl(var(--primary)),hsl(var(--accent)))] blur-md motion-reduce:animate-none"
+              />
+              {/* Light sweep across the face. */}
+              <span
+                aria-hidden
+                className="absolute inset-y-0 -left-1/3 w-1/3 animate-shimmer bg-white/25 blur-[6px] motion-reduce:hidden"
+              />
+              <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
               Add income or expense
-            </Button>
+            </button>
           )}
         </div>
 
