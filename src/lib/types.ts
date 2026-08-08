@@ -349,27 +349,143 @@ export type TransactionType = 'income' | 'expense';
 export type ExpenseType = 'need' | 'want' | 'investment' | 'investment_expense';
 
 
+// ---------------------------------------------------------------------------
+// Leniency helpers for AI-produced JSON.
+//
+// Model output is non-deterministic and the weaker/cheaper models in the picker
+// (Llama, DeepSeek, Kimi, Grok, the mini tiers) routinely return the right
+// information in a slightly different shape: a bare string where an object was
+// asked for, "3,000" where a number was asked for, "Need" where the enum is
+// lowercase. Rejecting those is a self-inflicted failure — the data is there.
+// These wrappers normalise first and validate second.
+// ---------------------------------------------------------------------------
+
+/**
+ * `.optional()` for AI output. Models express "I couldn't find this" as `null`,
+ * `""`, `"N/A"` or `"unknown"` at least as often as they omit the key, and a
+ * bare `.optional()` rejects every one of those — failing the whole parse over
+ * a field we didn't even need.
+ */
+const aiOptional = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(value => {
+    if (value === null) return undefined;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '' || /^(n\/?a|none|null|nil|unknown|unidentifiable|not specified)$/i.test(trimmed)) {
+        return undefined;
+      }
+    }
+    return value;
+  }, schema.optional());
+
+/** Accepts 3000, "3000", "₹3,000", "3000.50" → 3000 / 3000.5. */
+const lenientNumber = (schema: z.ZodTypeAny = z.number()) =>
+  z.preprocess(value => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const cleaned = value.replace(/[₹,\s]/g, '');
+      const parsed = Number.parseFloat(cleaned);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return value;
+  }, schema);
+
+/**
+ * A category / payment-method name echoed back by the model. Models frequently
+ * copy the whole bullet from the prompt's reference list — "Cash (ID: p4)" —
+ * which then fails the exact-name match downstream and silently falls back to
+ * the first item in the list. Strip the parenthetical so the match succeeds.
+ */
+const aiNameGuess = () =>
+  aiOptional(
+    z.preprocess(
+      value =>
+        typeof value === 'string'
+          ? value.replace(/\s*\(\s*id\s*[:=]?\s*[^)]*\)\s*$/i, '').trim()
+          : value,
+      z.string()
+    )
+  );
+
+/** Case-insensitive enum that also tolerates spaces/hyphens for underscores. */
+const lenientEnum = <T extends readonly [string, ...string[]]>(
+  values: T,
+  synonyms: Record<string, T[number]> = {}
+) =>
+  z.preprocess(value => {
+    if (typeof value !== 'string') return value;
+    const key = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (key in synonyms) return synonyms[key];
+    return (values as readonly string[]).includes(key) ? key : undefined;
+  }, z.enum(values));
+
+/** Accepts "Tanshu" or { name: "Tanshu", amount: 1000 }. */
+const SplitParticipantSchema = z.preprocess(
+  value => (typeof value === 'string' ? { name: value } : value),
+  z.object({
+    name: z.string().describe("Participant name copied verbatim from the input text. Never invent a name that isn't mentioned."),
+    amount: aiOptional(lenientNumber(z.number())).describe("This participant's exact share in INR, if the text specifies one (custom mode)."),
+  })
+);
+
+const EXPENSE_TYPE_VALUES = ['need', 'want', 'investment', 'investment_expense'] as const;
+const EXPENSE_TYPE_SYNONYMS = {
+  needs: 'need',
+  wants: 'want',
+  essential: 'need',
+  investments: 'investment',
+  invest: 'investment',
+} as const satisfies Record<string, (typeof EXPENSE_TYPE_VALUES)[number]>;
+
+const SPLIT_MODE_VALUES = ['equally', 'shares', 'custom', 'not_mine'] as const;
+const SPLIT_MODE_SYNONYMS = {
+  equal: 'equally',
+  equal_split: 'equally',
+  split_equally: 'equally',
+  even: 'equally',
+  evenly: 'equally',
+  exact: 'custom',
+  exact_amounts: 'custom',
+  amounts: 'custom',
+  specific: 'custom',
+  ratio: 'shares',
+  percentage: 'shares',
+  not_my_expense: 'not_mine',
+  notmine: 'not_mine',
+  none_of_mine: 'not_mine',
+  someone_else: 'not_mine',
+  full_reimbursement: 'not_mine',
+} as const satisfies Record<string, (typeof SPLIT_MODE_VALUES)[number]>;
+
+/** Accepts true/false, "true"/"false", "yes"/"no", 1/0. */
+const lenientBoolean = z.preprocess(value => {
+  if (typeof value === 'string') {
+    const key = value.trim().toLowerCase();
+    if (['true', 'yes', 'y', '1'].includes(key)) return true;
+    if (['false', 'no', 'n', '0'].includes(key)) return false;
+  }
+  if (typeof value === 'number') return value !== 0;
+  return value;
+}, z.boolean());
+
 // Zod schema for a single transaction parsed by AI from text
 export const ParsedAITransactionSchema = z.object({
   date: z.string().describe("The transaction date in YYYY-MM-DD format. Infer based on text and current date if relative (e.g., 'yesterday')."),
   description: z.string().describe("A concise description of the transaction. For purchases, include merchant and a few key items (e.g., 'Zepto Groceries: Milk, Curd, Banana')."),
-  amount: z.number().min(0.01).describe("The transaction amount as a positive number."),
-  type: z.enum(['income', 'expense']).describe("The type of transaction."),
-  categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
-  paymentMethodNameGuess: z.string().optional().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment', 'investment_expense']).optional().describe("If it's an expense, guess its type: 'need', 'want', or 'investment' or 'investment_expense'. If not clearly identifiable or income, leave blank."),
-  sourceGuess: z.string().optional().describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
-  confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
-  error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
-  splitDetails: z.object({
-    mode: z.enum(['equally', 'shares', 'custom', 'not_mine']).describe("'equally' when the text says split N ways / equally. 'custom' when explicit per-person amounts are given. 'not_mine' when the whole amount belongs to someone else (e.g. 'my sister used my card', 'not my expense', 'paid on behalf of X') — the user's own share is zero. 'shares' is rarely used; prefer 'equally' or 'custom'."),
-    includeMe: z.boolean().default(true).describe("False when the user's own share is zero (mode 'not_mine'). True otherwise."),
-    participants: z.array(z.object({
-      name: z.string().describe("Participant name copied verbatim from the input text. Never invent a name that isn't mentioned."),
-      amount: z.number().optional().describe("This participant's exact share in INR, if the text specifies one (custom mode)."),
-    })).min(1).describe("The other people (not the user) involved in the split, in the order mentioned."),
-    paidByName: z.string().optional().describe("Name of who actually paid, if it wasn't the user (e.g., 'Aman paid, my share is 400'). Leave blank if the user paid."),
-  }).optional().describe("Populate only if the text mentions splitting the bill, reimbursement, or a charge that isn't the user's own expense."),
+  amount: lenientNumber(z.number().min(0.01)).describe("The transaction amount as a positive number."),
+  type: lenientEnum(['income', 'expense']).describe("The type of transaction."),
+  categoryNameGuess: aiNameGuess().describe("The best guess for the category name from the provided list. If an exact match is not found, use the closest one or 'Others' if applicable. If no category seems to fit, leave blank."),
+  paymentMethodNameGuess: aiNameGuess().describe("If it's an expense, the best guess for the payment method name from the provided list. If no payment method seems to fit or it's an income, leave blank."),
+  expenseTypeNameGuess: aiOptional(lenientEnum(EXPENSE_TYPE_VALUES, EXPENSE_TYPE_SYNONYMS)).describe("If it's an expense, guess its type: 'need', 'want', or 'investment' or 'investment_expense'. If not clearly identifiable or income, leave blank."),
+  sourceGuess: aiOptional(z.string()).describe("If it's an income, a brief description of the source (e.g., 'Salary from X', 'Freelance Project Y'). If not clearly identifiable or expense, leave blank."),
+  confidenceScore: aiOptional(lenientNumber(z.number().min(0).max(1))).describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
+  error: aiOptional(z.string()).describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
+  splitDetails: aiOptional(z.object({
+    mode: lenientEnum(SPLIT_MODE_VALUES, SPLIT_MODE_SYNONYMS).describe("'equally' when the text says split N ways / equally. 'custom' when explicit per-person amounts are given. 'not_mine' when the whole amount belongs to someone else (e.g. 'my sister used my card', 'not my expense', 'paid on behalf of X') — the user's own share is zero. 'shares' is rarely used; prefer 'equally' or 'custom'."),
+    includeMe: lenientBoolean.default(true).describe("False when the user's own share is zero (mode 'not_mine'). True otherwise."),
+    participants: z.array(SplitParticipantSchema).min(1).describe("The other people (not the user) involved in the split, in the order mentioned."),
+    paidByName: aiOptional(z.string()).describe("Name of who actually paid, if it wasn't the user (e.g., 'Aman paid, my share is 400'). Leave blank if the user paid."),
+  })).describe("Populate only if the text mentions splitting the bill, reimbursement, or a charge that isn't the user's own expense."),
   model: z.string().optional(),
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
@@ -377,14 +493,14 @@ export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
 
 // Zod schema for the structure of a single transaction parsed by AI from a receipt image
 export const ParsedReceiptTransactionSchema = z.object({
-  date: z.string().optional().describe("The transaction date from the receipt in YYYY-MM-DD format. If unidentifiable, leave blank."),
-  description: z.string().optional().describe("The merchant name or a concise description of the transaction from the receipt. If unidentifiable, leave blank."),
-  amount: z.number().min(0.01, "Amount must be positive.").optional().describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
-  categoryNameGuess: z.string().optional().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
-  paymentMethodNameGuess: z.string().optional().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
-  expenseTypeNameGuess: z.enum(['need', 'want', 'investment', 'investment_expense']).optional().describe("Guess its type: 'need', 'want', 'investment', or 'investment_expense'. If not clearly identifiable, leave blank."),
-  confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
-  error: z.string().optional().describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
+  date: aiOptional(z.string()).describe("The transaction date from the receipt in YYYY-MM-DD format. If unidentifiable, leave blank."),
+  description: aiOptional(z.string()).describe("The merchant name or a concise description of the transaction from the receipt. If unidentifiable, leave blank."),
+  amount: aiOptional(lenientNumber(z.number().min(0.01, "Amount must be positive."))).describe("The total transaction amount as a positive number. If unidentifiable, leave blank."),
+  categoryNameGuess: aiNameGuess().describe("The best guess for the category name from the provided list based on items or merchant. If unsure, use 'Others' or leave blank."),
+  paymentMethodNameGuess: aiNameGuess().describe("The best guess for the payment method name from the provided list (e.g., 'Credit Card', 'Cash') if discernible. If unsure, leave blank."),
+  expenseTypeNameGuess: aiOptional(lenientEnum(EXPENSE_TYPE_VALUES, EXPENSE_TYPE_SYNONYMS)).describe("Guess its type: 'need', 'want', 'investment', or 'investment_expense'. If not clearly identifiable, leave blank."),
+  confidenceScore: aiOptional(lenientNumber(z.number().min(0).max(1))).describe("AI's confidence in parsing this receipt (0.0 to 1.0)."),
+  error: aiOptional(z.string()).describe("If the receipt couldn't be parsed reliably or is unreadable, provide a brief error message here."),
   model: z.string().optional(),
 });
 export type ParsedReceiptTransaction = z.infer<typeof ParsedReceiptTransactionSchema>;

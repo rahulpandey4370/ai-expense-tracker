@@ -189,6 +189,78 @@ function cleanJsonContent(content: string): string {
   return content.replace(/```json\n?|\n?```/g, '').trim();
 }
 
+/** Peels optional/nullable/default/effects wrappers to get at the real type name. */
+function unwrapTypeName(schema: any): string | undefined {
+  let current = schema;
+  for (let i = 0; i < 8 && current?._def; i++) {
+    const name = current._def.typeName;
+    if (name === 'ZodOptional' || name === 'ZodNullable' || name === 'ZodDefault') {
+      current = current._def.innerType;
+    } else if (name === 'ZodEffects') {
+      current = current._def.schema;
+    } else {
+      return name;
+    }
+  }
+  return current?._def?.typeName;
+}
+
+/**
+ * Models routinely drop the JSON envelope we asked for and return the payload
+ * directly — a bare `[...]` instead of `{ parsedTransactions: [...] }`, or the
+ * receipt's fields at the top level instead of under `parsedTransaction`. The
+ * data is right there, so re-wrap it rather than failing the parse.
+ *
+ * Only applies when the response shares *no* key with the expected object, so
+ * a correctly-shaped response is never touched.
+ */
+function normaliseEnvelope(parsed: unknown, outputSchema: ZodSchema): unknown {
+  const def: any = (outputSchema as any)?._def;
+  if (def?.typeName !== 'ZodObject') return parsed;
+
+  const shape = typeof def.shape === 'function' ? def.shape() : def.shape;
+  const keys: string[] = Object.keys(shape ?? {});
+  if (keys.length === 0) return parsed;
+
+  const isPlainObject = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (isPlainObject && keys.some(k => k in (parsed as Record<string, unknown>))) {
+    return parsed; // already the right shape
+  }
+
+  const arrayKey = keys.find(k => unwrapTypeName(shape[k]) === 'ZodArray');
+
+  // 1. Bare array where an array-valued key was expected.
+  if (Array.isArray(parsed) && arrayKey) return { [arrayKey]: parsed };
+
+  if (isPlainObject) {
+    const obj = parsed as Record<string, unknown>;
+    // 2. Right array under the wrong name ({ transactions: [...] }).
+    if (arrayKey) {
+      const arrayProp = Object.keys(obj).find(k => Array.isArray(obj[k]));
+      if (arrayProp) return { [arrayKey]: obj[arrayProp] };
+    }
+    // 3. A single record returned without its wrapper.
+    const objectKey = keys.find(k => unwrapTypeName(shape[k]) === 'ZodObject') ?? (keys.length === 1 ? keys[0] : undefined);
+    if (objectKey) return { [objectKey]: obj };
+  }
+
+  return parsed;
+}
+
+/**
+ * Shared JSON → schema step for the providers that hand back raw text (i.e.
+ * everything except Gemini, which enforces the schema itself).
+ */
+function parseModelJson<T extends ZodSchema>(raw: string, outputSchema: T, label: string): z.infer<T> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleanJsonContent(raw));
+  } catch {
+    throw new Error(`${label} returned text that is not valid JSON: ${raw.slice(0, 200)}`);
+  }
+  return outputSchema.parse(normaliseEnvelope(parsed, outputSchema));
+}
+
 // ---------------------------------------------------------------------------
 // Retry helper shared by every non-Genkit provider (Azure, OpenAI, Anthropic).
 // Only retries transient overload; real errors surface immediately.
@@ -229,6 +301,165 @@ export interface LLMConfig {
   temperature?: number;
   maxOutputTokens?: number;
   safetySettings?: Array<{ category: string; threshold: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Chat-completions parameter compatibility
+//
+// The OpenAI-shaped APIs disagree about their own parameters:
+//   - Reasoning-era models (o-series, gpt-5.x) reject `max_tokens` and demand
+//     `max_completion_tokens`; older deployments and the Azure AI Inference
+//     models (Llama, DeepSeek, Kimi, Grok) only understand `max_tokens`.
+//   - Reasoning models reject any `temperature` other than the default.
+//   - Some inference deployments reject `response_format` entirely.
+//
+// Rather than maintain a per-model allow-list that silently rots every time a
+// model ships, we send a sensible default, read the provider's own 400, and
+// adapt. What we learn is memoised per model so only the first call ever pays
+// the extra round-trip.
+// ---------------------------------------------------------------------------
+type TokenParam = 'max_tokens' | 'max_completion_tokens';
+
+interface ChatParamQuirks {
+  /** Which token-cap parameter this model accepts, once we know. */
+  tokenParam?: TokenParam;
+  /** Spellings already rejected, so we never retry the same one. */
+  tokenParamsTried: Set<string>;
+  /** Parameters the provider rejected outright and that we must omit. */
+  drop: Set<string>;
+}
+
+const quirksByModel = new Map<string, ChatParamQuirks>();
+
+function getQuirks(modelKey: string): ChatParamQuirks {
+  let quirks = quirksByModel.get(modelKey);
+  if (!quirks) {
+    quirks = { tokenParamsTried: new Set(), drop: new Set() };
+    quirksByModel.set(modelKey, quirks);
+  }
+  return quirks;
+}
+
+/**
+ * A flow's `maxOutputTokens` exists to stop runaway generation, but on
+ * reasoning models the same budget also funds hidden reasoning tokens — a
+ * 1.5k cap gets consumed thinking and returns empty content, or truncates the
+ * JSON mid-object. So the flow value acts as a floor-adjusted hint here and
+ * DIRECT_MAX_TOKENS is the real ceiling: generous enough never to truncate,
+ * still under the SDK's non-streaming HTTP timeout.
+ */
+function resolveTokenCap(config?: LLMConfig): number {
+  return Math.max(config?.maxOutputTokens ?? 0, DIRECT_MAX_TOKENS);
+}
+
+function buildChatParams(
+  quirks: ChatParamQuirks,
+  base: Record<string, any>,
+  config: LLMConfig | undefined,
+  defaultTokenParam: TokenParam
+): Record<string, any> {
+  const params: Record<string, any> = { ...base };
+
+  const tokenParam = quirks.tokenParam ?? defaultTokenParam;
+  if (!quirks.drop.has(tokenParam)) {
+    params[tokenParam] = resolveTokenCap(config);
+  }
+  if (config?.temperature != null) {
+    params.temperature = config.temperature;
+  }
+
+  for (const key of quirks.drop) delete params[key];
+  return params;
+}
+
+/**
+ * Reads a provider 400 and works out which parameter to change. Returns true
+ * when it learned something new and the call is worth retrying. Always
+ * terminates: each token spelling is tried at most once, and every other
+ * parameter can only be dropped once.
+ */
+function adaptQuirksFromError(
+  quirks: ChatParamQuirks,
+  error: any,
+  sentParams: Record<string, any>
+): boolean {
+  const status = error?.status ?? error?.cause?.status;
+  const message = String(error?.message ?? '');
+  if (status !== 400) return false;
+
+  const switchTokenParam = (rejected: string): boolean => {
+    quirks.tokenParamsTried.add(rejected);
+    const other: TokenParam = rejected === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
+    if (!quirks.tokenParamsTried.has(other)) {
+      quirks.tokenParam = other;
+      return true;
+    }
+    // Both spellings refused — go without a cap rather than fail the request.
+    quirks.drop.add('max_tokens');
+    quirks.drop.add('max_completion_tokens');
+    return true;
+  };
+
+  // The provider usually tells us exactly what to use instead.
+  const explicitSwap = /Use '(max_completion_tokens|max_tokens)' instead/i.exec(message);
+  if (explicitSwap) {
+    const target = explicitSwap[1] as TokenParam;
+    const rejected: TokenParam = target === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
+    quirks.tokenParamsTried.add(rejected);
+    if (quirks.tokenParam === target) return false; // already using it; nothing learned
+    quirks.tokenParam = target;
+    return true;
+  }
+
+  const named =
+    /Unsupported parameter: '([^']+)'/i.exec(message) ??
+    /Unsupported value: '([^']+)'/i.exec(message) ??
+    /Unrecognized request argument supplied: ([A-Za-z0-9_]+)/i.exec(message) ??
+    /'([A-Za-z0-9_]+)' is not supported/i.exec(message);
+
+  if (named) {
+    // Strip a nested path like "response_format.type" down to the root key.
+    const param = named[1].split('.')[0];
+    if (!(param in sentParams) || quirks.drop.has(param)) return false;
+    if (param === 'max_tokens' || param === 'max_completion_tokens') {
+      return switchTokenParam(param);
+    }
+    quirks.drop.add(param);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Issues a chat-completions call, re-shaping the request as many times as the
+ * provider needs (bounded by how many parameters there are to adapt).
+ */
+async function chatCompletionsAdaptive(
+  client: OpenAI | AzureOpenAI,
+  modelKey: string,
+  base: Record<string, any>,
+  config: LLMConfig | undefined,
+  defaultTokenParam: TokenParam
+): Promise<any> {
+  const quirks = getQuirks(modelKey);
+
+  for (let attempt = 0; ; attempt++) {
+    const params = buildChatParams(quirks, base, config, defaultTokenParam);
+    try {
+      return await retryableProviderCall(() =>
+        client.chat.completions.create(params as any)
+      );
+    } catch (error: any) {
+      // 5 is a safe bound: token spelling (x2), temperature, response_format,
+      // plus slack. Beyond that the 400 is about something we can't fix here.
+      if (attempt >= 5 || !adaptQuirksFromError(quirks, error, params)) throw error;
+      console.warn(
+        `[ai-client] ${modelKey} rejected a request parameter; retrying with an adapted shape. ` +
+        `Provider said: ${error?.message}`
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -284,20 +515,23 @@ async function callOpenAIStructured<T extends ZodSchema>(
     content.push({ type: 'image_url', image_url: { url: input.receiptImageUri } });
   }
 
-  const response = await retryableProviderCall(() =>
-    client.chat.completions.create({
+  const response = await chatCompletionsAdaptive(
+    client,
+    modelId,
+    {
       model: apiModel,
-      messages: [{ role: 'user', content }] as any,
+      messages: [{ role: 'user', content }],
       response_format: { type: 'json_object' },
-      temperature: config?.temperature,
-      max_tokens: config?.maxOutputTokens,
       stream: false,
-    } as any)
+    },
+    config,
+    // First-party OpenAI is reasoning-era; the newer spelling is the safer bet.
+    'max_completion_tokens'
   );
 
   const raw = (response as any).choices?.[0]?.message?.content;
   if (!raw) throw new Error(`OpenAI (${modelId}) returned an empty response.`);
-  return outputSchema.parse(JSON.parse(cleanJsonContent(raw)));
+  return parseModelJson(raw, outputSchema, `OpenAI (${modelId})`);
 }
 
 async function callAnthropicStructured<T extends ZodSchema>(
@@ -326,10 +560,12 @@ async function callAnthropicStructured<T extends ZodSchema>(
   }
 
   // No temperature/top_p: the current Claude models reject them outright.
+  // The cap must stay generous — adaptive thinking spends the same budget, so
+  // a flow's small hint would truncate the answer (see resolveTokenCap).
   const response = await retryableProviderCall(() =>
     client.messages.create({
       model: apiModel,
-      max_tokens: config?.maxOutputTokens ?? DIRECT_MAX_TOKENS,
+      max_tokens: resolveTokenCap(config),
       system: 'You are a precise financial data extraction engine. You always reply with a single JSON object.',
       messages: [{ role: 'user', content }],
     })
@@ -347,7 +583,7 @@ async function callAnthropicStructured<T extends ZodSchema>(
     .trim();
 
   if (!raw) throw new Error(`Claude (${modelId}) returned an empty response.`);
-  return outputSchema.parse(JSON.parse(cleanJsonContent(raw)));
+  return parseModelJson(raw, outputSchema, `Claude (${modelId})`);
 }
 
 /** Splits `data:image/png;base64,AAAA` into its media type and payload. */
@@ -373,7 +609,11 @@ async function callAzureStructured<T extends ZodSchema>(
 
   const client = getAzureClient(modelConfig);
   const isInference = isInferenceEndpoint(modelConfig.endpoint || '');
-  const textPrompt = simpleTemplateRender(promptTemplate, input);
+  // Same reason as the OpenAI path: `response_format: json_object` is rejected
+  // unless the word "json" appears in the messages, and if the provider turns
+  // out to reject response_format altogether this instruction is what keeps
+  // the reply parseable.
+  const textPrompt = simpleTemplateRender(promptTemplate, input) + JSON_ONLY_SUFFIX;
 
   const messages: ChatMessageParam[] = [
     {
@@ -390,15 +630,19 @@ async function callAzureStructured<T extends ZodSchema>(
     });
   }
 
-  const response = await retryableProviderCall(() =>
-    client.chat.completions.create({
+  const response = await chatCompletionsAdaptive(
+    client,
+    modelId,
+    {
       model: isInference ? modelConfig.id : modelConfig.deployment!,
       messages: messages as any[],
       response_format: { type: 'json_object' },
-      temperature: config?.temperature,
-      max_tokens: config?.maxOutputTokens,
       stream: false,
-    } as any)
+    },
+    config,
+    // Azure AI Inference deployments (Llama, DeepSeek, Kimi, Grok) speak the
+    // older dialect; Azure OpenAI Service deployments are reasoning-era.
+    isInference ? 'max_tokens' : 'max_completion_tokens'
   );
 
   const content = (response as any).choices?.[0]?.message?.content;
@@ -406,9 +650,7 @@ async function callAzureStructured<T extends ZodSchema>(
     throw new Error(`Azure OpenAI (${modelId}) returned an empty response.`);
   }
 
-  const cleaned = cleanJsonContent(content);
-  const parsed = JSON.parse(cleaned);
-  return outputSchema.parse(parsed);
+  return parseModelJson(content, outputSchema, `Azure OpenAI (${modelId})`);
 }
 
 async function callGeminiStructured<T extends ZodSchema>(
@@ -455,7 +697,7 @@ async function callGeminiStructured<T extends ZodSchema>(
 export async function callChatLLM(
   modelId: string,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  config?: { temperature?: number; maxOutputTokens?: number; safetySettings?: Array<{ category: string; threshold: string }> }
+  config?: LLMConfig
 ): Promise<string> {
   const provider = detectProvider(modelId);
 
@@ -474,12 +716,16 @@ export async function callChatLLM(
 async function callOpenAIChat(
   modelId: string,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  _config?: { temperature?: number; maxOutputTokens?: number }
+  config?: LLMConfig
 ): Promise<string> {
   const client = getOpenAIClient();
   const apiModel = getModelConfig(modelId)?.id ?? modelId;
-  const response = await retryableProviderCall(() =>
-    client.chat.completions.create({ model: apiModel, messages: messages as any } as any)
+  const response = await chatCompletionsAdaptive(
+    client,
+    modelId,
+    { model: apiModel, messages: messages as any },
+    config,
+    'max_completion_tokens'
   );
   return (response as any).choices?.[0]?.message?.content || '';
 }
@@ -507,7 +753,7 @@ async function callAnthropicChat(
   const response = await retryableProviderCall(() =>
     client.messages.create({
       model: apiModel,
-      max_tokens: config?.maxOutputTokens ?? DIRECT_MAX_TOKENS,
+      max_tokens: resolveTokenCap(config),
       ...(system ? { system } : {}),
       messages: turns,
     })
@@ -526,7 +772,7 @@ async function callAnthropicChat(
 async function callAzureChat(
   modelId: string,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  _config?: { temperature?: number; maxOutputTokens?: number; safetySettings?: Array<{ category: string; threshold: string }> }
+  config?: LLMConfig
 ): Promise<string> {
   const modelConfig = getModelConfig(modelId);
   if (!modelConfig) {
@@ -536,11 +782,15 @@ async function callAzureChat(
   const client = getAzureClient(modelConfig);
   const isInference = isInferenceEndpoint(modelConfig.endpoint || '');
 
-  const response = await retryableProviderCall(() =>
-    client.chat.completions.create({
+  const response = await chatCompletionsAdaptive(
+    client,
+    modelId,
+    {
       model: isInference ? modelConfig.id : modelConfig.deployment!,
       messages: messages as any[],
-    } as any)
+    },
+    config,
+    isInference ? 'max_tokens' : 'max_completion_tokens'
   );
 
   return (response as any).choices?.[0]?.message?.content || '';

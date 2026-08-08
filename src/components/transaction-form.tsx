@@ -1126,20 +1126,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const renderAITextInputForm = () => (
     <div className="space-y-4">
       <Label htmlFor="ai-text-input" className={labelClasses}>Enter Transactions in Natural Language</Label>
-      <div className="flex items-start gap-2">
+      {/* The mic lives inside the composer, bottom-right, the way a modern
+          chat input does — `pb-11` reserves the row so typed text never runs
+          underneath it. */}
+      <div className="relative">
         <Textarea
           id="ai-text-input"
           value={aiText}
           onChange={(e) => setAiText(e.target.value)}
           placeholder="e.g., Dinner with friends ₹1200 using HDFC credit card yesterday, split equally with Tanshu. Received ₹50000 salary last Monday. Groceries for ₹2500 via UPI two days ago."
           rows={5}
-          className={cn(inputClasses, "flex-1")}
+          className={cn(inputClasses, "w-full resize-none pb-11")}
           disabled={isProcessingAIText || isLoading}
         />
-        <VoiceInputButton
-          disabled={isProcessingAIText || isLoading}
-          onResult={(text) => setAiText(prev => prev ? `${prev} ${text}` : text)}
-        />
+        <div className="absolute bottom-2 right-2 flex items-center">
+          <VoiceInputButton
+            disabled={isProcessingAIText || isLoading}
+            onResult={(text) => setAiText(prev => (prev ? `${prev} ${text}` : text))}
+          />
+        </div>
       </div>
       <Button onClick={handleProcessAIText} disabled={isProcessingAIText || isLoading || !aiText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
         {isProcessingAIText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}

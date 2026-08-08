@@ -137,17 +137,17 @@ Current date is {{currentDate}}. Use it to resolve relative dates (e.g., "yester
 
 Available Expense Categories:
 {{#each expenseCategories}}
-- {{this.name}} (ID: {{this.id}})
+- {{this.name}}
 {{/each}}
 
 Available Income Categories:
 {{#each incomeCategories}}
-- {{this.name}} (ID: {{this.id}})
+- {{this.name}}
 {{/each}}
 
 Available Payment Methods (for expenses):
 {{#each paymentMethods}}
-- {{this.name}} (ID: {{this.id}})
+- {{this.name}}
 {{/each}}
 
 People the user has split expenses with before (match names mentioned in the text against this list; use the exact name shown):

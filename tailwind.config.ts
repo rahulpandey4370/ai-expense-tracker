@@ -98,13 +98,24 @@ export default {
   				to: {
   					height: '0'
   				}
+  			},
+  			// Live mic level bars. Scaled rather than sized so the animation
+  			// runs on the compositor instead of triggering layout.
+  			'waveform': {
+  				'0%, 100%': {
+  					transform: 'scaleY(0.3)'
+  				},
+  				'50%': {
+  					transform: 'scaleY(1)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'collapsible-down': 'collapsible-down 0.2s ease-out',
-  			'collapsible-up': 'collapsible-up 0.2s ease-out'
+  			'collapsible-up': 'collapsible-up 0.2s ease-out',
+  			'waveform': 'waveform 0.9s ease-in-out infinite'
   		}
   	}
   },

@@ -93,12 +93,12 @@ You must respond in a valid JSON format.
 
 Available Expense Categories:
 {{#each categories}}
-- {{this.name}} (ID: {{this.id}})
+- {{this.name}}
 {{/each}}
 
 Available Payment Methods:
 {{#each paymentMethods}}
-- {{this.name}} (ID: {{this.id}})
+- {{this.name}}
 {{/each}}
 
 From the receipt image, extract the following:
