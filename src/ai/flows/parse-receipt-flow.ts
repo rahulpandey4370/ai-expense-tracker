@@ -107,7 +107,7 @@ From the receipt image, extract the following:
 - amount: The total numeric amount paid (always positive, e.g., 50.75). Look for "Total", "Amount Due", "Paid", etc.
 - categoryNameGuess: (Optional) Based on merchant or items, the best guess for an expense category name from the provided list. If unsure, use "Others".
 - paymentMethodNameGuess: (Optional) If discernible from the receipt (e.g., "VISA ****1234", "Cash", "PayTM UPI"), the best guess for a payment method name from the provided list. Look for card brand names, last 4 digits, or payment app names.
-- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment_expense'.
+- expenseTypeNameGuess: (Optional) Classify as 'need', 'want', or 'investment'.
     Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
     Examples for 'want': Ordering food online, Eating out at restaurants, Non-essential travel/vacations, Shopping for non-essentials (clothes beyond basic needs, gadgets), Movies, Entertainment subscriptions.
     Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD), other financial assets.
@@ -162,19 +162,23 @@ const parseReceiptImageFlow = ai.defineFlow(
 
 
     let finalDate = outputFromAI.parsedTransaction.date;
+    let dateFallbackNote: string | undefined;
     if (outputFromAI.parsedTransaction.date) {
       try {
         const parsedD = parseDateFns(outputFromAI.parsedTransaction.date, 'yyyy-MM-dd', new Date());
         if (isNaN(parsedD.getTime())) {
           finalDate = format(new Date(), 'yyyy-MM-dd');
+          dateFallbackNote = `Couldn't read the receipt date — defaulted to today. Please verify.`;
         } else {
           finalDate = outputFromAI.parsedTransaction.date;
         }
       } catch (e) {
         finalDate = format(new Date(), 'yyyy-MM-dd');
+        dateFallbackNote = `Couldn't read the receipt date — defaulted to today. Please verify.`;
       }
     } else {
       finalDate = format(new Date(), 'yyyy-MM-dd');
+      dateFallbackNote = `No date found on the receipt — defaulted to today. Please verify.`;
     }
 
     return {
@@ -182,6 +186,7 @@ const parseReceiptImageFlow = ai.defineFlow(
         ...outputFromAI.parsedTransaction,
         date: finalDate,
         amount: outputFromAI.parsedTransaction.amount && outputFromAI.parsedTransaction.amount > 0 ? outputFromAI.parsedTransaction.amount : undefined,
+        error: outputFromAI.parsedTransaction.error || dateFallbackNote,
       }
     };
   }

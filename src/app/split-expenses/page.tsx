@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect, useCallback, type FormEvent, useMemo } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,32 +8,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { SplitUser, SplitUserInput, SplitExpenseInput, AppSplitExpense, UserBalance, SplitMethod, Category, PaymentMethod } from '@/lib/types';
-import { addSplitUser, deleteSplitUser, addSplitExpense, settleParticipantShare } from '@/lib/actions/split-expenses';
-import { useSplitUsers, useSplitExpenses, useSplitBalances, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
-import { UserPlus, Trash2, Loader2, Users, ListChecks, FilePlus, Scale, CheckCircle, CircleDot, CalendarIcon, AlertTriangle, ChevronsUpDown, Check } from "lucide-react";
+import type { AppTransaction } from '@/lib/types';
+import { addSplitUser, deleteSplitUser, settleSplitShare, settleMyShare, settleAllForUser } from '@/lib/actions/splits';
+import { useSplitUsers, useSplitBalances, useSplitTransactions, useInvalidateFinance } from '@/hooks/use-finance-queries';
+import { UserPlus, Trash2, Loader2, Users, ListChecks, Scale, CheckCircle, CircleDot, Plus } from "lucide-react";
 import { format } from 'date-fns';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-
+import { TransactionForm } from '@/components/transaction-form';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -52,58 +44,59 @@ const itemVariants = {
 };
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
-const MAIN_USER_ID = "me";
 
+/** True if a split transaction still has money outstanding — mine or someone else's. */
+function isOpen(t: AppTransaction): boolean {
+  const othersOpen = (t.splits ?? []).some(s => !s.isSettled);
+  const myShareOpen = !!t.paidById && !t.myShareSettled && (t.myShare ?? 0) > 0;
+  return othersOpen || myShareOpen;
+}
 
 export default function SplitExpensesPage() {
   const { toast } = useToast();
   const invalidate = useInvalidateFinance();
+  const isMobile = useIsMobile();
   const [newUserName, setNewUserName] = useState("");
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState<string | null>(null);
-  const [isSettling, setIsSettling] = useState<{ expenseId: string, userId: string } | null>(null);
+  const [settlingKey, setSettlingKey] = useState<string | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
 
-  // React Query: cached + deduped; mutations call fetchData() → invalidate.
   const usersQuery = useSplitUsers();
-  const expensesQuery = useSplitExpenses();
   const balancesQuery = useSplitBalances();
-  const categoriesQuery = useCategories();
-  const paymentMethodsQuery = usePaymentMethods();
+  const transactionsQuery = useSplitTransactions();
 
   const splitUsers = usersQuery.data ?? [];
-  const splitExpenses = expensesQuery.data ?? [];
-  const balances = balancesQuery.data ?? [];
-  const expenseCategories = useMemo(() => (categoriesQuery.data ?? []).filter(c => c.type === 'expense'), [categoriesQuery.data]);
-  const paymentMethods = paymentMethodsQuery.data ?? [];
+  const balances = (balancesQuery.data ?? []).filter(b => Math.abs(b.net) > 0.01 || b.theyOweMe > 0 || b.iOweThem > 0);
+  const splitTransactions = transactionsQuery.data?.rows ?? [];
 
   const isLoadingUsers = usersQuery.isLoading;
-  const isLoadingExpenses = expensesQuery.isLoading;
   const isLoadingBalances = balancesQuery.isLoading;
-  const isLoadingDropdowns = categoriesQuery.isLoading || paymentMethodsQuery.isLoading;
+  const isLoadingTransactions = transactionsQuery.isLoading;
 
-  useEffect(() => {
-    const err = usersQuery.error || expensesQuery.error || balancesQuery.error;
-    if (err) toast({ title: "Error Fetching Data", description: err instanceof Error ? err.message : "Could not load split expense data.", variant: "destructive" });
-  }, [usersQuery.error, expensesQuery.error, balancesQuery.error, toast]);
-
-  const fetchData = useCallback(() => {
-    invalidate();
-  }, [invalidate]);
+  const { openTransactions, settledTransactions } = useMemo(() => {
+    const open: AppTransaction[] = [];
+    const settled: AppTransaction[] = [];
+    for (const t of splitTransactions) {
+      (isOpen(t) ? open : settled).push(t);
+    }
+    return { openTransactions: open, settledTransactions: settled };
+  }, [splitTransactions]);
 
   const handleAddUser = async (e: FormEvent) => {
     e.preventDefault();
     if (!newUserName.trim()) {
-      toast({ title: "User Name Required", description: "Please enter a name for the user.", variant: "destructive" });
+      toast({ title: "Name Required", description: "Please enter a name.", variant: "destructive" });
       return;
     }
     setIsAddingUser(true);
     try {
       await addSplitUser({ name: newUserName.trim() });
       setNewUserName("");
-      fetchData(); // Refresh all data
-      toast({ title: "User Added!", description: `${newUserName.trim()} has been added.` });
+      invalidate();
+      toast({ title: "Person Added!", description: `${newUserName.trim()} has been added.` });
     } catch (error: any) {
-      toast({ title: "Error Adding User", description: error.message || "Could not add user.", variant: "destructive" });
+      toast({ title: "Error Adding Person", description: error.message || "Could not add person.", variant: "destructive" });
     } finally {
       setIsAddingUser(false);
     }
@@ -113,410 +106,301 @@ export default function SplitExpensesPage() {
     setIsDeletingUser(userId);
     try {
       await deleteSplitUser(userId);
-      fetchData(); // Refresh all data
-      toast({ title: "User Deleted", description: `${userName} has been removed.` });
+      invalidate();
+      toast({ title: "Person Deleted", description: `${userName} has been removed.` });
     } catch (error: any) {
-      toast({ title: "Error Deleting User", description: error.message || "Could not delete user. They might be part of existing unsettled splits.", variant: "destructive" });
+      toast({ title: "Error Deleting Person", description: error.message || "Could not delete person.", variant: "destructive" });
     } finally {
       setIsDeletingUser(null);
     }
   };
-  
-  const handleSettleShare = async (expenseId: string, participantUserId: string) => {
-    setIsSettling({ expenseId, userId: participantUserId });
+
+  const handleSettleShare = async (transactionId: string, userId: string) => {
+    const key = `${transactionId}:${userId}`;
+    setSettlingKey(key);
     try {
-        await settleParticipantShare(expenseId, participantUserId);
-        toast({ title: "Share Settled!", description: "The participant's share has been marked as settled." });
-        fetchData(); // Refresh all data
+      await settleSplitShare(transactionId, userId);
+      invalidate();
+      toast({ title: "Settled!", description: "That share has been marked as paid back." });
     } catch (error: any) {
-        toast({ title: "Settlement Error", description: error.message || "Could not settle the share.", variant: "destructive" });
+      toast({ title: "Settlement Error", description: error.message || "Could not settle this share.", variant: "destructive" });
     } finally {
-        setIsSettling(null);
+      setSettlingKey(null);
     }
   };
+
+  const handleSettleMyShare = async (transactionId: string) => {
+    const key = `mine:${transactionId}`;
+    setSettlingKey(key);
+    try {
+      await settleMyShare(transactionId);
+      invalidate();
+      toast({ title: "Settled!", description: "Marked as paid back." });
+    } catch (error: any) {
+      toast({ title: "Settlement Error", description: error.message || "Could not settle this share.", variant: "destructive" });
+    } finally {
+      setSettlingKey(null);
+    }
+  };
+
+  const handleSettleAllForUser = async (userId: string, userName: string) => {
+    setSettlingKey(`all:${userId}`);
+    try {
+      const { successCount } = await settleAllForUser(userId);
+      invalidate();
+      toast({ title: "Settled Up!", description: `${successCount} balance(s) with ${userName} cleared.` });
+    } catch (error: any) {
+      toast({ title: "Settlement Error", description: error.message || "Could not settle up.", variant: "destructive" });
+    } finally {
+      setSettlingKey(null);
+    }
+  };
+
+  const closeAddForm = () => setIsAddingNew(false);
+  const onAdded = () => { invalidate(); setIsAddingNew(false); };
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
         <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
-          <CardHeader>
-            <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
-              <Users className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-3" />
-              Split Expenses
-            </CardTitle>
-            <CardDescription className="text-sm md:text-base text-muted-foreground">
-              Manage shared expenses with your friends and colleagues.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
+                <Users className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-3" />
+                Split Expenses
+              </CardTitle>
+              <CardDescription className="text-sm md:text-base text-muted-foreground">
+                Every split lives on its transaction — add one from here or from the AI entry field.
+              </CardDescription>
+            </div>
+            <Button onClick={() => setIsAddingNew(true)} className="shrink-0">
+              <Plus className="mr-1.5 h-4 w-4" /> Add
+            </Button>
           </CardHeader>
           <CardContent className="space-y-8">
-            
+
+            {/* Balances */}
             <motion.section variants={cardVariants}>
-              <Card className={cn("shadow-lg border-accent/20 bg-card/95", glowClass)}>
-                <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-accent flex items-center gap-2"><UserPlus className="text-accent/80"/>Manage Split Users</CardTitle></CardHeader>
+              <Card className={cn("shadow-lg border-green-500/30 bg-green-500/5", glowClass)}>
+                <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-green-600 dark:text-green-400 flex items-center gap-2"><Scale className="text-green-500/80" />Balances</CardTitle></CardHeader>
                 <CardContent>
-                  <form onSubmit={handleAddUser} className="flex flex-col sm:flex-row items-end gap-2 mb-4">
-                    <div className="flex-grow w-full sm:w-auto">
-                      <Label htmlFor="newUserName" className="text-sm text-foreground/90">New User Name</Label>
-                      <Input id="newUserName" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="e.g., Rahul, Priya" className="mt-1 bg-background/70 border-border/70 focus:border-accent focus:ring-accent" disabled={isAddingUser} />
-                    </div>
-                    <Button type="submit" disabled={isAddingUser || !newUserName.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto" withMotion>
-                      {isAddingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />} Add User
-                    </Button>
-                  </form>
-                  <Separator className="my-4 border-accent/20"/>
-                  <h4 className="text-md font-medium text-accent/90 mb-2">Existing Users:</h4>
-                  {isLoadingUsers ? <div className="space-y-2"><div className="h-10 animate-pulse rounded-md bg-muted/50"></div></div> : splitUsers.length === 0 ? <p className="text-sm text-muted-foreground">No users added yet.</p> : (
-                    <ScrollArea className="h-[150px] pr-3"><ul className="space-y-2">
-                      {splitUsers.map(user => (
-                        <motion.li key={user.id} variants={itemVariants} className="flex items-center justify-between p-2.5 rounded-md bg-background/60 border hover:bg-accent/5">
-                          <span className="text-sm">{user.name}</span>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 h-7 w-7 p-1" disabled={isDeletingUser === user.id}>{isDeletingUser === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {user.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone and might affect balance calculations if the user has unsettled expenses.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteUser(user.id, user.name)} className="bg-destructive hover:bg-destructive/90">Delete User</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-                          </AlertDialog>
-                        </motion.li>
+                  {isLoadingBalances ? (
+                    <p className="text-muted-foreground">Calculating balances...</p>
+                  ) : balances.length === 0 ? (
+                    <p className="text-muted-foreground">All settled up! No open balances.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {balances.map(b => (
+                        <div key={b.userId} className="flex items-center justify-between gap-3 rounded-md border bg-background/60 p-3">
+                          <div className="text-sm">
+                            <strong className="text-foreground">{b.userName}</strong>
+                            {b.net > 0 ? (
+                              <p className="text-green-600 dark:text-green-400">Owes you ₹{b.net.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                            ) : b.net < 0 ? (
+                              <p className="text-red-600 dark:text-red-400">You owe ₹{Math.abs(b.net).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                            ) : (
+                              <p className="text-muted-foreground">Settled up</p>
+                            )}
+                          </div>
+                          {Math.abs(b.net) > 0.01 && (
+                            <Button
+                              size="sm" variant="outline"
+                              disabled={settlingKey === `all:${b.userId}`}
+                              onClick={() => handleSettleAllForUser(b.userId, b.userName)}
+                            >
+                              {settlingKey === `all:${b.userId}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Settle up"}
+                            </Button>
+                          )}
+                        </div>
                       ))}
-                    </ul></ScrollArea>
+                    </div>
                   )}
                 </CardContent>
               </Card>
             </motion.section>
 
-            <Separator className="my-6 border-primary/30"/>
+            <Separator className="my-6 border-primary/30" />
 
+            {/* Open items */}
             <motion.section variants={cardVariants}>
               <Card className={cn("shadow-lg border-primary/20 bg-card/95", glowClass)}>
-                <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><FilePlus className="text-primary/80"/>Add New Shared Expense</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><ListChecks className="text-primary/80" />Open Splits</CardTitle></CardHeader>
                 <CardContent>
-                  <AddSplitExpenseForm 
-                    users={splitUsers} 
-                    onExpenseAdded={fetchData} 
-                    categories={expenseCategories}
-                    paymentMethods={paymentMethods}
-                    isLoading={isLoadingDropdowns || isLoadingUsers}
-                  />
+                  {isLoadingTransactions ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                  ) : openTransactions.length === 0 ? (
+                    <p className="text-muted-foreground">Nothing outstanding.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {openTransactions.map(t => (
+                        <motion.div key={t.id} variants={itemVariants} className="p-4 border rounded-lg bg-background/50 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-semibold text-accent">{t.description}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {format(t.date, 'dd MMM, yyyy')} • Total: ₹{t.amount.toLocaleString()} • My share: ₹{(t.myShare ?? 0).toLocaleString()}
+                              </p>
+                              {t.paidById && (
+                                <p className="text-xs text-muted-foreground">Paid by: <strong>{t.paidBy?.name ?? 'someone else'}</strong></p>
+                              )}
+                            </div>
+                            <Badge variant="secondary" className="bg-orange-500/80 text-white">Open</Badge>
+                          </div>
+                          <ul className="space-y-2 text-sm">
+                            {t.paidById && !t.myShareSettled && (t.myShare ?? 0) > 0 && (
+                              <li className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                  <CircleDot className="h-4 w-4 text-orange-500" />
+                                  <span>You owe {t.paidBy?.name ?? 'them'} ₹{(t.myShare ?? 0).toLocaleString()}</span>
+                                </div>
+                                <Button
+                                  size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                  onClick={() => handleSettleMyShare(t.id)}
+                                  disabled={settlingKey === `mine:${t.id}`}
+                                >
+                                  {settlingKey === `mine:${t.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : "Settle"}
+                                </Button>
+                              </li>
+                            )}
+                            {(t.splits ?? []).map(s => (
+                              <li key={s.userId} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                  {s.isSettled ? <CheckCircle className="h-4 w-4 text-green-500" /> : <CircleDot className="h-4 w-4 text-orange-500" />}
+                                  <span>{s.userName} owes ₹{s.shareAmount.toLocaleString()}</span>
+                                </div>
+                                {!s.isSettled && (
+                                  <Button
+                                    size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                    onClick={() => handleSettleShare(t.id, s.userId)}
+                                    disabled={settlingKey === `${t.id}:${s.userId}`}
+                                  >
+                                    {settlingKey === `${t.id}:${s.userId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : "Settle"}
+                                  </Button>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.section>
-            
-            <Separator className="my-6 border-primary/30"/>
 
+            <Separator className="my-6 border-primary/30" />
+
+            {/* Settled history — collapsed by default */}
             <motion.section variants={cardVariants}>
-                <Card className={cn("shadow-lg border-primary/20 bg-card/95", glowClass)}>
-                    <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><ListChecks className="text-primary/80"/>Shared Expense History</CardTitle></CardHeader>
-                    <CardContent>
-                        {isLoadingExpenses ? <p className="text-muted-foreground">Loading history...</p> : splitExpenses.length === 0 ? <p className="text-muted-foreground">No shared expenses recorded yet.</p> :
-                        <div className="pr-3">
-                            <div className="space-y-4">
-                                {splitExpenses.map(expense => (
-                                    <motion.div key={expense.id} variants={itemVariants} className="p-4 border rounded-lg bg-background/50 space-y-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h4 className="font-semibold text-accent">{expense.title}</h4>
-                                                <p className="text-xs text-muted-foreground">{format(expense.date, 'dd MMM, yyyy')} • Total: ₹{expense.totalAmount.toLocaleString()}</p>
-                                                <p className="text-xs text-muted-foreground">Paid by: <strong>{expense.paidBy?.id === MAIN_USER_ID ? 'Me' : expense.paidBy?.name || 'Unknown'}</strong></p>
-                                            </div>
-                                            <Badge variant={expense.isFullySettled ? "default" : "secondary"} className={cn(expense.isFullySettled ? "bg-green-600/80" : "bg-orange-500/80", "text-white")}>{expense.isFullySettled ? "Settled" : "Unsettled"}</Badge>
-                                        </div>
-                                        <ul className="space-y-2 text-sm">
-                                            {expense.participants.map(p => (
-                                                <li key={p.user.id} className="flex justify-between items-center text-xs">
-                                                    <div className="flex items-center gap-2">
-                                                        {p.isSettled ? <CheckCircle className="h-4 w-4 text-green-500"/> : <CircleDot className="h-4 w-4 text-orange-500"/>}
-                                                        <span>{p.user.id === MAIN_USER_ID ? 'You owe' : p.user.name + ' owes'} ₹{p.shareAmount.toLocaleString()}</span>
-                                                    </div>
-                                                    {!p.isSettled && (
-                                                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleSettleShare(expense.id, p.user.id)} disabled={isSettling?.expenseId === expense.id && isSettling?.userId === p.user.id}>
-                                                        {isSettling?.expenseId === expense.id && isSettling?.userId === p.user.id ? <Loader2 className="h-3 w-3 animate-spin"/> : "Settle"}
-                                                      </Button>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        </div>
-                        }
-                    </CardContent>
-                </Card>
+              <Accordion type="single" collapsible>
+                <AccordionItem value="settled" className="border-none">
+                  <Card className={cn("shadow-lg border-primary/20 bg-card/95", glowClass)}>
+                    <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                      <CardTitle className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2">
+                        <CheckCircle className="text-primary/80" />
+                        Settled History
+                        <Badge variant="outline" className="ml-1 font-normal">{settledTransactions.length}</Badge>
+                      </CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-6 pb-6">
+                      {settledTransactions.length === 0 ? (
+                        <p className="text-muted-foreground">Nothing settled yet.</p>
+                      ) : (
+                        <ScrollArea className="h-[300px] pr-3">
+                          <div className="space-y-3">
+                            {settledTransactions.map(t => (
+                              <div key={t.id} className="p-3 border rounded-lg bg-background/40 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="font-medium">{t.description}</span>
+                                  <span className="text-muted-foreground">{format(t.date, 'dd MMM, yyyy')}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Total ₹{t.amount.toLocaleString()} • My share ₹{(t.myShare ?? 0).toLocaleString()}
+                                  {t.splits && t.splits.length > 0 && ` • Split with ${t.splits.map(s => s.userName).join(', ')}`}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </AccordionContent>
+                  </Card>
+                </AccordionItem>
+              </Accordion>
             </motion.section>
 
-            <Separator className="my-6 border-primary/30"/>
+            <Separator className="my-6 border-primary/30" />
 
+            {/* People directory */}
             <motion.section variants={cardVariants}>
-                <Card className={cn("shadow-lg border-green-500/30 bg-green-500/5", glowClass)}>
-                    <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-green-600 dark:text-green-400 flex items-center gap-2"><Scale className="text-green-500/80"/>Overall Balances</CardTitle></CardHeader>
-                    <CardContent>
-                        {isLoadingBalances ? <p className="text-muted-foreground">Calculating balances...</p> : balances.filter(b => b.owes.length > 0 || b.owedBy.length > 0).length === 0 ? <p className="text-muted-foreground">All balances are settled!</p> :
-                        <div className="space-y-3">
-                            {balances.map(balance => (balance.owes.length > 0 || balance.owedBy.length > 0) && (
-                                <div key={balance.userId} className="text-sm">
-                                    <strong className="text-primary">{balance.userName === "Me" ? "Your Balances" : balance.userName}</strong>
-                                    {balance.owes.length > 0 && 
-                                        <ul className="list-disc list-inside pl-4 text-red-600 dark:text-red-400">
-                                            {balance.owes.map(debt => (
-                                                <li key={debt.toUserId}>Owes ₹{debt.amount.toLocaleString()} to <strong className="text-foreground">{debt.toUserName}</strong></li>
-                                            ))}
-                                        </ul>
-                                    }
-                                     {balance.owedBy.length > 0 && 
-                                        <ul className="list-disc list-inside pl-4 text-green-600 dark:text-green-400">
-                                            {balance.owedBy.map(credit => (
-                                                <li key={credit.fromUserId}>Is owed ₹{credit.amount.toLocaleString()} by <strong className="text-foreground">{credit.fromUserName}</strong></li>
-                                            ))}
-                                        </ul>
-                                    }
-                                </div>
-                            ))}
-                        </div>
-                        }
-                    </CardContent>
-                </Card>
+              <Card className={cn("shadow-lg border-accent/20 bg-card/95", glowClass)}>
+                <CardHeader><CardTitle className="text-lg sm:text-xl font-semibold text-accent flex items-center gap-2"><UserPlus className="text-accent/80" />People</CardTitle></CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAddUser} className="flex flex-col sm:flex-row items-end gap-2 mb-4">
+                    <div className="flex-grow w-full sm:w-auto">
+                      <Label htmlFor="newUserName" className="text-sm text-foreground/90">New Person</Label>
+                      <Input id="newUserName" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="e.g., Rahul, Priya" className="mt-1" disabled={isAddingUser} />
+                    </div>
+                    <Button type="submit" disabled={isAddingUser || !newUserName.trim()} className="w-full sm:w-auto" withMotion>
+                      {isAddingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />} Add
+                    </Button>
+                  </form>
+                  <Separator className="my-4" />
+                  {isLoadingUsers ? (
+                    <div className="h-10 animate-pulse rounded-md bg-muted/50" />
+                  ) : splitUsers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No one added yet.</p>
+                  ) : (
+                    <ScrollArea className="h-[150px] pr-3">
+                      <ul className="space-y-2">
+                        {splitUsers.map(user => (
+                          <motion.li key={user.id} variants={itemVariants} className="flex items-center justify-between p-2.5 rounded-md bg-background/60 border hover:bg-accent/5">
+                            <span className="text-sm">{user.name}</span>
+                            <Button
+                              variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 h-7 w-7 p-1"
+                              disabled={isDeletingUser === user.id}
+                              onClick={() => handleDeleteUser(user.id, user.name)}
+                            >
+                              {isDeletingUser === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </motion.li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
             </motion.section>
 
           </CardContent>
         </Card>
       </motion.div>
+
+      {isMobile ? (
+        <Sheet open={isAddingNew} onOpenChange={(open) => !open && closeAddForm()}>
+          <SheetContent side="bottom" className="bg-background/95 border-primary/50 h-[92vh] flex flex-col p-0 rounded-t-xl">
+            <SheetHeader className="px-4 pt-4 pb-2 text-left">
+              <SheetTitle className="text-accent text-lg">Add a Split Expense</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-sm">Record who this expense is shared with.</SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
+              <TransactionForm onTransactionAdded={onAdded} onCancel={closeAddForm} defaultOpenSplit />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <AlertDialog open={isAddingNew} onOpenChange={(open) => !open && closeAddForm()}>
+          <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg w-[90vw] max-w-lg sm:max-w-xl md:max-w-2xl rounded-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-accent text-xl">Add a Split Expense</AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">Record who this expense is shared with.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4 max-h-[70vh] overflow-y-auto pr-2">
+              <TransactionForm onTransactionAdded={onAdded} onCancel={closeAddForm} defaultOpenSplit />
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </main>
   );
 }
-
-interface AddSplitExpenseFormProps {
-  users: SplitUser[];
-  onExpenseAdded: () => void;
-  categories: Category[];
-  paymentMethods: PaymentMethod[];
-  isLoading: boolean;
-}
-
-// Sub-component for the Add Split Expense Form
-function AddSplitExpenseForm({ users, onExpenseAdded, categories, paymentMethods, isLoading: isLoadingDropdowns }: AddSplitExpenseFormProps) {
-    const { toast } = useToast();
-    const [title, setTitle] = useState('');
-    const [totalAmount, setTotalAmount] = useState('');
-    const [date, setDate] = useState<Date | undefined>(new Date());
-    const [paidById, setPaidById] = useState<string | undefined>(MAIN_USER_ID);
-    const [splitMethod, setSplitMethod] = useState<SplitMethod>('equally');
-    const [participants, setParticipants] = useState<Set<string>>(new Set([MAIN_USER_ID]));
-    const [customShares, setCustomShares] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(false);
-    
-    const [categoryId, setCategoryId] = useState<string | undefined>();
-    const [paymentMethodId, setPaymentMethodId] = useState<string | undefined>();
-    const [isParticipantPopoverOpen, setIsParticipantPopoverOpen] = useState(false);
-
-
-    useEffect(() => {
-        if (categories.length > 0 && !categoryId) {
-            setCategoryId(categories.find(c => c.name === 'Food and Dining')?.id || categories[0].id);
-        }
-        if (paymentMethods.length > 0 && !paymentMethodId) {
-            setPaymentMethodId(paymentMethods.find(p => p.type === 'UPI')?.id || paymentMethods[0].id);
-        }
-    }, [categories, paymentMethods, categoryId, paymentMethodId]);
-
-    const allPossiblePayers = [{ id: MAIN_USER_ID, name: 'Me (FinWise User)' }, ...users];
-
-    const toggleParticipant = (userId: string) => {
-        setParticipants(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(userId)) newSet.delete(userId);
-            else newSet.add(userId);
-            // If custom split, clear share for removed participant
-            if (splitMethod === 'custom' && !newSet.has(userId)) {
-                setCustomShares(currentShares => {
-                    const newShares = {...currentShares};
-                    delete newShares[userId];
-                    return newShares;
-                });
-            }
-            return newSet;
-        });
-    };
-    
-    const remainingAmount = useMemo(() => {
-        const total = parseFloat(totalAmount) || 0;
-        const currentCustomSum = Object.values(customShares).reduce((sum, share) => sum + (parseFloat(share) || 0), 0);
-        return total - currentCustomSum;
-    }, [totalAmount, customShares]);
-
-
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
-        
-        const amountNum = parseFloat(totalAmount);
-        if (!title.trim() || isNaN(amountNum) || amountNum <= 0 || !date || !paidById || participants.size < 1) {
-            toast({ title: "Missing Information", description: "Please fill all fields. At least one participant is required.", variant: "destructive" });
-            return;
-        }
-
-        if(paidById === MAIN_USER_ID && (!categoryId || !paymentMethodId)) {
-            toast({ title: "Missing Information", description: "When you pay, please select a category and payment method for your records.", variant: "destructive" });
-            return;
-        }
-
-        let participantData: { userId: string; customShare?: number }[] = [];
-        if (splitMethod === 'custom') {
-            if (Math.abs(remainingAmount) > 0.01) {
-                toast({ title: "Custom Split Mismatch", description: `The sum of custom shares must equal the total amount. Remaining: ₹${remainingAmount.toFixed(2)}`, variant: "destructive"});
-                return;
-            }
-            participantData = Array.from(participants).map(id => ({ userId: id, customShare: parseFloat(customShares[id] || '0') }));
-        } else {
-            participantData = Array.from(participants).map(id => ({ userId: id }));
-        }
-
-        const expenseData: SplitExpenseInput = {
-            title, totalAmount: amountNum, date, paidById, splitMethod,
-            participants: participantData,
-            personalExpenseDetails: paidById === MAIN_USER_ID ? { categoryId: categoryId!, paymentMethodId: paymentMethodId! } : undefined
-        };
-        
-        setIsLoading(true);
-        try {
-            await addSplitExpense(expenseData);
-            toast({ title: "Shared Expense Added!", description: `'${title}' has been recorded.` });
-            setTitle(''); setTotalAmount(''); setDate(new Date()); setPaidById(MAIN_USER_ID); setSplitMethod('equally');
-            setParticipants(new Set([MAIN_USER_ID])); setCustomShares({}); setCategoryId(categories[0]?.id); setPaymentMethodId(paymentMethods[0]?.id);
-            onExpenseAdded();
-        } catch (error: any) {
-            toast({ title: "Error Adding Expense", description: error.message || "Could not add shared expense.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    if (isLoadingDropdowns) {
-        return <p className="text-muted-foreground text-center italic">Loading options...</p>
-    }
-     if (users.length === 0 && allPossiblePayers.length <= 1) {
-        return <p className="text-muted-foreground text-center italic">Please add at least one other user to start adding shared expenses.</p>
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><Label htmlFor="title">Title</Label><Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Dinner at BBQ Nation" className="mt-1"/></div>
-                <div><Label htmlFor="totalAmount">Total Amount (₹)</Label><Input id="totalAmount" type="number" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} placeholder="e.g., 2500" className="mt-1"/></div>
-            </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <Label htmlFor="date">Date</Label>
-                    <Popover>
-                        <PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal mt-1", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{date ? format(date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
-                    </Popover>
-                </div>
-                <div>
-                    <Label htmlFor="paidById">Paid By</Label>
-                    <Select value={paidById} onValueChange={setPaidById}><SelectTrigger id="paidById" className="mt-1"><SelectValue placeholder="Select who paid" /></SelectTrigger>
-                        <SelectContent>{allPossiblePayers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            {paidById === MAIN_USER_ID && (
-                 <Card className="bg-primary/5 border-primary/20 p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <Label>Expense Category <span className="text-xs text-muted-foreground">(for your records)</span></Label>
-                            <Select value={categoryId} onValueChange={setCategoryId}><SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
-                                <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label>Payment Method <span className="text-xs text-muted-foreground">(for your records)</span></Label>
-                             <Select value={paymentMethodId} onValueChange={setPaymentMethodId}><SelectTrigger className="mt-1"><SelectValue placeholder="Select payment method" /></SelectTrigger>
-                                <SelectContent>{paymentMethods.map(pm => <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </Card>
-            )}
-
-            <div>
-                 <Label>Participants</Label>
-                 <Popover open={isParticipantPopoverOpen} onOpenChange={setIsParticipantPopoverOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={isParticipantPopoverOpen}
-                            className="w-full justify-between mt-1 h-auto min-h-10"
-                        >
-                            <div className="flex flex-wrap gap-1">
-                                {participants.size > 0 ? (
-                                    Array.from(participants).map(userId => {
-                                        const user = allPossiblePayers.find(p => p.id === userId);
-                                        return <Badge key={userId} variant="secondary">{user?.name}</Badge>;
-                                    })
-                                ) : (
-                                    <span className="text-muted-foreground">Select participants...</span>
-                                )}
-                            </div>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                            <CommandInput placeholder="Search users..." />
-                            <CommandEmpty>No user found.</CommandEmpty>
-                            <CommandList>
-                                <CommandGroup>
-                                    {allPossiblePayers.map((user) => (
-                                        <CommandItem
-                                            key={user.id}
-                                            value={user.name}
-                                            onSelect={() => {
-                                                toggleParticipant(user.id);
-                                            }}
-                                        >
-                                            <Check
-                                                className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    participants.has(user.id) ? "opacity-100" : "opacity-0"
-                                                )}
-                                            />
-                                            {user.name}
-                                        </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                            </CommandList>
-                        </Command>
-                    </PopoverContent>
-                </Popover>
-            </div>
-             <div>
-                <Label>Split Method</Label>
-                <RadioGroup value={splitMethod} onValueChange={(val) => setSplitMethod(val as SplitMethod)} className="flex space-x-4 mt-1">
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="equally" id="equally" /><Label htmlFor="equally">Equally</Label></div>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="custom" id="custom" /><Label htmlFor="custom">Custom</Label></div>
-                </RadioGroup>
-            </div>
-            {splitMethod === 'custom' && (
-                <Card className="p-3 bg-accent/5 border-accent/20">
-                    <CardHeader className="p-0 pb-2"><CardTitle className="text-md text-accent">Custom Split</CardTitle><CardDescription className="text-xs">Enter each person's share. Must sum to total.</CardDescription></CardHeader>
-                    <CardContent className="p-0 space-y-2">
-                        {Array.from(participants).map(userId => {
-                            const user = allPossiblePayers.find(p => p.id === userId);
-                            return (
-                                <div key={userId} className="flex items-center gap-2">
-                                    <Label className="w-1/3 truncate" title={user?.name}>{user?.name}</Label>
-                                    <Input type="number" placeholder="0.00" value={customShares[userId] || ''} onChange={(e) => setCustomShares({...customShares, [userId]: e.target.value})} className="h-8 text-sm" />
-                                </div>
-                            );
-                        })}
-                    </CardContent>
-                    <CardContent className="p-0 pt-2 text-sm font-medium"><p className={cn(Math.abs(remainingAmount) > 0.01 ? 'text-red-500' : 'text-green-500')}>Remaining: ₹{remainingAmount.toFixed(2)}</p></CardContent>
-                </Card>
-            )}
-            <Button type="submit" disabled={isLoading} className="w-full bg-primary text-primary-foreground" withMotion>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FilePlus className="mr-2 h-4 w-4"/>} Add Shared Expense
-            </Button>
-        </form>
-    );
-}
-

@@ -30,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAIModel } from '@/contexts/AIModelContext';
+import { netAmount } from '@/lib/split-utils';
 
 
 const pageVariants = {
@@ -113,18 +114,19 @@ export default function ReportsPage() {
     ? `${reportYear}`
     : `${monthNamesList[reportMonth]} ${reportYear}`;
 
-  /** Expense totals per category, for the ranked bar chart. */
+  /** Expense totals per category, for the ranked bar chart. Net of splits — only my share counts as my spending. */
   const categoryBreakdownData = useMemo(() => {
     const totals = new Map<string, number>();
     for (const t of filteredTransactionsForPeriod) {
       if (t.type !== 'expense') continue;
       const name = t.category?.name ?? t.source ?? 'Uncategorised';
-      totals.set(name, (totals.get(name) ?? 0) + t.amount);
+      totals.set(name, (totals.get(name) ?? 0) + netAmount(t));
     }
     return [...totals.entries()].map(([name, value]) => ({ name, value }));
   }, [filteredTransactionsForPeriod]);
 
-  /** Expense totals per payment method. */
+  /** Expense totals per payment method. Deliberately gross (full amount) —
+   *  this reflects actual card/UPI activity, not just what's "mine". */
   const paymentMethodBreakdownData = useMemo(() => {
     const totals = new Map<string, number>();
     for (const t of filteredTransactionsForPeriod) {
@@ -145,7 +147,7 @@ export default function ReportsPage() {
         const d = t.date instanceof Date ? t.date : new Date(t.date);
         return {
           description: t.description ?? null,
-          amount: t.amount,
+          amount: netAmount(t),
           date: getCalendarDateString(t.date) || d.toISOString(),
           categoryName: t.category?.name ?? null,
           paymentMethodName: t.paymentMethod?.name ?? null,
@@ -168,7 +170,7 @@ export default function ReportsPage() {
       .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         const categoryName = t.category!.name;
-        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
+        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + netAmount(t));
       });
 
     return Array.from(spendingMap.entries())

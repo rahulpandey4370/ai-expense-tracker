@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from "framer-motion";
 import { KpiCard } from "@/components/kpi-card";
 import { TransactionForm } from "@/components/transaction-form";
@@ -12,7 +13,7 @@ import { IncomeExpenseTrendChart } from "@/components/charts/income-expense-tren
 import { ExpenseTypeSplitChart } from "@/components/charts/expense-type-split-chart";
 import type { AppTransaction, Category, Budget, AIModel } from '@/lib/types';
 import { materializeRecurringTransactions } from '@/lib/actions/recurring';
-import { useTransactionsInRange, useCategories, useBudgets, useInvalidateFinance } from '@/hooks/use-finance-queries';
+import { useTransactionsInRange, useCategories, useBudgets, useInvalidateFinance, usePaymentMethods } from '@/hooks/use-finance-queries';
 import { Banknote, TrendingDown, PiggyBank, Percent, AlertTriangle, Loader2, HandCoins, Target, Landmark, LineChart, Wallet, Sigma, Plus, Eye, EyeOff, MoreVertical, Check } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDateSelection } from '@/contexts/DateSelectionContext';
@@ -29,7 +30,10 @@ import { IncomeAllocationBar } from '@/components/income-allocation-bar';
 import { OpportunityCostAnalyzer } from '@/components/opportunity-cost-analyzer';
 import { MerchantSpendSection } from '@/components/merchant-spend-section';
 import { DashboardSkeleton } from '@/components/dashboard-skeleton';
-import { formatCurrencyWhole, formatCurrencyCompact, formatPercent } from '@/lib/format';
+import { formatCurrencyWhole, formatCurrencyCompact, formatPercent, formatDelta, percentChange } from '@/lib/format';
+import { netAmount, othersShare, openReceivable } from '@/lib/split-utils';
+import { CollapsibleKpiGroup } from '@/components/dashboard/collapsible-kpi-group';
+import { Store, CreditCard, HeartHandshake } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAIModel } from '@/contexts/AIModelContext';
 
@@ -139,7 +143,9 @@ export default function DashboardPage() {
   }, [selQuery.data, trendQuery.data]);
   const { data: allCategories = [] } = useCategories();
   const { data: budgets = [] } = useBudgets();
+  const { data: paymentMethods = [] } = usePaymentMethods();
   const isLoadingData = selQuery.isLoading || trendQuery.isLoading;
+  const router = useRouter();
 
   // Materialize any due recurring transactions once per day (client-rate-limited),
   // then refresh the cached queries so new rows appear.
@@ -180,20 +186,20 @@ export default function DashboardPage() {
 
     const needsExpenses = currentMonthTransactions
       .filter(t => t.type === 'expense' && t.expenseType === 'need')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + netAmount(t), 0);
 
     const wantsExpenses = currentMonthTransactions
       .filter(t => t.type === 'expense' && t.expenseType === 'want')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + netAmount(t), 0);
 
     const coreExpenses = needsExpenses + wantsExpenses;
-    
+
     const totalInvestments = currentMonthTransactions
-      .filter(t => t.type === 'expense' && 
-                   (t.expenseType === 'investment' || 
+      .filter(t => t.type === 'expense' &&
+                   (t.expenseType === 'investment' ||
                     (t.category && investmentCategoryNames.includes(t.category.name)))
       )
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + netAmount(t), 0);
     
     const totalOutgoings = coreExpenses + totalInvestments;
     const availableToSaveOrInvest = income - coreExpenses; 
@@ -232,18 +238,62 @@ export default function DashboardPage() {
 
     const lastMonthCoreExpenses = lastMonthTransactions
         .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want'))
-        .reduce((sum, t) => sum + t.amount, 0) || 0;
+        .reduce((sum, t) => sum + netAmount(t), 0) || 0;
 
     const lastMonthSpendingByCategory = lastMonthTransactions
         .filter(t => t.type === 'expense' && (t.expenseType === 'need' || t.expenseType === 'want') && t.category?.name)
         .reduce((acc, t) => {
             const categoryName = t.category!.name;
-            acc[categoryName] = (acc[categoryName] || 0) + t.amount;
+            acc[categoryName] = (acc[categoryName] || 0) + netAmount(t);
             return acc;
         }, {} as Record<string, number>);
 
     return { lastMonthCoreExpenses, lastMonthSpendingByCategory };
   }, [transactions, selectedDate]);
+
+  // Per-card spend this month, gross (a card statement counts every charge on
+  // it, mine or not) — CC Tanshu pinned first since it's the one most watched.
+  const paymentMethodMonthly = useMemo(() => {
+    const prevMonthDate = subMonths(selectedDate, 1);
+    const lastMonth = prevMonthDate.getMonth();
+    const yearForLastMonth = prevMonthDate.getFullYear();
+
+    const totals = new Map<string, { name: string; current: number; previous: number }>();
+    for (const t of currentMonthTransactions) {
+      if (t.type !== 'expense' || !t.paymentMethod) continue;
+      const entry = totals.get(t.paymentMethod.id) ?? { name: t.paymentMethod.name, current: 0, previous: 0 };
+      entry.current += t.amount;
+      totals.set(t.paymentMethod.id, entry);
+    }
+    for (const t of transactions) {
+      if (t.type !== 'expense' || !t.paymentMethod) continue;
+      if (!isSameCalendarMonth(t.date, lastMonth, yearForLastMonth)) continue;
+      const entry = totals.get(t.paymentMethod.id) ?? { name: t.paymentMethod.name, current: 0, previous: 0 };
+      entry.previous += t.amount;
+      totals.set(t.paymentMethod.id, entry);
+    }
+
+    const tanshu = paymentMethods.find(pm => pm.name.toLowerCase().includes('tanshu'));
+    return [...totals.entries()]
+      .map(([id, v]) => ({ id, ...v, change: percentChange(v.current, v.previous) }))
+      .filter(v => v.current > 0)
+      .sort((a, b) => (a.id === tanshu?.id ? -1 : b.id === tanshu?.id ? 1 : b.current - a.current));
+  }, [currentMonthTransactions, transactions, selectedDate, paymentMethods]);
+
+  // What others charged on my cards this month, and how much of that is still
+  // unsettled across all time — the two numbers that answer "am I owed money?".
+  const reimbursements = useMemo(() => {
+    const spentByOthersThisMonth = currentMonthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + othersShare(t), 0);
+    const openThisMonth = currentMonthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + openReceivable(t), 0);
+    const openAllTime = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + openReceivable(t), 0);
+    return { spentByOthersThisMonth, openThisMonth, openAllTime };
+  }, [currentMonthTransactions, transactions]);
 
 
   const budgetData = useMemo(() => {
@@ -254,7 +304,7 @@ export default function DashboardPage() {
                     if (budget.type === 'category') return t.category?.id === budget.targetId;
                     return false;
                 })
-                .reduce((sum, t) => sum + t.amount, 0);
+                .reduce((sum, t) => sum + netAmount(t), 0);
             return {
                 id: budget.id,
                 name: budget.name,
@@ -447,6 +497,82 @@ export default function DashboardPage() {
           </motion.div>
         </motion.div>
 
+        {/* Secondary KPI groups — collapsed by default, right under the main
+            numbers rather than buried at the bottom of the page. */}
+        <div className="space-y-3">
+          <CollapsibleKpiGroup id="merchants" title="Where your money went" icon={<Store className="h-4 w-4 text-accent" />}>
+            <MerchantSpendSection
+              transactions={transactions}
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+              selectedMonthName={monthNamesList[selectedMonth]}
+              isVisible={kpisVisible}
+              bare
+            />
+          </CollapsibleKpiGroup>
+
+          <CollapsibleKpiGroup
+            id="payment-methods"
+            title="Cards & Payment Methods"
+            icon={<CreditCard className="h-4 w-4 text-accent" />}
+            badge={paymentMethodMonthly.length || undefined}
+          >
+            {paymentMethodMonthly.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No card or payment method activity this month.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {paymentMethodMonthly.map(pm => (
+                  <button
+                    key={pm.id}
+                    type="button"
+                    onClick={() => router.push(`/transactions?month=${selectedMonth}&year=${selectedYear}&type=expense&paymentMethodId=${pm.id}`)}
+                    className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                  >
+                    <span className="truncate text-xs font-medium text-muted-foreground" title={pm.name}>{pm.name}</span>
+                    <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
+                      {kpisVisible ? formatCurrencyCompact(pm.current) : '•••••'}
+                    </span>
+                    {kpisVisible && pm.change !== null && (
+                      <span className={cn("text-[11px]", pm.change > 0 ? "text-red-500" : pm.change < 0 ? "text-green-500" : "text-muted-foreground")}>
+                        {formatDelta(pm.change)} vs last month
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </CollapsibleKpiGroup>
+
+          <CollapsibleKpiGroup id="reimbursements" title="Reimbursements" icon={<HeartHandshake className="h-4 w-4 text-accent" />}>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => router.push('/split-expenses')}
+                className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+              >
+                <span className="text-xs font-medium text-muted-foreground">Spent by others on my card this month</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">
+                  {kpisVisible ? formatCurrencyWhole(reimbursements.spentByOthersThisMonth) : '•••••'}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {kpisVisible ? `${formatCurrencyWhole(reimbursements.openThisMonth)} still unsettled` : ' '}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/split-expenses')}
+                className="flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+              >
+                <span className="text-xs font-medium text-muted-foreground">Total open receivables</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">
+                  {kpisVisible ? formatCurrencyWhole(reimbursements.openAllTime) : '•••••'}
+                </span>
+                <span className="text-[11px] text-muted-foreground">Across all unsettled splits</span>
+              </button>
+            </div>
+          </CollapsibleKpiGroup>
+        </div>
+
          {(kpisVisible && monthlyMetrics.totalOutgoings > monthlyMetrics.income) && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Alert 
@@ -566,17 +692,6 @@ export default function DashboardPage() {
           <motion.div variants={itemVariants}>
             <IncomeExpenseTrendChart transactions={transactions} numberOfMonths={3} />
           </motion.div>
-        </motion.div>
-
-        {/* Merchant KPIs — dynamic, only merchants with spend this month. */}
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
-          <MerchantSpendSection
-            transactions={transactions}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            selectedMonthName={monthNamesList[selectedMonth]}
-            isVisible={kpisVisible}
-          />
         </motion.div>
       </main>
       

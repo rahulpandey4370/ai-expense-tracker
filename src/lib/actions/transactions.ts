@@ -1,7 +1,7 @@
 'use server';
 
 import { getSupabase } from '@/lib/supabase';
-import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput } from '@/lib/types';
+import type { AppTransaction, RawTransaction, Category, PaymentMethod, TransactionInput, TransactionSplitInput } from '@/lib/types';
 import { TransactionInputSchema } from '@/lib/types';
 import { getAppCalendarDayString } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
@@ -97,6 +97,11 @@ function toRawTransaction(row: any): RawTransaction {
     source: row.source ?? undefined,
     expenseType: row.expense_type ?? undefined,
     isSplit: row.is_split ?? undefined,
+    myShare: row.my_share ?? undefined,
+    paidById: row.paid_by_id ?? undefined,
+    splitMethod: row.split_method ?? undefined,
+    myShareSettled: row.my_share_settled ?? undefined,
+    netAmount: row.net_amount ?? row.amount,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -114,43 +119,19 @@ function toTransactionRow(tx: RawTransaction): Record<string, any> {
     source: tx.source ?? null,
     expense_type: tx.expenseType ?? null,
     is_split: tx.isSplit ?? null,
+    my_share: tx.myShare ?? null,
+    paid_by_id: tx.paidById ?? null,
+    split_method: tx.splitMethod ?? null,
     created_at: tx.createdAt,
     updated_at: tx.updatedAt,
   };
 }
 
-export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
-  const [allCategories, allPaymentMethods] = await Promise.all([getCategories(), getPaymentMethods()]);
-  const categoryMap = new Map(allCategories.map(c => [c.id, c]));
-  const paymentMethodMap = new Map(allPaymentMethods.map(pm => [pm.id, pm]));
-
-  const supabase = getSupabase();
-  let query = supabase.from('transactions').select('*').order('date', { ascending: false });
-  if (options?.limit) query = query.limit(options.limit);
-
-  const { data, error } = await query;
-  if (error) {
-    console.error('Supabase Error (getTransactions):', error.message);
-    throw new Error(`Could not fetch transactions from Supabase. Original error: ${error.message}`);
-  }
-
-  return (data as any[]).map(row => {
-    const rawTx = toRawTransaction(row);
-    return {
-      ...rawTx,
-      date: new Date(rawTx.date),
-      createdAt: new Date(rawTx.createdAt),
-      updatedAt: new Date(rawTx.updatedAt),
-      category: rawTx.categoryId ? categoryMap.get(rawTx.categoryId) : undefined,
-      paymentMethod: rawTx.paymentMethodId ? paymentMethodMap.get(rawTx.paymentMethodId) : undefined,
-    } as AppTransaction;
-  });
-}
-
 // --- Efficient server-side querying (reads the transactions_expanded view) ---
-// The view (supabase/functions.sql) flattens category/payment-method names onto
-// each row so filtering, sorting (incl. by those names), and pagination all run
-// in Postgres in one query — no full lookup-table fetch or in-JS Map building.
+// The view (supabase/functions.sql) flattens category/payment-method names and
+// aggregates transaction_splits onto each row so filtering, sorting (incl. by
+// those names), and pagination all run in Postgres in one query — no full
+// lookup-table fetch, no N+1 for splits.
 function hydrateExpandedRow(row: any): AppTransaction {
   const rawTx = toRawTransaction(row);
   return {
@@ -164,7 +145,25 @@ function hydrateExpandedRow(row: any): AppTransaction {
     paymentMethod: row.payment_method_id
       ? { id: row.payment_method_id, name: row.payment_method_name, type: row.payment_method_type }
       : undefined,
+    paidBy: row.paid_by_id
+      ? { id: row.paid_by_id, name: row.paid_by_name, createdAt: '', updatedAt: '' }
+      : undefined,
+    splits: Array.isArray(row.splits) ? row.splits : [],
   } as AppTransaction;
+}
+
+export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
+  const supabase = getSupabase();
+  let query = supabase.from('transactions_expanded').select('*').order('date', { ascending: false });
+  if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Supabase Error (getTransactions):', error.message);
+    throw new Error(`Could not fetch transactions from Supabase. Original error: ${error.message}`);
+  }
+
+  return (data as any[]).map(hydrateExpandedRow);
 }
 
 /**
@@ -281,6 +280,24 @@ export async function queryTransactions(
   return { rows: (data as any[]).map(hydrateExpandedRow), total: count ?? 0 };
 }
 
+/**
+ * Writes a transaction and its split rows (if any) atomically via the
+ * create_transaction_with_splits() Postgres function — a mid-write failure
+ * must never leave an amount whose shares don't sum to it.
+ */
+async function writeTransactionWithSplits(
+  row: Record<string, any>,
+  splits: { userId: string; shareAmount: number }[]
+): Promise<any> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc('create_transaction_with_splits', {
+    p_transaction: row,
+    p_splits: splits.map(s => ({ userId: s.userId, shareAmount: s.shareAmount })),
+  });
+  if (error) throw new Error(`Could not save transaction. Original error: ${error.message}`);
+  return (data as any[])[0];
+}
+
 export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
   const validation = TransactionInputSchema.safeParse(data);
   if (!validation.success) {
@@ -303,30 +320,16 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     updatedAt: now,
   };
 
-  const supabase = getSupabase();
-  const { data: createdRows, error } = await supabase.from('transactions').insert(toTransactionRow(newItem)).select();
-  if (error) throw new Error(`Could not add transaction to Supabase. Original error: ${error.message}`);
+  const createdRow = await writeTransactionWithSplits(toTransactionRow(newItem), validation.data.splits ?? []);
 
   revalidatePath('/');
   revalidatePath('/transactions');
   revalidatePath('/reports');
   revalidatePath('/yearly-overview');
   revalidatePath('/ai-playground');
+  revalidatePath('/split-expenses');
 
-  const allCategories = await getCategories();
-  const allPaymentMethods = await getPaymentMethods();
-  const createdItem = toRawTransaction(createdRows![0]);
-  const category = createdItem.categoryId ? allCategories.find(c => c.id === createdItem.categoryId) : undefined;
-  const paymentMethod = createdItem.paymentMethodId ? allPaymentMethods.find(pm => pm.id === createdItem.paymentMethodId) : undefined;
-
-  return {
-    ...createdItem,
-    date: new Date(createdItem.date),
-    createdAt: new Date(createdItem.createdAt),
-    updatedAt: new Date(createdItem.updatedAt),
-    category,
-    paymentMethod,
-  } as AppTransaction;
+  return hydrateExpandedRow(createdRow);
 }
 
 export async function updateTransaction(id: string, data: Partial<TransactionInput>): Promise<AppTransaction> {
@@ -342,12 +345,30 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   }
   const existingItem = toRawTransaction(existingRows[0]);
 
+  // `splits` is the sentinel for "this call fully specifies the split state".
+  // The transaction form always sends it (populated, or `[]` to clear a
+  // split) on every save. Callers that never touch splitting at all —
+  // recurring materialization, programmatic edits — omit it entirely, so
+  // their update preserves whatever split already exists instead of wiping it.
+  const touchesSplit = data.splits !== undefined;
+  let existingSplits: TransactionSplitInput[] = [];
+  if (!touchesSplit) {
+    const { data: splitRows, error: splitsError } = await supabase
+      .from('transaction_splits')
+      .select('user_id, share_amount')
+      .eq('transaction_id', id);
+    if (splitsError) throw new Error(`Could not read existing splits. Original error: ${splitsError.message}`);
+    existingSplits = (splitRows ?? []).map(r => ({ userId: r.user_id, shareAmount: r.share_amount }));
+  }
+
   const updatedRawData = {
     ...existingItem,
     ...data,
     date: data.date ? data.date.toISOString() : existingItem.date,
     description: data.description !== undefined ? data.description : existingItem.description,
-    isSplit: data.isSplit !== undefined ? data.isSplit : existingItem.isSplit,
+    myShare: touchesSplit ? data.myShare : existingItem.myShare,
+    paidById: touchesSplit ? data.paidById : existingItem.paidById,
+    splitMethod: touchesSplit ? data.splitMethod : existingItem.splitMethod,
     updatedAt: new Date().toISOString(),
   };
 
@@ -360,7 +381,10 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: updatedRawData.paymentMethodId,
     source: updatedRawData.source,
     expenseType: updatedRawData.expenseType,
-    isSplit: updatedRawData.isSplit,
+    myShare: updatedRawData.myShare,
+    paidById: updatedRawData.paidById,
+    splitMethod: updatedRawData.splitMethod,
+    splits: data.splits !== undefined ? data.splits : existingSplits,
   };
 
   const validation = TransactionInputSchema.safeParse(transactionInputForValidation);
@@ -381,41 +405,23 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     paymentMethodId: validation.data.paymentMethodId,
     source: validation.data.source,
     expenseType: validation.data.expenseType,
-    isSplit: validation.data.isSplit,
+    myShare: validation.data.myShare,
+    paidById: validation.data.paidById,
+    splitMethod: validation.data.splitMethod,
     createdAt: existingItem.createdAt,
     updatedAt: new Date().toISOString(),
   };
 
-  const { data: updatedRows, error: updateError } = await supabase
-    .from('transactions')
-    .update(toTransactionRow(finalItemToUpdate))
-    .eq('id', id)
-    .select();
-  if (updateError) throw new Error(`Could not update transaction in Supabase. Original error: ${updateError.message}`);
-  if (!updatedRows || updatedRows.length === 0) {
-    throw new Error(`Transaction with ID ${id} not found during update.`);
-  }
+  const updatedRow = await writeTransactionWithSplits(toTransactionRow(finalItemToUpdate), validation.data.splits ?? []);
 
   revalidatePath('/');
   revalidatePath('/transactions');
   revalidatePath('/reports');
   revalidatePath('/yearly-overview');
   revalidatePath('/ai-playground');
+  revalidatePath('/split-expenses');
 
-  const allCategories = await getCategories();
-  const allPaymentMethods = await getPaymentMethods();
-  const updatedItem = toRawTransaction(updatedRows[0]);
-  const category = updatedItem.categoryId ? allCategories.find(c => c.id === updatedItem.categoryId) : undefined;
-  const paymentMethod = updatedItem.paymentMethodId ? allPaymentMethods.find(pm => pm.id === updatedItem.paymentMethodId) : undefined;
-
-  return {
-    ...updatedItem,
-    date: new Date(updatedItem.date),
-    createdAt: new Date(updatedItem.createdAt),
-    updatedAt: new Date(updatedItem.updatedAt),
-    category,
-    paymentMethod,
-  } as AppTransaction;
+  return hydrateExpandedRow(updatedRow);
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean }> {

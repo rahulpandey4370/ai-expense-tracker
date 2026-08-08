@@ -18,6 +18,7 @@ import {
   ChartLegendContent,
 } from "@/components/ui/chart"
 import type { AppTransaction } from "@/lib/types"
+import { netAmount } from "@/lib/split-utils"
 import { cn } from "@/lib/utils"
 
 interface ExpenseTypeSplitChartProps {
@@ -45,7 +46,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
       if (expenseType === 'investment_expense') {
           expenseType = 'investment';
       }
-      acc[expenseType] = (acc[expenseType] || 0) + curr.amount;
+      acc[expenseType] = (acc[expenseType] || 0) + netAmount(curr);
       return acc;
     }, {} as Record<string, number>);
 

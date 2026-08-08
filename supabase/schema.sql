@@ -15,6 +15,16 @@ create table if not exists payment_methods (
   type text not null
 );
 
+-- People you split expenses/reimbursables with. "Me" is never a row here --
+-- it's represented by the absence of paid_by_id / a transaction's own
+-- my_share on the transactions table below.
+create table if not exists split_users (
+  id text primary key,
+  name text not null,
+  created_at timestamptz not null,
+  updated_at timestamptz not null
+);
+
 create table if not exists transactions (
   id text primary key,
   type text not null check (type in ('income', 'expense')),
@@ -26,10 +36,23 @@ create table if not exists transactions (
   source text,
   expense_type text check (expense_type in ('need', 'want', 'investment', 'investment_expense')),
   is_split boolean,
+  -- Splitting: my_share is what counts as "my" spend (defaults to the full
+  -- amount via net_amount below when the transaction isn't split at all).
+  -- paid_by_id is who actually paid (null = me); split_method records how
+  -- the remainder was divided among transaction_splits rows.
+  my_share numeric check (my_share >= 0),
+  paid_by_id text references split_users(id),
+  split_method text check (split_method in ('equally', 'shares', 'custom', 'not_mine')),
+  -- Only meaningful when paid_by_id is set: has my own share (a debt I owe
+  -- the payer) been settled? transaction_splits covers the opposite
+  -- direction (what other split_users owe me).
+  my_share_settled boolean not null default false,
+  net_amount numeric generated always as (coalesce(my_share, amount)) stored,
   created_at timestamptz not null,
   updated_at timestamptz not null
 );
 create index if not exists transactions_date_idx on transactions (date desc);
+create index if not exists transactions_net_amount_idx on transactions (date desc, net_amount);
 
 create table if not exists budgets (
   id text primary key,
@@ -100,33 +123,22 @@ create table if not exists report_cache (
   created_at timestamptz not null default now()
 );
 
-create table if not exists split_users (
+-- One row per other participant on a split transaction (and, when someone
+-- else paid, what I owe them). share_amount excludes my own share, which
+-- lives on transactions.my_share.
+create table if not exists transaction_splits (
   id text primary key,
-  name text not null,
+  transaction_id text not null references transactions(id) on delete cascade,
+  user_id text not null references split_users(id) on delete restrict,
+  share_amount numeric not null check (share_amount >= 0),
+  is_settled boolean not null default false,
+  settled_at timestamptz,
   created_at timestamptz not null,
-  updated_at timestamptz not null
+  updated_at timestamptz not null,
+  unique (transaction_id, user_id)
 );
-
-create table if not exists split_expenses (
-  id text primary key,
-  title text not null,
-  date timestamptz not null,
-  total_amount numeric not null,
-  paid_by_id text not null,
-  split_method text not null check (split_method in ('equally', 'custom')),
-  is_fully_settled boolean not null default false,
-  created_at timestamptz not null,
-  updated_at timestamptz not null
-);
-
-create table if not exists split_expense_participants (
-  id bigserial primary key,
-  split_expense_id text not null references split_expenses(id) on delete cascade,
-  user_id text not null,
-  share_amount numeric not null,
-  is_settled boolean not null default false
-);
-create index if not exists split_expense_participants_expense_id_idx on split_expense_participants (split_expense_id);
+create index if not exists transaction_splits_tx_idx on transaction_splits (transaction_id);
+create index if not exists transaction_splits_open_idx on transaction_splits (user_id, is_settled);
 
 create table if not exists portfolio_assets (
   id text primary key,

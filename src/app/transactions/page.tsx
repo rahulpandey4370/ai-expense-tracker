@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
-import { deleteTransaction, deleteMultipleTransactions, updateTransaction } from '@/lib/actions/transactions';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance, financeKeys } from '@/hooks/use-finance-queries';
+import { deleteTransaction, deleteMultipleTransactions } from '@/lib/actions/transactions';
+import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
 import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus, X, MoreHorizontal, CheckSquare } from "lucide-react";
@@ -50,6 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 import { useAIModel } from '@/contexts/AIModelContext';
+import { netAmount as netOfSplit } from '@/lib/split-utils';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -101,7 +101,6 @@ export default function TransactionsPage() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const isMobile = useIsMobile();
   const [isDeleting, setIsDeleting] = useState(false); // For single delete
-  const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
   // One shared confirm dialog instead of an AlertDialog instance mounted for
   // every visible row.
   const [pendingDelete, setPendingDelete] = useState<AppTransaction | null>(null);
@@ -129,7 +128,6 @@ export default function TransactionsPage() {
   const { data: allCategoriesState = [] } = useCategories();
   const { data: allPaymentMethodsState = [] } = usePaymentMethods();
   const isLoading = txQuery.isLoading;
-  const qc = useQueryClient();
   const invalidate = useInvalidateFinance();
   
   const searchParams = useSearchParams();
@@ -140,6 +138,8 @@ export default function TransactionsPage() {
   const paramExpenseTypes = searchParams.get('expenseTypes'); // comma-separated multi-filter from KPI drill-downs
   const paramCategoryNames = searchParams.get('categoryNames'); // comma-separated category-name filter from KPI drill-downs
   const paramMerchant = searchParams.get('merchant'); // merchant id from the dashboard merchant tiles
+  const paramPaymentMethodId = searchParams.get('paymentMethodId'); // payment method id from the dashboard card tiles
+  const paramSplits = searchParams.get('splits'); // 'open' from the reimbursements KPI drill-down
 
   const [filterExpenseTypes, setFilterExpenseTypes] = useState<string[]>([]);
   const [filterCategoryNames, setFilterCategoryNames] = useState<string[]>([]);
@@ -190,12 +190,14 @@ export default function TransactionsPage() {
       if (paramExpenseTypes) setFilterExpenseTypes(paramExpenseTypes.split(',').map(s => s.trim()).filter(Boolean));
       if (paramCategoryNames) setFilterCategoryNames(paramCategoryNames.split(',').map(s => s.trim()).filter(Boolean));
       if (paramMerchant) setFilterMerchantId(paramMerchant);
+      if (paramPaymentMethodId) setFilterPaymentMethodId(paramPaymentMethodId);
+      if (paramSplits === 'open') setFilterSplit('split');
 
-      if (paramMonth || paramYear || paramType || paramExpenseType || paramExpenseTypes || paramCategoryNames || paramMerchant || searchParams.toString() === '') {
+      if (paramMonth || paramYear || paramType || paramExpenseType || paramExpenseTypes || paramCategoryNames || paramMerchant || paramPaymentMethodId || paramSplits || searchParams.toString() === '') {
          hasAppliedInitialParams.current = true;
       }
     }
-  }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, paramMerchant, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
+  }, [paramMonth, paramYear, paramType, paramExpenseType, paramExpenseTypes, paramCategoryNames, paramMerchant, paramPaymentMethodId, paramSplits, isLoading, handleMonthChange, handleYearChange, selectedMonth, selectedYear, searchParams]);
 
 
   const filteredTransactions = useMemo(() => {
@@ -282,8 +284,10 @@ export default function TransactionsPage() {
 
   const filteredSummary = useMemo(() => {
     const count = filteredTransactions.length;
+    // Expenses count only my share — a split transaction's net total,
+    // not the full amount someone else will pay me back for.
     const netAmount = filteredTransactions.reduce((acc, curr) => {
-      return acc + (curr.type === 'income' ? curr.amount : -curr.amount);
+      return acc + (curr.type === 'income' ? curr.amount : -netOfSplit(curr));
     }, 0);
     return { count, netAmount };
   }, [filteredTransactions]);
@@ -315,27 +319,6 @@ export default function TransactionsPage() {
       toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
     } finally {
       setIsDeleting(false);
-    }
-  };
-
-  const handleToggleSplit = async (transaction: AppTransaction) => {
-    const nextSplit = !transaction.isSplit;
-    const rangeKey = financeKeys.transactionsRange(rangeStart, rangeEnd);
-    // Optimistic update on the cached page so rapid taps don't refetch each time.
-    qc.setQueryData<AppTransaction[]>(rangeKey, prev =>
-      (prev ?? []).map(t => (t.id === transaction.id ? { ...t, isSplit: nextSplit } : t))
-    );
-    setIsTogglingSplit(transaction.id);
-    try {
-      await updateTransaction(transaction.id, { isSplit: nextSplit });
-    } catch (error) {
-      console.error("Failed to toggle split status:", error);
-      qc.setQueryData<AppTransaction[]>(rangeKey, prev =>
-        (prev ?? []).map(t => (t.id === transaction.id ? { ...t, isSplit: !nextSplit } : t))
-      );
-      toast({ title: "Update Failed", description: "Could not update the split status.", variant: "destructive" });
-    } finally {
-      setIsTogglingSplit(prevId => (prevId === transaction.id ? null : prevId));
     }
   };
 
@@ -405,7 +388,7 @@ export default function TransactionsPage() {
       toast({ title: "No Data to Export", description: "There are no transactions matching your current filters.", variant: "default"});
       return;
     }
-    const headers = ["ID", "Type", "Date", "Amount (₹)", "Description", "Category/Source", "Payment Method", "Expense Type", "Is Split"];
+    const headers = ["ID", "Type", "Date", "Amount (₹)", "Description", "Category/Source", "Payment Method", "Expense Type", "Is Split", "My Share (₹)", "Split With"];
     const rows = filteredTransactions.map(t => [
       t.id,
       t.type,
@@ -415,7 +398,9 @@ export default function TransactionsPage() {
       t.category?.name || t.source || '',
       t.paymentMethod?.name || '',
       t.expenseType || '',
-      t.isSplit ? 'Yes' : 'No'
+      t.isSplit ? 'Yes' : 'No',
+      netOfSplit(t).toFixed(2),
+      `"${(t.splits ?? []).map(s => s.userName).join(', ')}"`
     ].join(','));
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
@@ -617,7 +602,7 @@ export default function TransactionsPage() {
                           <p className="text-xs text-muted-foreground">{format(toCalendarDate(t.date) || new Date(t.date), "dd MMM, yyyy")}</p>
                         </div>
                         <p className={cn("shrink-0 text-base font-bold tabular-nums", t.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500')}>
-                          {t.type === 'income' ? '+' : '−'}{formatCurrency(t.amount)}
+                          {t.type === 'income' ? '+' : '−'}{formatCurrency(netOfSplit(t))}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pl-8">
@@ -626,23 +611,10 @@ export default function TransactionsPage() {
                          {t.expenseType && <Badge variant="default" className={cn('capitalize', t.expenseType === 'need' ? 'bg-blue-500/80' : t.expenseType === 'want' ? 'bg-purple-500/80' : 'bg-indigo-500/80', 'text-white')}>{t.expenseType.replace('_expense','')}</Badge>}
                       </div>
                       <div className="flex justify-end gap-1 pt-2">
-                         {t.type === 'expense' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-7 w-7 text-muted-foreground hover:text-accent",
-                              t.isSplit && "text-yellow-400 bg-yellow-900/40 hover:bg-yellow-800/40 hover:text-yellow-300"
-                            )}
-                            onClick={() => handleToggleSplit(t)}
-                            disabled={isTogglingSplit === t.id}
-                          >
-                            {isTogglingSplit === t.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Users className="h-4 w-4" />
-                            )}
-                          </Button>
+                         {t.type === 'expense' && t.isSplit && (
+                          <Badge variant="outline" className="h-7 gap-1 border-yellow-800/40 bg-yellow-900/20 px-1.5 text-yellow-400" title="This expense is split">
+                            <Users className="h-3.5 w-3.5" />
+                          </Badge>
                         )}
                          <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(t)} className="text-accent h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
                          <AlertDialog>
@@ -724,7 +696,7 @@ export default function TransactionsPage() {
                             "whitespace-nowrap text-right align-top font-semibold tabular-nums",
                             transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           )}>
-                            {transaction.type === 'income' ? '+' : '−'}{formatCurrency(transaction.amount)}
+                            {transaction.type === 'income' ? '+' : '−'}{formatCurrency(netOfSplit(transaction))}
                           </TableCell>
                           <TableCell className="align-top text-foreground/90">
                             <span className="line-clamp-1" title={transaction.category?.name || transaction.source}>
@@ -771,12 +743,9 @@ export default function TransactionsPage() {
                                   <Edit3 className="mr-2 h-4 w-4" /> Edit
                                 </DropdownMenuItem>
                                 {transaction.type === 'expense' && (
-                                  <DropdownMenuItem
-                                    onSelect={() => handleToggleSplit(transaction)}
-                                    disabled={isTogglingSplit === transaction.id}
-                                  >
+                                  <DropdownMenuItem onSelect={() => setEditingTransaction(transaction)}>
                                     <Users className="mr-2 h-4 w-4" />
-                                    {transaction.isSplit ? 'Unmark split' : 'Mark as split'}
+                                    {transaction.isSplit ? 'Edit split' : 'Split this expense'}
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSeparator />

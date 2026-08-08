@@ -27,11 +27,18 @@ const PaymentMethodSchemaForAIInternal = z.object({
 });
 
 // Internal schema for AI flow input, not exported
+const SplitUserSchemaForAIInternal = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+// Internal schema for AI flow input, not exported
 const ParseTransactionTextInputSchemaInternal = z.object({
   naturalLanguageText: z.string().describe("The block of text containing one or more transaction descriptions."),
   expenseCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available expense categories (name, id) to help with mapping."),
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
+  splitUsers: z.array(SplitUserSchemaForAIInternal).default([]).describe("People the user has split expenses with before — match names mentioned in the text against this list."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
   model: z.string().optional(),
 });
@@ -51,6 +58,7 @@ export async function parseTransactionsFromText(
     naturalLanguageText: string;
     categories: { id: string; name: string; type: 'income' | 'expense' }[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
+    splitUsers?: z.infer<typeof SplitUserSchemaForAIInternal>[];
     model: AIModel;
   }
 ): Promise<ParseTransactionTextOutput> {
@@ -74,6 +82,7 @@ export async function parseTransactionsFromText(
       expenseCategories: expenseCategoriesForAI,
       incomeCategories: incomeCategoriesForAI,
       paymentMethods: input.paymentMethods,
+      splitUsers: input.splitUsers ?? [],
       currentDate,
       model: modelToUse,
     });
@@ -141,6 +150,19 @@ Available Payment Methods (for expenses):
 - {{this.name}} (ID: {{this.id}})
 {{/each}}
 
+People the user has split expenses with before (match names mentioned in the text against this list; use the exact name shown):
+{{#each splitUsers}}
+- {{this.name}}
+{{/each}}
+
+🤝 SPLITTING (populate \`splitDetails\` only if the text mentions sharing this expense, a reimbursement, or a charge that isn't the user's own):
+- Words like "split with", "split N ways", "divided between", "shared with" → mode: "equally". Set includeMe: true and list the OTHER people (not the user) in \`participants\`.
+- Explicit per-person amounts ("Tanshu owes me 500", "Priya's share is 300") → mode: "custom", with each participant's \`amount\` filled in.
+- Phrases meaning the WHOLE amount belongs to someone else — "my sister used my card", "not my expense", "paid for X's dinner", "on behalf of Y" → mode: "not_mine", includeMe: false, and put that one person in \`participants\` (amount not needed, it's the full total).
+- "X paid, my share is Y" or "Aman paid for this" → also set \`paidByName\` to that person's name.
+- Copy participant names exactly as they appear in the input text (or match them to the "People" list above if close). Never invent a name that isn't mentioned.
+- If the text says nothing about splitting or reimbursement, omit \`splitDetails\` entirely.
+
 For each transaction identified, provide:
 - date: Transaction date (YYYY-MM-DD). In case it is not provided, use the current date.
 - description: Detailed description. For purchases (e.g., groceries), include the merchant name and list a few key items (e.g., "Zepto Groceries: Milk, Curd, Banana, Sauce, etc.") Do this Automatically even if the input is not formatted correctly. And also use the capitalisation and punctuations as provided in the example. Keep it short and to the point not too elaborate for common inputs. It should only be descriptive when dealing with listing items, Or Funds names in an investment transaction and so on. **The description MUST start with a single appropriate emoji that visually represents the transaction, followed by one space, then the textual description.** Pick an emoji that fits the merchant/category/intent — e.g., 🛒 for groceries, 🍽️ for dining out, 🚕 for cabs/Uber, ⛽ for fuel, 🏠 for rent/home, 💡 for utilities/electricity, 📱 for mobile/recharge, 🎬 for movies/entertainment, 🛍️ for shopping, ✈️ for flights/travel, 🏥 for medical, 💊 for medicines, 📈 for stocks/equity investments, 🟡 for gold, 💼 for salary, 💰 for cashback/interest, 🎁 for gifts, ☕ for cafe/coffee, 🍺 for alcohol, 📚 for education/books, 🐾 for pets, 💧 for water, 🔌 for electricity, 🌐 for internet, 🚗 for vehicle/EMI. If none fits cleanly, use 💸 for generic expense and 💵 for generic income. Do NOT include more than one emoji at the start.
@@ -148,7 +170,7 @@ For each transaction identified, provide:
 - type: 'income' or 'expense'.
 - categoryNameGuess: Your best guess for the category name from the provided lists.
 - paymentMethodNameGuess: (Optional, for expenses) Your best guess for the payment method name.
-- expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment_expense'.
+- expenseTypeNameGuess: (Optional, for expenses) Classify as 'need', 'want', or 'investment'.
     Examples for 'need': Rent, essential Groceries (milk, bread, vegetables), Medicines, essential Auto & Transportation (commute to work), Loan Repayments, Utilities, Education fees, Maid salary, basic Gym membership for health.
     Examples for 'want': Ordering food, Eating out, non-essential travel/vacations, Shopping for gadgets/clothes, Movies, Entertainment subscriptions.
     Examples for 'investment': Investing in Stocks, Mutual Funds (MF), Recurring Deposits (RD). Use this for any transaction involving words like 'invested', 'bought stocks', 'SIP', etc.
@@ -182,7 +204,7 @@ const parseTransactionsFlow = ai.defineFlow(
     try {
       output = await callStructuredLLM(model, parseTransactionsPromptTemplate, input, ParseTransactionTextOutputSchemaInternal, {
         temperature: 0.2,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 2500,
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },

@@ -59,9 +59,7 @@ export default function AppHeader() {
 
       <div className="flex shrink-0 items-center gap-1 md:gap-2">
         {showPeriod && <PeriodPicker />}
-        {/* Theme is a set-once preference — it doesn't earn a permanent slot
-            in a 390px header. It stays reachable from Settings › Appearance. */}
-        <div className="hidden sm:block"><ThemeToggle /></div>
+        <ThemeToggle />
         {!isDemoRoute && <ModelSelector />}
         {!isDemoRoute && <UserNav />}
       </div>

@@ -268,7 +268,7 @@ async function callOpenAIStructured<T extends ZodSchema>(
   promptTemplate: string,
   input: Record<string, any>,
   outputSchema: T,
-  _config?: LLMConfig
+  config?: LLMConfig
 ): Promise<z.infer<T>> {
   const client = getOpenAIClient();
   // modelId may be a provider-qualified key ("openai::gpt-5.6-sol"); the API
@@ -289,6 +289,8 @@ async function callOpenAIStructured<T extends ZodSchema>(
       model: apiModel,
       messages: [{ role: 'user', content }] as any,
       response_format: { type: 'json_object' },
+      temperature: config?.temperature,
+      max_tokens: config?.maxOutputTokens,
       stream: false,
     } as any)
   );
@@ -303,7 +305,7 @@ async function callAnthropicStructured<T extends ZodSchema>(
   promptTemplate: string,
   input: Record<string, any>,
   outputSchema: T,
-  _config?: LLMConfig
+  config?: LLMConfig
 ): Promise<z.infer<T>> {
   const client = getAnthropicClient();
   const apiModel = getModelConfig(modelId)?.id ?? modelId;
@@ -327,7 +329,7 @@ async function callAnthropicStructured<T extends ZodSchema>(
   const response = await retryableProviderCall(() =>
     client.messages.create({
       model: apiModel,
-      max_tokens: DIRECT_MAX_TOKENS,
+      max_tokens: config?.maxOutputTokens ?? DIRECT_MAX_TOKENS,
       system: 'You are a precise financial data extraction engine. You always reply with a single JSON object.',
       messages: [{ role: 'user', content }],
     })
@@ -362,7 +364,7 @@ async function callAzureStructured<T extends ZodSchema>(
   promptTemplate: string,
   input: Record<string, any>,
   outputSchema: T,
-  _config?: LLMConfig
+  config?: LLMConfig
 ): Promise<z.infer<T>> {
   const modelConfig = getModelConfig(modelId);
   if (!modelConfig) {
@@ -393,6 +395,8 @@ async function callAzureStructured<T extends ZodSchema>(
       model: isInference ? modelConfig.id : modelConfig.deployment!,
       messages: messages as any[],
       response_format: { type: 'json_object' },
+      temperature: config?.temperature,
+      max_tokens: config?.maxOutputTokens,
       stream: false,
     } as any)
   );

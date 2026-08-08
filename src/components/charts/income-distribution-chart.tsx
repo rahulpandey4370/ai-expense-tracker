@@ -18,6 +18,7 @@ import {
   ChartLegendContent,
 } from "@/components/ui/chart"
 import type { AppTransaction } from "@/lib/types"
+import { netAmount } from "@/lib/split-utils"
 import { cn } from "@/lib/utils"
 
 interface IncomeDistributionChartProps {
@@ -45,15 +46,15 @@ export function IncomeDistributionChart({ transactions, selectedMonthName, selec
   
   const needsSpending = transactions
     .filter(t => t.type === 'expense' && t.expenseType === 'need')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + netAmount(t), 0);
 
   const wantsSpending = transactions
     .filter(t => t.type === 'expense' && t.expenseType === 'want')
-    .reduce((sum, t) => sum + t.amount, 0);
-    
+    .reduce((sum, t) => sum + netAmount(t), 0);
+
   const investmentSpending = transactions
     .filter(t => t.type === 'expense' && (t.expenseType === 'investment' || (t.category && investmentCategoryNames.includes(t.category.name))))
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + netAmount(t), 0);
     
   const totalSpending = needsSpending + wantsSpending + investmentSpending;
   const cashSavings = totalIncome - totalSpending;

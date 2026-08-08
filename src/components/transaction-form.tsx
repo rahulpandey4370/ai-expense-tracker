@@ -14,12 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins, Users } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
 import { toCalendarDate } from "@/lib/date-utils";
-import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel } from "@/lib/types";
+import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel, SplitUser } from "@/lib/types";
 import { getCategories, getPaymentMethods, addTransaction, updateTransaction } from '@/lib/actions/transactions';
 import { useToast } from "@/hooks/use-toast";
 import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
@@ -30,13 +29,21 @@ import { TransactionInputSchema, ParsedAITransactionSchema, ParsedReceiptTransac
 import Image from 'next/image';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { ModelInfoBadge } from './model-info-badge';
+import { Badge } from './ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { SplitEditor, type SplitEditorValue } from './splits/split-editor';
+import { useSplitUsers, useInvalidateFinance } from '@/hooks/use-finance-queries';
+import { addSplitUser } from '@/lib/actions/splits';
+import { resolveParsedSplit } from '@/lib/split-utils';
+import { VoiceInputButton } from './ai/voice-input-button';
 
 
 interface TransactionFormProps {
   onTransactionAdded?: () => void;
   initialTransactionData?: AppTransaction | null;
   onCancel?: () => void;
+  /** Opens directly on the manual-entry tab with the split editor expanded — used by the Split Expenses "Add" flow. */
+  defaultOpenSplit?: boolean;
 }
 
 const formCardVariants = {
@@ -59,10 +66,15 @@ type BulkParsedTransaction = Partial<TransactionInput> & {
 
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
+// Stable reference for the "no data yet" case — `data: x = []` in a
+// destructure creates a brand-new array every render, which breaks any
+// effect/memo that depends on it (infinite update loop).
+const EMPTY_SPLIT_USERS: SplitUser[] = [];
 
-export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel }: TransactionFormProps) {
+
+export function TransactionForm({ onTransactionAdded, initialTransactionData, onCancel, defaultOpenSplit }: TransactionFormProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>('ai_text');
+  const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'ai_text' | 'ai_receipt'>(defaultOpenSplit ? 'single' : 'ai_text');
   const { selectedModel } = useAIModel();
   const isMobile = useIsMobile();
 
@@ -75,8 +87,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | undefined>(undefined);
   const [expenseType, setExpenseType] = useState<AppExpenseTypeEnum | undefined>('need');
   const [source, setSource] = useState<string | undefined>(undefined);
-  const [isSplit, setIsSplit] = useState<boolean>(false);
+  const [showSplitEditor, setShowSplitEditor] = useState<boolean>(!!defaultOpenSplit);
+  const [splitValue, setSplitValue] = useState<SplitEditorValue | null>(null);
+  const [notMineShortcut, setNotMineShortcut] = useState<boolean>(false);
   const [formId, setFormId] = useState<string | null>(null);
+  const { data: splitUsers = EMPTY_SPLIT_USERS } = useSplitUsers();
+  const invalidateFinance = useInvalidateFinance();
+  const handleAddSplitUser = useCallback(async (name: string) => {
+    const user = await addSplitUser({ name });
+    invalidateFinance();
+    return user;
+  }, [invalidateFinance]);
 
   // Dropdown Data State
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -93,6 +114,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [aiText, setAiText] = useState<string>('');
   const [parsedAITransactions, setParsedAITransactions] = useState<ParsedAITransaction[]>([]);
   const [aiReviewTransactions, setAiReviewTransactions] = useState<TransactionInput[]>([]);
+  const [aiUnmatchedSplitNames, setAiUnmatchedSplitNames] = useState<string[][]>([]);
+  const [isCreatingSplitUser, setIsCreatingSplitUser] = useState<string | null>(null);
   const [isProcessingAIText, setIsProcessingAIText] = useState(false);
   const [aiProcessingError, setAiProcessingError] = useState<string | null>(null);
   const [lastUsedAIModel, setLastUsedAIModel] = useState<AIModel | undefined>();
@@ -152,7 +175,20 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setDate(new Date(initialTransactionData.date));
       setAmount(initialTransactionData.amount.toString());
       setDescription(initialTransactionData.description || '');
-      setIsSplit(initialTransactionData.isSplit || false);
+      if (initialTransactionData.isSplit || initialTransactionData.paidById) {
+        setShowSplitEditor(true);
+        setNotMineShortcut(initialTransactionData.splitMethod === 'not_mine');
+        setSplitValue({
+          splitMethod: (initialTransactionData.splitMethod as SplitEditorValue['splitMethod']) ?? 'equally',
+          paidById: initialTransactionData.paidById,
+          myShare: initialTransactionData.myShare ?? initialTransactionData.amount,
+          splits: (initialTransactionData.splits ?? []).map(s => ({ userId: s.userId, shareAmount: s.shareAmount })),
+        });
+      } else {
+        setShowSplitEditor(false);
+        setNotMineShortcut(false);
+        setSplitValue(null);
+      }
       if (initialTransactionData.type === 'expense') {
         setSelectedCategoryId(initialTransactionData.category?.id || undefined);
         setSelectedPaymentMethodId(initialTransactionData.paymentMethod?.id || undefined);
@@ -170,7 +206,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         setDate(new Date());
         setAmount('');
         setDescription('');
-        setIsSplit(false);
+        setShowSplitEditor(false);
+        setNotMineShortcut(false);
+        setSplitValue(null);
 
         if (type === 'expense') {
             setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
@@ -207,7 +245,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setDate(new Date());
     setAmount('');
     setDescription('');
-    setIsSplit(false);
+    setShowSplitEditor(false);
+    setNotMineShortcut(false);
+    setSplitValue(null);
     if (type === 'expense') {
         setSelectedCategoryId(expenseCategories.length > 0 ? expenseCategories[0].id : undefined);
         setSelectedPaymentMethodId(paymentMethods.length > 0 ? paymentMethods[0].id : undefined);
@@ -224,6 +264,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const handleSingleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (type === 'expense' && showSplitEditor && !splitValue) {
+      toast({ title: "Split incomplete", description: "Choose who this is split with before saving.", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
 
     const transactionPayload: Partial<TransactionInput> = {
@@ -231,12 +277,22 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       date,
       amount: parseFloat(amount),
       description: description || undefined,
-      isSplit,
     };
     if (type === 'expense') {
       transactionPayload.categoryId = selectedCategoryId;
       transactionPayload.paymentMethodId = selectedPaymentMethodId;
       transactionPayload.expenseType = expenseType;
+      if (showSplitEditor && splitValue) {
+        transactionPayload.myShare = splitValue.myShare;
+        transactionPayload.paidById = splitValue.paidById;
+        transactionPayload.splitMethod = splitValue.splitMethod;
+        transactionPayload.splits = splitValue.splits;
+      } else {
+        transactionPayload.myShare = undefined;
+        transactionPayload.paidById = undefined;
+        transactionPayload.splitMethod = undefined;
+        transactionPayload.splits = [];
+      }
     } else { // income
       transactionPayload.categoryId = selectedCategoryId;
       transactionPayload.source = source;
@@ -495,6 +551,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsProcessingAIText(true);
     setParsedAITransactions([]);
     setAiReviewTransactions([]);
+    setAiUnmatchedSplitNames([]);
     setAiProcessingError(null);
     setLastUsedAIModel(selectedModel);
     try {
@@ -505,6 +562,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         naturalLanguageText: aiText,
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
+        splitUsers: splitUsers.map(u => ({ id: u.id, name: u.name })),
         model: selectedModel,
       });
       
@@ -563,7 +621,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   useEffect(() => {
     if (parsedAITransactions.length > 0) {
-      const initialReviewItems: TransactionInput[] = parsedAITransactions.map(aiTx => {
+      const initialReviewItems = parsedAITransactions.map(aiTx => {
         let catId, pmId;
         let transactionDate = new Date(); 
         try {
@@ -594,23 +652,33 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         }
         
         const finalExpenseType = (aiTx.expenseTypeNameGuess as AppExpenseTypeEnum) || 'need';
-        
+        const resolvedSplit = resolveParsedSplit(aiTx, splitUsers);
+
         return {
-          date: transactionDate, 
-          description: aiTx.description || "AI Parsed Transaction",
-          amount: aiTx.amount || 0,
-          type: aiTx.type || 'expense',
-          categoryId: catId, 
-          paymentMethodId: aiTx.type === 'expense' ? pmId : undefined, 
-          expenseType: aiTx.type === 'expense' ? finalExpenseType : undefined,
-          source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
+          tx: {
+            date: transactionDate,
+            description: aiTx.description || "AI Parsed Transaction",
+            amount: aiTx.amount || 0,
+            type: aiTx.type || 'expense',
+            categoryId: catId,
+            paymentMethodId: aiTx.type === 'expense' ? pmId : undefined,
+            expenseType: aiTx.type === 'expense' ? finalExpenseType : undefined,
+            source: aiTx.type === 'income' ? (aiTx.sourceGuess || '') : undefined,
+            myShare: resolvedSplit?.myShare,
+            paidById: resolvedSplit?.paidById,
+            splitMethod: resolvedSplit?.splitMethod,
+            splits: resolvedSplit?.splits,
+          } as TransactionInput,
+          unmatchedNames: resolvedSplit?.unmatchedNames ?? [],
         };
-      }).filter(tx => tx.amount && tx.amount > 0 && tx.description); 
-      setAiReviewTransactions(initialReviewItems);
+      }).filter(({ tx }) => tx.amount && tx.amount > 0 && tx.description);
+      setAiReviewTransactions(initialReviewItems.map(i => i.tx));
+      setAiUnmatchedSplitNames(initialReviewItems.map(i => i.unmatchedNames));
     } else {
       setAiReviewTransactions([]);
+      setAiUnmatchedSplitNames([]);
     }
-  }, [parsedAITransactions, expenseCategories, incomeCategories, paymentMethods]);
+  }, [parsedAITransactions, expenseCategories, incomeCategories, paymentMethods, splitUsers]);
 
   const handleSubmitAIText = async () => {
     setIsLoading(true);
@@ -680,6 +748,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setAiText('');
       setParsedAITransactions([]);
       setAiReviewTransactions([]);
+      setAiUnmatchedSplitNames([]);
       setAiProcessingError(null);
     }
     setIsLoading(false);
@@ -741,8 +810,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 }
             } catch (e) { console.warn("AI receipt returned invalid date string:", result.parsedTransaction.date); }
 
-            catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction?.categoryNameGuess?.toLowerCase())?.id;
-            pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction?.paymentMethodNameGuess?.toLowerCase())?.id;
+            catId = expenseCategories.find(c => c.name.toLowerCase() === result.parsedTransaction?.categoryNameGuess?.toLowerCase())?.id
+              ?? expenseCategories.find(c => c.name.toLowerCase() === 'others')?.id
+              ?? expenseCategories[0]?.id;
+            pmId = paymentMethods.find(p => p.name.toLowerCase() === result.parsedTransaction?.paymentMethodNameGuess?.toLowerCase())?.id
+              ?? paymentMethods[0]?.id;
 
             setAiReceiptReviewTransaction({
               date: transactionDate,
@@ -936,13 +1008,46 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         </div>
       )}
        {type === 'expense' && (
-          <div className="flex items-center space-x-2 pt-2">
-            <Switch id="is-split" checked={isSplit} onCheckedChange={setIsSplit} disabled={isFetchingDropdowns} />
-            <Label htmlFor="is-split" className="flex items-center gap-2 text-sm text-foreground/90">
-                <Users className="h-4 w-4 text-accent" />
-                Mark as a split transaction
-            </Label>
-        </div>
+          <div className="space-y-2 pt-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button" variant={showSplitEditor && !notMineShortcut ? "secondary" : "outline"} size="sm"
+                disabled={isFetchingDropdowns}
+                onClick={() => {
+                  const next = showSplitEditor && !notMineShortcut ? false : true;
+                  setShowSplitEditor(next);
+                  setNotMineShortcut(false);
+                  if (!next) setSplitValue(null);
+                }}
+              >
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                {showSplitEditor && !notMineShortcut ? "Remove split" : "Split this expense"}
+              </Button>
+              <Button
+                type="button" variant={notMineShortcut ? "secondary" : "outline"} size="sm"
+                disabled={isFetchingDropdowns}
+                onClick={() => {
+                  const next = !notMineShortcut;
+                  setNotMineShortcut(next);
+                  setShowSplitEditor(next);
+                  if (!next) setSplitValue(null);
+                }}
+              >
+                <HandCoins className="mr-1.5 h-3.5 w-3.5" />
+                {notMineShortcut ? "Undo" : "Someone else's charge"}
+              </Button>
+            </div>
+            {showSplitEditor && (
+              <SplitEditor
+                totalAmount={parseFloat(amount) || 0}
+                users={splitUsers}
+                value={splitValue}
+                onChange={setSplitValue}
+                onAddUser={handleAddSplitUser}
+                forceNotMine={notMineShortcut}
+              />
+            )}
+          </div>
       )}
       {isFetchingDropdowns && (<div className="flex items-center justify-center space-x-2 text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Loading options...</span></div>)}
       <div className="flex flex-col sm:flex-row gap-3 pt-3">
@@ -1021,15 +1126,21 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const renderAITextInputForm = () => (
     <div className="space-y-4">
       <Label htmlFor="ai-text-input" className={labelClasses}>Enter Transactions in Natural Language</Label>
-      <Textarea
-        id="ai-text-input"
-        value={aiText}
-        onChange={(e) => setAiText(e.target.value)}
-        placeholder="e.g., Dinner with friends ₹1200 using HDFC credit card yesterday. Received ₹50000 salary last Monday. Groceries for ₹2500 via UPI two days ago."
-        rows={5}
-        className={inputClasses}
-        disabled={isProcessingAIText || isLoading}
-      />
+      <div className="flex items-start gap-2">
+        <Textarea
+          id="ai-text-input"
+          value={aiText}
+          onChange={(e) => setAiText(e.target.value)}
+          placeholder="e.g., Dinner with friends ₹1200 using HDFC credit card yesterday, split equally with Tanshu. Received ₹50000 salary last Monday. Groceries for ₹2500 via UPI two days ago."
+          rows={5}
+          className={cn(inputClasses, "flex-1")}
+          disabled={isProcessingAIText || isLoading}
+        />
+        <VoiceInputButton
+          disabled={isProcessingAIText || isLoading}
+          onResult={(text) => setAiText(prev => prev ? `${prev} ${text}` : text)}
+        />
+      </div>
       <Button onClick={handleProcessAIText} disabled={isProcessingAIText || isLoading || !aiText.trim()} className="w-full bg-primary text-primary-foreground" withMotion>
         {isProcessingAIText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
         Process with AI
@@ -1124,6 +1235,68 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                                 <SelectItem value="need">Need</SelectItem><SelectItem value="want">Want</SelectItem><SelectItem value="investment">Investment</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      {(tx.splits && tx.splits.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline" className="gap-1 text-[11px] font-normal">
+                            <Users className="h-3 w-3" />
+                            {tx.splitMethod === 'not_mine' ? 'Not your expense' : `You: ₹${(tx.myShare ?? 0).toFixed(0)}`}
+                          </Badge>
+                          {tx.splits.map(s => {
+                            const person = splitUsers.find(u => u.id === s.userId);
+                            return (
+                              <Badge key={s.userId} variant="outline" className="text-[11px] font-normal">
+                                {person?.name ?? '?'}: ₹{s.shareAmount.toFixed(0)}
+                              </Badge>
+                            );
+                          })}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[11px]">Edit split</Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-2">
+                              <SplitEditor
+                                totalAmount={tx.amount || 0}
+                                users={splitUsers}
+                                value={{
+                                  splitMethod: (tx.splitMethod as SplitEditorValue['splitMethod']) ?? 'equally',
+                                  paidById: tx.paidById,
+                                  myShare: tx.myShare ?? 0,
+                                  splits: tx.splits ?? [],
+                                }}
+                                onChange={(v) => {
+                                  handleAIReviewChange(index, 'myShare', v?.myShare);
+                                  handleAIReviewChange(index, 'paidById', v?.paidById);
+                                  handleAIReviewChange(index, 'splitMethod', v?.splitMethod);
+                                  handleAIReviewChange(index, 'splits', v?.splits ?? []);
+                                }}
+                                onAddUser={handleAddSplitUser}
+                                forceNotMine={tx.splitMethod === 'not_mine'}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
+                      {(aiUnmatchedSplitNames[index]?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] text-amber-500">Mentioned but not in your people list:</span>
+                          {aiUnmatchedSplitNames[index].map(name => (
+                            <Button
+                              key={name} type="button" size="sm" variant="outline"
+                              className="h-6 gap-1 border-amber-500/40 bg-amber-500/10 px-2 text-[11px] text-amber-600 dark:text-amber-400"
+                              disabled={isCreatingSplitUser === name}
+                              onClick={async () => {
+                                setIsCreatingSplitUser(name);
+                                try { await handleAddSplitUser(name); } finally { setIsCreatingSplitUser(null); }
+                              }}
+                            >
+                              {isCreatingSplitUser === name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Users className="h-3 w-3" />}
+                              Create &quot;{name}&quot;
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     </>
                 )}
@@ -1267,8 +1440,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     {parsedReceiptTransaction?.confidenceScore !== undefined && (
                         <p className="text-xs text-muted-foreground">AI Confidence: {(parsedReceiptTransaction.confidenceScore * 100).toFixed(0)}%</p>
                     )}
-                    {parsedReceiptTransaction?.error && ( 
-                        <p className="text-xs text-red-500">AI Note: {parsedReceiptTransaction.error}</p>
+                    {parsedReceiptTransaction?.error && (
+                        <Alert variant="destructive" className="text-xs py-2">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <AlertTitle className="text-xs">Double-check this one</AlertTitle>
+                            <AlertDescription className="text-xs">{parsedReceiptTransaction.error}</AlertDescription>
+                        </Alert>
                     )}
                 </Card>
                  <Button onClick={handleSubmitAIReceipt} disabled={isLoading || !aiReceiptReviewTransaction || !aiReceiptReviewTransaction.amount} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>

@@ -39,7 +39,13 @@ export interface RawTransaction {
   paymentMethodId?: string;
   source?: string;
   expenseType?: 'need' | 'want' | 'investment' | 'investment_expense';
-  isSplit?: boolean; // New field for split indicator
+  isSplit?: boolean; // Derived: true iff this transaction has split rows
+  // --- Splitting ---
+  myShare?: number;                 // What counts as "my" spend. Undefined/null = not split (full amount is mine).
+  paidById?: string;                // SplitUser id who actually paid. Undefined = I paid.
+  splitMethod?: 'equally' | 'shares' | 'custom' | 'not_mine';
+  myShareSettled?: boolean;         // Only meaningful when paidById is set: have I paid back my share?
+  netAmount?: number;               // Server-computed: myShare ?? amount. Always what KPIs should sum.
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // For cosmos DB
@@ -48,6 +54,13 @@ export interface RawTransaction {
   _etag?: string;
   _attachments?: string;
   _ts?: number;
+}
+
+export interface TransactionSplitShare {
+  userId: string;
+  userName: string;
+  shareAmount: number;
+  isSettled: boolean;
 }
 
 // This is the "hydrated" transaction type used by the frontend,
@@ -59,7 +72,16 @@ export interface AppTransaction extends Omit<RawTransaction, 'categoryId' | 'pay
   category?: Category;
   paymentMethod?: PaymentMethod;
   expenseType?: 'need' | 'want' | 'investment'; // Simplified for frontend
+  paidBy?: SplitUser;                // Populated when someone else paid.
+  splits?: TransactionSplitShare[];  // Other participants' shares (excludes my own).
 }
+
+// One other participant's share when creating/updating a split transaction.
+export const TransactionSplitInputSchema = z.object({
+  userId: z.string(),
+  shareAmount: z.number().min(0),
+});
+export type TransactionSplitInput = z.infer<typeof TransactionSplitInputSchema>;
 
 // Zod schema for validating transaction input for Server Actions
 export const TransactionInputSchema = z.object({
@@ -71,7 +93,11 @@ export const TransactionInputSchema = z.object({
   paymentMethodId: z.string().optional(),
   source: z.string().optional(),
   expenseType: z.enum(['need', 'want', 'investment', 'investment_expense']).optional(),
-  isSplit: z.boolean().optional(), // New field for split indicator
+  // --- Splitting (expense-only) ---
+  myShare: z.number().min(0).optional(),
+  paidById: z.string().optional(),
+  splitMethod: z.enum(['equally', 'shares', 'custom', 'not_mine']).optional(),
+  splits: z.array(TransactionSplitInputSchema).optional(),
 }).refine(data => {
   if (data.type === 'expense') {
     return !!data.categoryId && !!data.paymentMethodId && !!data.expenseType;
@@ -88,6 +114,17 @@ export const TransactionInputSchema = z.object({
 }, {
   message: "For income, a Category (e.g., Salary) is required.",
   path: ['type'],
+}).refine(data => {
+  // If a split is present, my share + everyone else's shares must add up to the total.
+  if (data.splits && data.splits.length > 0) {
+    const othersTotal = data.splits.reduce((sum, s) => sum + s.shareAmount, 0);
+    const mine = data.myShare ?? 0;
+    return Math.abs(mine + othersTotal - data.amount) < 0.01;
+  }
+  return true;
+}, {
+  message: "My share plus everyone else's shares must add up to the total amount.",
+  path: ['splits'],
 });
 
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
@@ -325,9 +362,14 @@ export const ParsedAITransactionSchema = z.object({
   confidenceScore: z.number().min(0).max(1).optional().describe("AI's confidence in parsing this specific transaction (0.0 to 1.0). 1.0 means very confident."),
   error: z.string().optional().describe("If this specific part of the text couldn't be parsed as a valid transaction, provide a brief error message here."),
   splitDetails: z.object({
-    participants: z.array(z.string()).describe("List of participant names mentioned in the split, e.g., ['me', 'Rahul', 'Priya']. 'me' or 'I' should be standardized to 'me'."),
-    splitRatio: z.string().optional().describe("The ratio of the split if specified, e.g., '50-50', 'equally'.")
-  }).optional().describe("If the text mentions splitting the bill, populate this object."),
+    mode: z.enum(['equally', 'shares', 'custom', 'not_mine']).describe("'equally' when the text says split N ways / equally. 'custom' when explicit per-person amounts are given. 'not_mine' when the whole amount belongs to someone else (e.g. 'my sister used my card', 'not my expense', 'paid on behalf of X') — the user's own share is zero. 'shares' is rarely used; prefer 'equally' or 'custom'."),
+    includeMe: z.boolean().default(true).describe("False when the user's own share is zero (mode 'not_mine'). True otherwise."),
+    participants: z.array(z.object({
+      name: z.string().describe("Participant name copied verbatim from the input text. Never invent a name that isn't mentioned."),
+      amount: z.number().optional().describe("This participant's exact share in INR, if the text specifies one (custom mode)."),
+    })).min(1).describe("The other people (not the user) involved in the split, in the order mentioned."),
+    paidByName: z.string().optional().describe("Name of who actually paid, if it wasn't the user (e.g., 'Aman paid, my share is 400'). Leave blank if the user paid."),
+  }).optional().describe("Populate only if the text mentions splitting the bill, reimbursement, or a charge that isn't the user's own expense."),
   model: z.string().optional(),
 });
 export type ParsedAITransaction = z.infer<typeof ParsedAITransactionSchema>;
@@ -461,8 +503,10 @@ export const FinancialHealthCheckOutputSchema = z.object({
 export type FinancialHealthCheckOutput = z.infer<typeof FinancialHealthCheckOutputSchema>;
 
 
-// --- Split Expenses Feature Types ---
-export type SplitMethod = 'equally' | 'custom';
+// --- Splits (people directory + balances) ---
+// Splitting itself now lives on `transactions` / `transaction_splits`
+// (see RawTransaction.myShare/paidById/splitMethod and AppTransaction.splits).
+// This section only keeps the people directory and the derived balance view.
 
 export const SplitUserInputSchema = z.object({
   name: z.string().min(1, "User name is required.").max(100, "Name too long"),
@@ -475,74 +519,13 @@ export interface SplitUser extends SplitUserInput {
   updatedAt: string; // ISO string
 }
 
-export const SplitExpenseParticipantInputSchema = z.object({
-  userId: z.string(),
-  customShare: z.number().min(0).optional(),
-});
-export type SplitExpenseParticipantInput = z.infer<typeof SplitExpenseParticipantInputSchema>;
-
-export const SplitExpenseInputSchema = z.object({
-  title: z.string().min(1, "Title is required.").max(200, "Title too long"),
-  date: z.date({ description: "Date of the shared expense" }),
-  totalAmount: z.number().gt(0, "Total amount must be positive."),
-  paidById: z.string({ description: "ID of the SplitUser who paid the bill" }),
-  splitMethod: z.enum(['equally', 'custom'], { description: "How the bill was split" }),
-  participants: z.array(SplitExpenseParticipantInputSchema).min(1, "At least one participant is required for a split."),
-  personalExpenseDetails: z.object({
-    categoryId: z.string(),
-    paymentMethodId: z.string(),
-  }).optional(),
-}).refine(data => {
-  if (data.splitMethod === 'custom') {
-    const totalCustomShares = data.participants.reduce((sum, p) => sum + (p.customShare || 0), 0);
-    return Math.abs(totalCustomShares - data.totalAmount) < 0.01;
-  }
-  return true;
-}, {
-  message: "The sum of custom shares must equal the total amount.",
-  path: ['participants'],
-});
-export type SplitExpenseInput = z.infer<typeof SplitExpenseInputSchema>;
-
-
-// Raw SplitExpense for Cosmos DB storage
-export interface RawSplitExpense {
-  id: string;
-  title: string;
-  date: string; // ISO string
-  totalAmount: number;
-  paidById: string; // SplitUser ID (or "me")
-  participants: {
-    userId: string; // SplitUser ID (or "me")
-    shareAmount: number;
-    isSettled: boolean;
-  }[];
-  splitMethod: SplitMethod;
-  isFullySettled: boolean; // Derived: true if all participants are settled
-  createdAt: string; // ISO string
-  updatedAt: string; // ISO string
-}
-
-// AppSplitExpense for frontend, with populated user objects
-export interface AppSplitExpense extends Omit<RawSplitExpense, 'date' | 'createdAt' | 'updatedAt' | 'paidById' | 'participants'> {
-  date: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  paidBy: SplitUser; // Populated SplitUser object
-  participants: {
-    user: SplitUser; // Populated SplitUser object
-    shareAmount: number;
-    isSettled: boolean;
-  }[];
-}
-
-// For calculating balances
+// One row per person with an open balance, from the open_split_balances() RPC.
 export interface UserBalance {
   userId: string;
   userName: string;
-  netAmount: number; // Positive if this user is owed, negative if this user owes overall
-  owes: { toUserId: string; toUserName: string; amount: number }[];
-  owedBy: { fromUserId: string; fromUserName: string; amount: number }[];
+  theyOweMe: number;
+  iOweThem: number;
+  net: number; // theyOweMe - iOweThem; positive = they owe me overall
 }
 
 // AI Fixed Expense Analyzer Schemas

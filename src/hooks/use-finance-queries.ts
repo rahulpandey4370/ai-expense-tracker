@@ -11,7 +11,7 @@ import {
 } from '@/lib/actions/transactions';
 import { getBudgets } from '@/lib/actions/budgets';
 import { getGoals } from '@/lib/actions/goals';
-import { getSplitUsers, getSplitExpenses, getSplitBalances } from '@/lib/actions/split-expenses';
+import { getSplitUsers, getSplitBalances, getSplitTransactions } from '@/lib/actions/splits';
 import { getPortfolioDashboardData } from '@/lib/actions/portfolio';
 import { getMonthlyRollups, getTransactionYears, getCategoryBreakdown } from '@/lib/actions/analytics';
 
@@ -34,7 +34,7 @@ export const financeKeys = {
   categoryBreakdown: (start: string, end: string, type: string | null) =>
     [...financeKeys.all, 'categoryBreakdown', start, end, type] as const,
   splitUsers: () => [...financeKeys.all, 'splitUsers'] as const,
-  splitExpenses: () => [...financeKeys.all, 'splitExpenses'] as const,
+  splitTransactions: () => [...financeKeys.all, 'splitTransactions'] as const,
   splitBalances: () => [...financeKeys.all, 'splitBalances'] as const,
   portfolioDashboard: () => [...financeKeys.all, 'portfolioDashboard'] as const,
 };
@@ -101,8 +101,8 @@ export function useSplitUsers() {
   return useQuery({ queryKey: financeKeys.splitUsers(), queryFn: () => getSplitUsers() });
 }
 
-export function useSplitExpenses() {
-  return useQuery({ queryKey: financeKeys.splitExpenses(), queryFn: () => getSplitExpenses() });
+export function useSplitTransactions(limit?: number) {
+  return useQuery({ queryKey: financeKeys.splitTransactions(), queryFn: () => getSplitTransactions({ limit }) });
 }
 
 export function useSplitBalances() {

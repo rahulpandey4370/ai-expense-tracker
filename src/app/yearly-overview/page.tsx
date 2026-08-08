@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { getCalendarYear, isSameCalendarMonth, isSameCalendarYear } from '@/lib/date-utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MonthlyIncomeExpenseSavingsChart } from '@/components/charts/monthly-income-expense-savings-chart';
+import { netAmount } from '@/lib/split-utils';
 
 
 const pageVariants = {
@@ -103,10 +104,10 @@ export default function YearlyOverviewPage() {
     for (let i = 0; i < 12; i++) {
       const monthTransactions = allTransactions.filter(t => isSameCalendarMonth(t.date, i, selectedYear));
       const totalIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-      const totalSpend = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      const totalSpend = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + netAmount(t), 0);
       const totalInvestment = monthTransactions
         .filter(t => t.type === 'expense' && (t.expenseType === 'investment' || (t.category && investmentCategoryNames.includes(t.category.name))))
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + netAmount(t), 0);
       const totalCashbacksInterestsDividends = monthTransactions
         .filter(t => t.type === 'income' && (t.category && cashbackAndInterestAndDividendCategoryNames.includes(t.category.name)))
         .reduce((sum, t) => sum + t.amount, 0);
@@ -142,7 +143,7 @@ export default function YearlyOverviewPage() {
       .filter(t => t.type === 'expense' && t.category)
       .forEach(t => {
         const categoryName = t.category!.name;
-        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + t.amount);
+        spendingMap.set(categoryName, (spendingMap.get(categoryName) || 0) + netAmount(t));
       });
     return Array.from(spendingMap.entries())
       .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))

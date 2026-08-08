@@ -172,7 +172,6 @@ export async function materializeRecurringTransactions(): Promise<{ inserted: nu
           paymentMethodId: rule.paymentMethodId,
           source: rule.source,
           expenseType: rule.expenseType,
-          isSplit: false,
         });
         inserted += 1;
         lastInsertedYmd = ymd(due);
@@ -238,7 +237,6 @@ export async function triggerRecurringRuleNow(ruleId: string): Promise<{ inserte
     paymentMethodId: rule.paymentMethodId,
     source: rule.source,
     expenseType: rule.expenseType,
-    isSplit: false,
   });
 
   const { error } = await supabase

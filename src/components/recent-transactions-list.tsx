@@ -1,7 +1,6 @@
 
 "use client";
 
-import { useState } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,11 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import type { AppTransaction } from "@/lib/types";
 import { format } from "date-fns";
 import { toCalendarDate } from "@/lib/date-utils";
-import { ArrowDownCircle, ArrowUpCircle, ListChecks, Users, Loader2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ListChecks, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from '@/components/ui/button';
-import { updateTransaction } from '@/lib/actions/transactions';
-import { useToast } from '@/hooks/use-toast';
+import { netAmount } from '@/lib/split-utils';
 
 interface RecentTransactionsListProps {
   transactions: AppTransaction[];
@@ -41,25 +38,6 @@ const listItemVariants = {
 const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px_hsl(var(--accent)/0.5)]";
 
 export function RecentTransactionsList({ transactions, count = 5, onDataChange }: RecentTransactionsListProps) {
-  const [isTogglingSplit, setIsTogglingSplit] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const handleToggleSplit = async (transaction: AppTransaction) => {
-    setIsTogglingSplit(transaction.id);
-    try {
-      await updateTransaction(transaction.id, { isSplit: !transaction.isSplit });
-      toast({
-        title: `Transaction ${!transaction.isSplit ? 'marked' : 'unmarked'} as split.`,
-      });
-      onDataChange?.(); // Trigger data refresh
-    } catch (error) {
-      console.error("Failed to toggle split status:", error);
-      toast({ title: "Update Failed", description: "Could not update the split status.", variant: "destructive" });
-    } finally {
-      setIsTogglingSplit(null);
-    }
-  };
-
   const recentTransactions = [...transactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, count);
@@ -118,27 +96,17 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                         "font-semibold text-sm",
                         transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                       )}>
-                        {transaction.type === 'income' ? '+' : '-'} ₹{transaction.amount.toFixed(2)}
+                        {transaction.type === 'income' ? '+' : '-'} ₹{netAmount(transaction).toFixed(2)}
                       </p>
                        <div className="flex justify-end items-center mt-1">
-                        {transaction.type === 'expense' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-7 w-7 text-muted-foreground hover:text-accent",
-                              transaction.isSplit && "text-yellow-400 bg-yellow-900/40 hover:bg-yellow-800/40 hover:text-yellow-300"
-                            )}
-                            onClick={() => handleToggleSplit(transaction)}
-                            disabled={isTogglingSplit === transaction.id}
+                        {transaction.type === 'expense' && transaction.isSplit && (
+                          <Badge
+                            variant="outline"
+                            className="h-7 gap-1 border-yellow-800/40 bg-yellow-900/20 px-1.5 text-yellow-400"
+                            title="This expense is split"
                           >
-                            {isTogglingSplit === transaction.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Users className="h-4 w-4" />
-                            )}
-                            <span className="sr-only">Toggle Split Status</span>
-                          </Button>
+                            <Users className="h-3.5 w-3.5" />
+                          </Badge>
                         )}
                         {transaction.type === 'expense' && transaction.expenseType && (
                           <Badge variant={

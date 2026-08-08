@@ -20,6 +20,7 @@ import {
 import type { AppTransaction } from "@/lib/types"
 import { subMonths, getMonth, getYear } from "date-fns";
 import { isSameCalendarMonth } from "@/lib/date-utils";
+import { netAmount } from "@/lib/split-utils";
 import { cn } from "@/lib/utils";
 
 interface IncomeExpenseTrendChartProps {
@@ -51,7 +52,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
             t.type === 'expense' && // All expense types
             isSameCalendarMonth(t.date, month, year)
         )
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + netAmount(t), 0);
 
       data.push({
         name: `${monthNames[month]} '${String(year).slice(-2)}`,

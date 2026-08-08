@@ -11,6 +11,7 @@ import type { AppTransaction } from '@/lib/types';
 import { detectMerchant, MERCHANT_GROUP_LABELS, type MerchantGroup } from '@/lib/merchants';
 import { formatCurrencyWhole, formatCurrencyCompact, formatDelta, percentChange, formatCount } from '@/lib/format';
 import { isSameCalendarMonth } from '@/lib/date-utils';
+import { netAmount } from '@/lib/split-utils';
 import { cn } from '@/lib/utils';
 
 interface MerchantSpendSectionProps {
@@ -21,6 +22,8 @@ interface MerchantSpendSectionProps {
   selectedMonthName: string;
   /** Whether balances are unmasked; merchant amounts follow the same privacy toggle. */
   isVisible: boolean;
+  /** Skip the Card/title chrome — used when an outer collapsible group already supplies it. */
+  bare?: boolean;
 }
 
 interface MerchantTotal {
@@ -42,6 +45,7 @@ export function MerchantSpendSection({
   selectedYear,
   selectedMonthName,
   isVisible,
+  bare = false,
 }: MerchantSpendSectionProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -66,7 +70,7 @@ export function MerchantSpendSection({
       const inPrevious = isSameCalendarMonth(t.date, prevMonth, prevYear);
       if (!inCurrent && !inPrevious) continue;
 
-      if (inCurrent) allExpenseThisMonth += t.amount;
+      if (inCurrent) allExpenseThisMonth += netAmount(t);
 
       const merchant = detectMerchant(t.description);
       if (!merchant) continue;
@@ -76,11 +80,11 @@ export function MerchantSpendSection({
           id: merchant.id, name: merchant.name, group: merchant.group,
           total: 0, count: 0, previousTotal: 0, change: null,
         };
-        entry.total += t.amount;
+        entry.total += netAmount(t);
         entry.count += 1;
         current.set(merchant.id, entry);
       } else {
-        previous.set(merchant.id, (previous.get(merchant.id) ?? 0) + t.amount);
+        previous.set(merchant.id, (previous.get(merchant.id) ?? 0) + netAmount(t));
       }
     }
 
@@ -116,6 +120,71 @@ export function MerchantSpendSection({
     router.push(`/transactions?${params.toString()}`);
   };
 
+  const content = (
+    <div className="space-y-3">
+      {!bare && (
+        <p className="text-sm text-muted-foreground">
+          {merchants.length} merchant{merchants.length === 1 ? '' : 's'} in {selectedMonthName} {selectedYear}
+          {isVisible && shareOfSpend > 0 && (
+            <> · {formatCurrencyWhole(totalTracked)} ({shareOfSpend.toFixed(0)}% of spend)</>
+          )}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <AnimatePresence initial={false}>
+          {visible.map((m, i) => (
+            <motion.button
+              key={m.id}
+              type="button"
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, delay: Math.min(i, INITIAL_VISIBLE) * 0.02 }}
+              onClick={() => handleDrillDown(m)}
+              aria-label={`${m.name}: ${formatCurrencyWhole(m.total)} across ${m.count} transactions. View transactions.`}
+              className={cn(
+                'group flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left',
+                'transition-colors hover:border-accent/50 hover:bg-accent/5',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
+              )}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <span className="truncate text-xs font-medium text-muted-foreground" title={m.name}>
+                  {m.name}
+                </span>
+                <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-accent" />
+              </div>
+
+              <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
+                {isVisible ? formatCurrencyCompact(m.total) : '•••••'}
+              </span>
+
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>{formatCount(m.count)} txn{m.count === 1 ? '' : 's'}</span>
+                {isVisible && <ChangeChip change={m.change} isNew={m.previousTotal === 0} />}
+              </div>
+            </motion.button>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {merchants.length > INITIAL_VISIBLE && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setExpanded(v => !v)}
+          className="w-full text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={cn('mr-1 h-4 w-4 transition-transform', expanded && 'rotate-180')} />
+          {expanded ? 'Show less' : `Show ${hidden} more merchant${hidden === 1 ? '' : 's'}`}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (bare) return content;
+
   return (
     <Card className="bg-card/80">
       <CardHeader className="pb-3">
@@ -134,59 +203,7 @@ export function MerchantSpendSection({
           </div>
         </div>
       </CardHeader>
-
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          <AnimatePresence initial={false}>
-            {visible.map((m, i) => (
-              <motion.button
-                key={m.id}
-                type="button"
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18, delay: Math.min(i, INITIAL_VISIBLE) * 0.02 }}
-                onClick={() => handleDrillDown(m)}
-                aria-label={`${m.name}: ${formatCurrencyWhole(m.total)} across ${m.count} transactions. View transactions.`}
-                className={cn(
-                  'group flex flex-col gap-1 rounded-lg border border-border bg-background/60 p-3 text-left',
-                  'transition-colors hover:border-accent/50 hover:bg-accent/5',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
-                )}
-              >
-                <div className="flex items-start justify-between gap-1">
-                  <span className="truncate text-xs font-medium text-muted-foreground" title={m.name}>
-                    {m.name}
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-accent" />
-                </div>
-
-                <span className="text-base font-semibold tabular-nums text-foreground sm:text-lg">
-                  {isVisible ? formatCurrencyCompact(m.total) : '•••••'}
-                </span>
-
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span>{formatCount(m.count)} txn{m.count === 1 ? '' : 's'}</span>
-                  {isVisible && <ChangeChip change={m.change} isNew={m.previousTotal === 0} />}
-                </div>
-              </motion.button>
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {merchants.length > INITIAL_VISIBLE && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(v => !v)}
-            className="w-full text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ChevronDown className={cn('mr-1 h-4 w-4 transition-transform', expanded && 'rotate-180')} />
-            {expanded ? 'Show less' : `Show ${hidden} more merchant${hidden === 1 ? '' : 's'}`}
-          </Button>
-        )}
-      </CardContent>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

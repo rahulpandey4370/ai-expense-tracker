@@ -29,6 +29,7 @@ import type { AppTransaction } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useAIModel } from "@/contexts/AIModelContext";
+import { netAmount } from "@/lib/split-utils";
 
 interface SpendingInsightsProps {
   currentMonthTransactions: AppTransaction[];
@@ -140,7 +141,7 @@ export function SpendingInsights({
       )
       .reduce((acc, t) => {
         const categoryName = t.category!.name;
-        acc[categoryName] = (acc[categoryName] || 0) + t.amount;
+        acc[categoryName] = (acc[categoryName] || 0) + netAmount(t);
         return acc;
       }, {} as Record<string, number>);
 
