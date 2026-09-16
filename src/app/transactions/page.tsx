@@ -12,7 +12,7 @@ import { deleteTransaction, deleteMultipleTransactions } from '@/lib/actions/tra
 import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
-import { ArrowDownCircle, ArrowUpCircle, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus, X, MoreHorizontal, CheckSquare } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ArrowDownUp, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus, X, MoreHorizontal, CheckSquare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -421,6 +421,12 @@ export default function TransactionsPage() {
     return `Year ${selectedYear}`;
   }, [viewMode, selectedMonth, selectedYear, monthNamesList]);
 
+  const mobileSortDirectionLabel = sortConfig.key === 'date'
+    ? (sortConfig.direction === 'ascending' ? 'Oldest' : 'Newest')
+    : sortConfig.key === 'amount'
+      ? (sortConfig.direction === 'ascending' ? 'Low–high' : 'High–low')
+      : (sortConfig.direction === 'ascending' ? 'A–Z' : 'Z–A');
+
   return (
     <div className="p-0 space-y-6 bg-background/80 backdrop-blur-sm sm:p-2 md:p-4 lg:p-6">
       <motion.div
@@ -523,6 +529,36 @@ export default function TransactionsPage() {
                           Export to CSV
                         </Button>
                       </motion.div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 md:hidden">
+                      <Select
+                        value={sortConfig.key ?? 'date'}
+                        onValueChange={(value) => setSortConfig(prev => ({
+                          key: value as SortableKeys,
+                          direction: prev.key === value ? prev.direction : (value === 'date' || value === 'amount' ? 'descending' : 'ascending'),
+                        }))}
+                      >
+                        <SelectTrigger className="bg-background/70 border-primary/40 text-xs"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                        <SelectContent className="bg-card border-primary/60 text-foreground">
+                          <SelectItem value="date" className="text-xs">Sort by date</SelectItem>
+                          <SelectItem value="description" className="text-xs">Sort by description</SelectItem>
+                          <SelectItem value="amount" className="text-xs">Sort by amount</SelectItem>
+                          <SelectItem value="categoryName" className="text-xs">Sort by category</SelectItem>
+                          <SelectItem value="paymentMethodName" className="text-xs">Sort by payment method</SelectItem>
+                          <SelectItem value="expenseType" className="text-xs">Sort by expense type</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSortConfig(prev => ({ ...prev, direction: prev.direction === 'ascending' ? 'descending' : 'ascending' }))}
+                        className="gap-1.5 text-xs"
+                        aria-label={`Current order: ${mobileSortDirectionLabel}. Change sort direction.`}
+                      >
+                        <ArrowDownUp className="h-4 w-4" />
+                        {mobileSortDirectionLabel}
+                      </Button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -635,7 +671,7 @@ export default function TransactionsPage() {
                     into 15 lines, making rows 300px tall while whitespace sat
                     unused to the right. */}
                 <Table className="table-fixed">
-                  <TableHeader className="sticky top-14 z-10 bg-card md:top-16">
+                  <TableHeader className="bg-card">
                     <TableRow className="hover:bg-primary/10 border-b-primary/30">
                       {selectMode && (
                         <TableHead className="w-10 px-2">

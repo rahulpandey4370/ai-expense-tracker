@@ -33,6 +33,7 @@ import { DashboardSkeleton } from '@/components/dashboard-skeleton';
 import { formatCurrencyWhole, formatCurrencyCompact, formatPercent, formatDelta, percentChange } from '@/lib/format';
 import { netAmount, othersShare, openReceivable } from '@/lib/split-utils';
 import { CollapsibleKpiGroup } from '@/components/dashboard/collapsible-kpi-group';
+import { DailySpendSection } from '@/components/dashboard/daily-spend-section';
 import { Store, CreditCard, HeartHandshake } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAIModel } from '@/contexts/AIModelContext';
@@ -529,6 +530,21 @@ export default function DashboardPage() {
             these are supporting detail, not the headline. */}
         <CollapsibleKpiGroup
           panels={[
+            {
+              id: 'daily-spending',
+              title: 'Daily spending',
+              icon: <LineChart className="h-4 w-4" />,
+              activeClassName: 'text-amber-600 dark:text-amber-400',
+              content: (
+                <DailySpendSection
+                  transactions={transactions}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
+                  selectedMonthName={monthNamesList[selectedMonth]}
+                  isVisible={kpisVisible}
+                />
+              ),
+            },
             {
               id: 'merchants',
               title: 'Where your money went',
