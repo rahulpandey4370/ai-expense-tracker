@@ -6,15 +6,13 @@ import cuid from 'cuid';
 import { getSupabase } from '@/lib/supabase';
 import { hasBearer } from '@/lib/bearer';
 import { isDebitAlert, extractAmount, extractAccountHint, smsHash } from '@/lib/sms';
-import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
-import { getDefaultModelForTask } from '@/lib/task-models';
+import { guessFromSms } from '@/lib/sms-ai';
 import { getAppCalendarDayString } from '@/lib/date-utils';
 import { sendPush } from '@/lib/push';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const FALLBACK_CATEGORY = /^(others?|misc(ellaneous)?|general|uncategori[sz]ed)$/i;
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 export async function POST(req: Request) {
@@ -38,42 +36,14 @@ export async function POST(req: Request) {
   const { data: existing } = await supabase.from('pending_transactions').select('id').eq('text_hash', textHash).limit(1);
   if (existing?.length) return NextResponse.json({ status: 'duplicate' });
 
+  // Card digits are read here, locally; the AI only gets a redacted copy.
   const accountHint = extractAccountHint(text);
-  const [{ data: categories }, { data: paymentMethods }, { data: hintRows }] = await Promise.all([
-    supabase.from('categories').select('id, name, type').eq('type', 'expense'),
-    supabase.from('payment_methods').select('id, name'),
-    accountHint
-      ? supabase.from('sms_account_hints').select('payment_method_id').eq('account_hint', accountHint).limit(1)
-      : Promise.resolve({ data: [] as { payment_method_id: string }[] }),
-  ]);
-
-  // AI fills merchant, category, payment method and need/want. The amount is
-  // already known from the SMS, so the AI is told it and can't change it.
-  let parsed: Awaited<ReturnType<typeof parseTransactionsFromText>>['parsedTransactions'][number] | undefined;
-  try {
-    const result = await parseTransactionsFromText({
-      naturalLanguageText: [
-        `This is a bank SMS alert for ONE completed debit (money I spent) of ${inr(amount)}.`,
-        'Return exactly one expense. The merchant/payee is the "to", "at", "trf to" or VPA name; ignore balance, limit and reference numbers.',
-        'Pick the payment method from the bank name, card/account type (credit card, debit card, UPI, net banking, ATM) and last digits.',
-        `SMS: ${text}`,
-      ].join('\n'),
-      categories: (categories ?? []) as { id: string; name: string; type: 'expense' }[],
-      paymentMethods: paymentMethods ?? [],
-      model: getDefaultModelForTask('transaction_parsing'),
-    });
-    parsed = result.parsedTransactions.find(t => t.type === 'expense') ?? result.parsedTransactions[0];
-  } catch (e) {
-    console.error('SMS AI parse failed, saving with defaults:', e);
-  }
-
-  const byName = <T extends { name: string }>(list: T[] | null, name?: string | null) =>
-    name ? list?.find(x => x.name.toLowerCase() === name.toLowerCase()) : undefined;
+  const guess = await guessFromSms({ text, sender, amount, accountHint });
 
   const today = getAppCalendarDayString(new Date())!;
   const threeDaysAgo = getAppCalendarDayString(new Date(Date.now() - 3 * 864e5))!;
   // SMS arrive in real time; only trust an AI-read date if it's within the last 3 days.
-  const date = parsed?.date && parsed.date >= threeDaysAgo && parsed.date <= today ? parsed.date : today;
+  const date = guess.date && guess.date >= threeDaysAgo && guess.date <= today ? guess.date : today;
 
   const row = {
     id: cuid(),
@@ -83,11 +53,11 @@ export async function POST(req: Request) {
     account_hint: accountHint,
     date,
     amount,
-    description: parsed?.description?.trim() || `💸 ${sender ?? 'Bank'} debit`,
-    category_id: (byName(categories, parsed?.categoryNameGuess) ?? categories?.find(c => FALLBACK_CATEGORY.test(c.name)))?.id ?? null,
-    payment_method_id: hintRows?.[0]?.payment_method_id ?? byName(paymentMethods, parsed?.paymentMethodNameGuess)?.id ?? null,
-    expense_type: parsed?.expenseTypeNameGuess ?? null,
-    confidence: parsed?.confidenceScore ?? null,
+    description: guess.description || `💸 ${sender ?? 'Bank'} debit`,
+    category_id: guess.categoryId,
+    payment_method_id: guess.paymentMethodId,
+    expense_type: guess.expenseType,
+    confidence: guess.confidence,
   };
 
   const { error } = await supabase.from('pending_transactions').insert(row);
@@ -97,12 +67,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'could not save' }, { status: 500 });
   }
 
-  const pmName = paymentMethods?.find(p => p.id === row.payment_method_id)?.name;
-  const catName = categories?.find(c => c.id === row.category_id)?.name;
   try {
     await sendPush({
       title: `📩 Log ${inr(amount)}?`,
-      body: [row.description, [pmName, catName].filter(Boolean).join(' · '), 'Tap to review'].filter(Boolean).join('\n'),
+      body: [row.description, [guess.paymentMethodName, guess.categoryName].filter(Boolean).join(' · '), 'Tap to review'].filter(Boolean).join('\n'),
       url: '/pending',
       tag: `sms-${row.id}`,
     });

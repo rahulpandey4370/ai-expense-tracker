@@ -59,11 +59,13 @@ export async function sendPushOnce(key: string, payload: PushPayload): Promise<b
     if (error.code === '23505') return false; // already sent
     throw new Error(`Could not record notification: ${error.message}`);
   }
+  const forget = () => getSupabase().from('notification_log').delete().eq('key', key); // retry next time
   try {
-    await sendPush(payload);
+    if (await sendPush(payload)) return true;
   } catch (e) {
-    await getSupabase().from('notification_log').delete().eq('key', key); // retry next time
+    await forget();
     throw e;
   }
-  return true;
+  await forget(); // no device received it (none subscribed yet): don't mark as sent
+  return false;
 }

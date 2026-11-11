@@ -43,6 +43,34 @@ export function extractAccountHint(text: string): string | null {
   return m ? m[1] : null;
 }
 
+const MONEY = String.raw`(?:rs\.?|inr|₹)?\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?`;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Mask personal details before an SMS (or a note) is sent to an AI model:
+ * OTPs, balances/limits, card/account digits, phone numbers, emails, long
+ * reference numbers, "Dear <name>" and any names in SMS_REDACT_NAMES
+ * (comma-separated, e.g. "Rahul,Pandey"). Merchant names and UPI handles stay,
+ * the AI needs them. Only the copy sent to the model is masked; the stored SMS is not.
+ */
+export function redactSms(text: string, names = (process.env.SMS_REDACT_NAMES ?? '').split(',')): string {
+  let t = text
+    .replace(/\b(otp|one[ -]time password|passcode|code|pin)(\W{1,15})\d{4,8}\b/gi, '$1$2[OTP]')
+    .replace(/\b\d{4,8}(?=\s+is\s+(?:your|the)\s+(?:otp|one[ -]time|code|pin))/gi, '[OTP]')
+    .replace(new RegExp(String.raw`\b(avl\.?\s*bal(?:ance)?|available\s+(?:bal(?:ance)?|limit|lmt)|avl\.?\s*lmt|bal(?:ance)?|limit|lmt|outstanding)([^0-9]{0,20}?)${MONEY}`, 'gi'), '$1$2[BALANCE]')
+    .replace(/[\w.+-]+@[\w-]+\.[a-z][\w.]*/gi, '[EMAIL]')
+    .replace(/(?:\+?91[\s-]?)?\b[6-9]\d{9}\b/g, '[PHONE]')
+    .replace(/\b\d{9,}\b/g, '[REF]')
+    .replace(/(\bx+|\*+)\d{3,6}\b/gi, 'XXXX')
+    .replace(/\b(a\/c|acct?|account|card)(\s*(?:no\.?|number)?\s*[:.]?\s*)\d{3,6}\b/gi, '$1$2XXXX')
+    .replace(/\b(ending(?:\s+with|\s+in)?\s*)\d{3,6}\b/gi, '$1XXXX')
+    .replace(/\b(dear|hi|hello)\s+(?!(?:customer|user|sir|madam|cardholder|card ?member|upi user|valued)\b)[a-z][a-z.]*(?:\s+[a-z][a-z.]*)?(?=\s*[,!:])/gi, '$1 [NAME]');
+  for (const name of names.map(n => n.trim()).filter(n => n.length >= 2)) {
+    t = t.replace(new RegExp(`\\b${escapeRe(name)}\\b`, 'gi'), '[NAME]');
+  }
+  return t;
+}
+
 export function smsHash(text: string): string {
   return createHash('sha256').update(text.trim().replace(/\s+/g, ' ').toLowerCase()).digest('hex');
 }

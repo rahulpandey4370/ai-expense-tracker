@@ -3,6 +3,7 @@
 import { getSupabase } from '@/lib/supabase';
 import { addTransaction } from '@/lib/actions/transactions';
 import { sendPush } from '@/lib/push';
+import { guessFromSms } from '@/lib/sms-ai';
 import { revalidatePath } from 'next/cache';
 
 export interface PendingTransaction {
@@ -100,6 +101,40 @@ export async function confirmPendingTransaction(id: string, input: PendingConfir
     });
   }
   revalidatePath('/pending');
+}
+
+/**
+ * The inbox "AI" button: re-read the SMS with your own note (e.g. "team lunch")
+ * and suggest description, category, payment method and need/want, like the
+ * normal text parse. The SMS is loaded from the DB and redacted before the AI sees it.
+ */
+export async function aiFillPendingTransaction(id: string, note: string): Promise<{
+  description: string | null;
+  categoryId: string | null;
+  paymentMethodId: string | null;
+  expenseType: PendingConfirmInput['expenseType'] | null;
+}> {
+  const { data: row, error } = await getSupabase()
+    .from('pending_transactions')
+    .select('raw_text, sender, amount, account_hint')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single();
+  if (error || !row) throw new Error('This SMS was already confirmed or dismissed.');
+  const guess = await guessFromSms({
+    text: row.raw_text,
+    sender: row.sender,
+    amount: Number(row.amount),
+    accountHint: row.account_hint,
+    note: String(note ?? ''),
+  });
+  if (!guess.aiOk) throw new Error('The AI could not read this one. Try rewording your note, or fill it in by hand.');
+  return {
+    description: guess.description,
+    categoryId: guess.categoryId,
+    paymentMethodId: guess.paymentMethodId,
+    expenseType: guess.expenseType,
+  };
 }
 
 export async function dismissPendingTransaction(id: string): Promise<void> {

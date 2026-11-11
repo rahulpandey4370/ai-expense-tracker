@@ -1,7 +1,28 @@
 // Run: npx tsx --test src/lib/sms.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isDebitAlert, extractAmount, extractAccountHint, smsHash } from './sms';
+import { isDebitAlert, extractAmount, extractAccountHint, smsHash, redactSms } from './sms';
+
+test('personal details are masked before the AI sees the SMS, merchant stays', () => {
+  const cases: [string, string[], string[]][] = [
+    // [sms, must NOT contain, must still contain]
+    ['Rs.500.00 debited from A/c XX1234 on 11-11-26 to VPA swiggy@icici (UPI Ref No 431234567890). Not you? Call 18002586161',
+      ['1234', '431234567890', '18002586161'], ['Rs.500.00', 'swiggy@icici', 'XXXX']],
+    ['INR 1,250.00 spent on HDFC Bank Card XX9876 at AMAZON on 2026-11-11. Avl Lmt: INR 50,000.00',
+      ['9876', '50,000'], ['INR 1,250.00', 'AMAZON', '[BALANCE]']],
+    ['Dear Rahul Pandey, Rs 349 debited from Acct 5566 for NETFLIX. Avl Bal Rs 10,000.00. Call +91 9876543210',
+      ['Rahul', 'Pandey', '5566', '10,000', '9876543210'], ['Rs 349', 'NETFLIX', '[NAME]', '[PHONE]']],
+    ['Sent Rs.200 to 9876543210@ybl from card ending 4321. Mail care@hdfcbank.com. OTP: 482910',
+      ['9876543210', '4321', 'care@hdfcbank.com', '482910'], ['Rs.200', '@ybl', '[EMAIL]', '[OTP]']],
+    ['Dear Customer, Rs 120 spent at ZOMATO', [], ['Dear Customer', 'ZOMATO', 'Rs 120']],
+  ];
+  for (const [sms, gone, kept] of cases) {
+    const out = redactSms(sms, []);
+    for (const g of gone) assert.ok(!out.includes(g), `"${g}" leaked in: ${out}`);
+    for (const k of kept) assert.ok(out.includes(k), `"${k}" missing in: ${out}`);
+  }
+  assert.equal(redactSms('Rs 50 to RAHUL PANDEY via rahul.pandey@okaxis', ['Rahul', 'Pandey']), 'Rs 50 to [NAME] [NAME] via [NAME].[NAME]@okaxis');
+});
 
 const debits: [string, number, string | null][] = [
   ['Rs.500.00 debited from A/c XX1234 on 11-11-26 to VPA swiggy@icici (UPI Ref No 431234567890). Not you? Call 18002586161', 500, '1234'],

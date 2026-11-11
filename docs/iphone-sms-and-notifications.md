@@ -32,9 +32,12 @@ Do the four parts in order: **A** server, **B** Supabase, **C** iPhone app and n
    |---|---|
    | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public Key from step 1 |
    | `VAPID_PRIVATE_KEY` | Private Key from step 1 |
-   | `VAPID_SUBJECT` | `mailto:` followed by your email |
+   | `VAPID_SUBJECT` | your app URL, e.g. `https://finwise-ai.vercel.app` |
    | `SMS_INGEST_TOKEN` | first secret |
    | `CRON_SECRET` | second secret |
+   | `SMS_REDACT_NAMES` | optional: names to hide from the AI, comma-separated, e.g. `Rahul,Pandey` |
+
+   **Privacy:** the AI (GPT-5.6 Luna) only sees a masked copy of each SMS: OTPs, balances/limits, card and account digits, phone numbers, emails, reference numbers, "Dear <name>" and the names above are replaced with `[OTP]`, `[BALANCE]`, `XXXX` and so on. Payment method names are sent without their digits. The original SMS is stored only in your own database, for the SMS Inbox.
 
 4. **Redeploy.** `NEXT_PUBLIC_*` values are baked in at build time, so a fresh build is required.
 

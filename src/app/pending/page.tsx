@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { MessageSquareText, Loader2, Check, X } from "lucide-react";
+import { MessageSquareText, Loader2, Check, X, Sparkles } from "lucide-react";
 import { getCategories, getPaymentMethods } from "@/lib/actions/transactions";
 import {
   getPendingTransactions,
   confirmPendingTransaction,
   dismissPendingTransaction,
+  aiFillPendingTransaction,
   type PendingTransaction,
 } from "@/lib/actions/pending";
 import type { Category, PaymentMethod } from "@/lib/types";
@@ -33,6 +34,8 @@ export default function PendingPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [aiBusyId, setAiBusyId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +79,24 @@ export default function PendingPage() {
     }
   };
 
+  const aiFill = async (item: PendingTransaction) => {
+    setAiBusyId(item.id);
+    try {
+      const g = await aiFillPendingTransaction(item.id, notes[item.id] ?? '');
+      // Amount and date stay as read from the SMS.
+      update(item.id, {
+        description: g.description ?? item.description,
+        categoryId: g.categoryId ?? item.categoryId,
+        paymentMethodId: g.paymentMethodId ?? item.paymentMethodId,
+        expenseType: g.expenseType ?? item.expenseType,
+      });
+    } catch (e: any) {
+      toast({ title: "AI couldn't fill it", description: e.message, variant: "destructive" });
+    } finally {
+      setAiBusyId(null);
+    }
+  };
+
   const dismiss = async (item: PendingTransaction) => {
     setBusyId(item.id);
     try {
@@ -114,6 +135,20 @@ export default function PendingPage() {
                 {item.sender ? <span className="font-semibold">{item.sender}: </span> : null}
                 {item.rawText}
               </p>
+
+              <div className="space-y-1">
+                <Label htmlFor={`note-${item.id}`}>What was it? (AI fills the rest)</Label>
+                <div className="flex gap-2">
+                  <Input id={`note-${item.id}`} placeholder="e.g. team lunch, paid by credit card"
+                    value={notes[item.id] ?? ''}
+                    onChange={e => setNotes(n => ({ ...n, [item.id]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') aiFill(item); }} />
+                  <Button type="button" variant="secondary" onClick={() => aiFill(item)} disabled={aiBusyId === item.id || busyId === item.id}>
+                    {aiBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    AI
+                  </Button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2 space-y-1">
