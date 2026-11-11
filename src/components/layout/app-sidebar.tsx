@@ -18,7 +18,7 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank, LineChart } from "lucide-react";
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank, LineChart, MessageSquareText } from "lucide-react";
 
 /**
  * Grouped instead of an 11-item flat list. The old order interleaved daily
@@ -34,6 +34,7 @@ const navGroups: { label: string | null; items: { href: string; label: string; i
     label: "Track",
     items: [
       { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
+      { href: "/pending", label: "SMS Inbox", icon: MessageSquareText },
       { href: "/recurring", label: "Recurring", icon: Repeat },
       { href: "/split-expenses", label: "Split Expenses", icon: Users },
     ],

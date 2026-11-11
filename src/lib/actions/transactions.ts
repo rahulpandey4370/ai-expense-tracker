@@ -5,6 +5,8 @@ import type { AppTransaction, RawTransaction, Category, PaymentMethod, Transacti
 import { TransactionInputSchema } from '@/lib/types';
 import { getAppCalendarDayString } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { checkBudgetAlerts } from '@/lib/notifications';
 import cuid from 'cuid';
 
 // --- Category and Payment Method Functions ---
@@ -321,6 +323,11 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
   };
 
   const createdRow = await writeTransactionWithSplits(toTransactionRow(newItem), validation.data.splits ?? []);
+
+  // Push a budget alert if this expense crossed 50/80/100%, after the response is sent.
+  if (newItem.type === 'expense') {
+    after(() => checkBudgetAlerts().catch(e => console.error('Budget alert check failed:', e)));
+  }
 
   revalidatePath('/');
   revalidatePath('/transactions');

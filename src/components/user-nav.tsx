@@ -17,6 +17,12 @@ import { User, LogOut, Settings, LifeBuoy, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 import { useRouter } from "next/navigation"; // Import useRouter
 import { useToast } from "@/hooks/use-toast";
+import { savePushSubscription, sendTestPush } from "@/lib/actions/pending";
+
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+}
 
 export function UserNav() {
   const { logout } = useAuth(); // Get logout function
@@ -28,45 +34,38 @@ export function UserNav() {
     // The logout function in AuthContext already handles router.push('/login')
   };
 
+  // Subscribes this device to Web Push and stores it on the server.
+  // On iPhone this only works from the Home Screen app (iOS 16.4+), not a Safari tab.
   const handleEnableNotifications = async () => {
-    if (!("Notification" in window)) {
-      toast({
-        title: "Notifications Not Supported",
-        description: "This browser does not support desktop notifications.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const fail = (title: string, description: string) =>
+      toast({ title, description, variant: "destructive" });
 
-    if (Notification.permission === "granted") {
-      toast({
-        title: "Notifications Already Enabled",
-        description: "You're all set to receive notifications.",
-      });
-      // Here you would typically send the subscription to your server
-      // const subscription = await swRegistration.pushManager.getSubscription();
-      // sendSubscriptionToServer(subscription);
-    } else if (Notification.permission !== "denied") {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        toast({
-          title: "Notifications Enabled!",
-          description: "You will now receive updates from FinWise AI.",
-        });
-        // Here you would also send the subscription to your server
-      } else {
-        toast({
-          title: "Notifications Not Enabled",
-          description: "You have blocked notifications. You can change this in your browser settings.",
-          variant: "destructive",
-        });
-      }
-    } else {
-       toast({
-          title: "Notifications Blocked",
-          description: "You have previously blocked notifications. Please enable them in your browser settings.",
-          variant: "destructive",
-        });
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      return fail(
+        "Push not available here",
+        "On iPhone: open this site in Safari, tap Share → Add to Home Screen, then enable notifications from the Home Screen app."
+      );
+    }
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) return fail("Push not configured", "NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing on the server.");
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      return fail("Notifications blocked", "Allow notifications for FinWise in iPhone Settings → Notifications.");
+    }
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        }));
+      await savePushSubscription(subscription.toJSON(), navigator.userAgent);
+      await sendTestPush();
+      toast({ title: "Notifications enabled", description: "A test notification is on its way." });
+    } catch (error: any) {
+      fail("Could not enable notifications", error?.message ?? "Unknown error");
     }
   };
 
