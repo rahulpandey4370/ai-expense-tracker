@@ -22,7 +22,6 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { IncomeDistributionChart } from '@/components/charts/income-distribution-chart';
 import { BudgetTrackerCard } from '@/components/budget-tracker-card';
-import { useBudgetAlerts } from '@/hooks/use-budget-alerts';
 import { Button } from '@/components/ui/button';
 import { subMonths } from 'date-fns';
 import { isSameCalendarMonth } from '@/lib/date-utils';
@@ -342,8 +341,6 @@ export default function DashboardPage() {
             };
         });
     }, [currentMonthTransactions, budgets]);
-
-    useBudgetAlerts(budgetData);
 
   if (!isClient || isLoadingData) {
     return <DashboardSkeleton />;
