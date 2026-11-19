@@ -44,6 +44,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#008080',
+  // Draw edge to edge; the header, bottom nav, buttons and toasts pad themselves
+  // with env(safe-area-inset-*) so nothing tappable sits under the notch or home bar.
+  viewportFit: 'cover',
 };
 
 export default async function RootLayout({

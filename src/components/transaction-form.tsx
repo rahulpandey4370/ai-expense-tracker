@@ -1,6 +1,6 @@
 
 
-import { useState, type FormEvent, type ChangeEvent, useEffect, useCallback, useMemo } from 'react';
+import { useState, type FormEvent, type ChangeEvent, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -132,6 +132,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // One key per new entry, reused on retries so a resubmit can't log it twice. Rotated after each success.
+  const idempotencyKey = useRef<string>(crypto.randomUUID());
   const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true);
 
 
@@ -321,7 +323,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         await updateTransaction(formId, validation.data);
         toast({ title: "Transaction Updated!", description: "Your transaction has been successfully modified." });
       } else {
-        await addTransaction(validation.data);
+        await addTransaction(validation.data, idempotencyKey.current);
+        idempotencyKey.current = crypto.randomUUID();
         toast({ title: "Transaction Added!", description: "New transaction recorded successfully." });
       }
 
@@ -871,7 +874,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
 
     try {
-      await addTransaction(validation.data);
+      await addTransaction(validation.data, idempotencyKey.current);
+      idempotencyKey.current = crypto.randomUUID();
       toast({ title: "Transaction Added!", description: "Receipt transaction recorded successfully." });
       onTransactionAdded?.();
       setReceiptFile(null);
@@ -960,7 +964,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       </div>
       <div>
         <Label htmlFor={`description-${formId || 'new'}`} className={labelClasses}>Description</Label>
-        <Input id={`description-${formId || 'new'}`} placeholder={type === 'expense' ? "e.g., Groceries, Dinner out" : "e.g., July Salary"} value={description} onChange={(e) => setDescription(e.target.value)} className={cn("mt-1", inputClasses)} disabled={isFetchingDropdowns} />
+        {/* Wraps instead of scrolling sideways, so a long description stays readable; Enter still saves. */}
+        <Textarea id={`description-${formId || 'new'}`} rows={1} placeholder={type === 'expense' ? "e.g., Groceries, Dinner out" : "e.g., July Salary"} value={description} onChange={(e) => setDescription(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} className={cn("mt-1 min-h-10 resize-none", inputClasses)} disabled={isFetchingDropdowns} />
       </div>
       {type === 'expense' && (
         <>
@@ -1071,6 +1076,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       <Label htmlFor="bulk-input" className={labelClasses}>Paste Excel Data (Tab-separated: Description, Category, Amount, Ignored Total Amount, Date (DD/MM/YYYY), Expense Type, Payment Method)</Label>
       <Textarea
         id="bulk-input"
+        voice={false}
         value={bulkText}
         onChange={(e) => setBulkText(e.target.value)}
         placeholder="E.g.&#10;Rent	Rent	₹32,000.00	₹32,000.00	01/05/2025	Need	UPI (HDFC)&#10;Ice cream	Food and Dining	₹94.50	₹189.00	01/05/2025	Want	Credit Card YES 2106"
@@ -1133,6 +1139,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       <div className="relative">
         <Textarea
           id="ai-text-input"
+          voice={false}
           value={aiText}
           onChange={(e) => setAiText(e.target.value)}
           placeholder="e.g., Dinner with friends ₹1200 using HDFC credit card yesterday, split equally with Tanshu. Received ₹50000 salary last Monday. Groceries for ₹2500 via UPI two days ago."

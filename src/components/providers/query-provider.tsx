@@ -9,12 +9,15 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Cached data is considered fresh for 1 min; navigating between pages
-            // reuses it instantly instead of re-fetching. Mutations invalidate keys
-            // to force a refresh when data actually changes.
+            // Stale-while-revalidate: cached data shows instantly, and anything
+            // older than 1 min refetches in the background on page visit, on
+            // returning to the app, and when the network comes back. This is
+            // your own records, not a live balance, so a briefly old number is
+            // harmless. Mutations still invalidate keys straight away.
             staleTime: 60_000,
             gcTime: 5 * 60_000,
-            refetchOnWindowFocus: false,
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
             retry: 1,
           },
         },

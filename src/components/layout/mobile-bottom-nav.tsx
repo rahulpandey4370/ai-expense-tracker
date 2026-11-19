@@ -30,7 +30,7 @@ export function MobileBottomNav() {
       className={cn(
         'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur-sm md:hidden',
         // Keeps the bar clear of the iOS home indicator.
-        'pb-[env(safe-area-inset-bottom)]'
+        'pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]'
       )}
     >
       <ul className="grid grid-cols-5">

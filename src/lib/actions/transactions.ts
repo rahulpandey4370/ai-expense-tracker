@@ -300,7 +300,12 @@ async function writeTransactionWithSplits(
   return (data as any[])[0];
 }
 
-export async function addTransaction(data: TransactionInput): Promise<AppTransaction> {
+/**
+ * `idempotencyKey` (a UUID the form makes when you start a new entry and reuses
+ * on every retry) becomes the row id, so a double-submit or a retry after a
+ * dropped response finds the existing row instead of creating a second one.
+ */
+export async function addTransaction(data: TransactionInput, idempotencyKey?: string): Promise<AppTransaction> {
   const validation = TransactionInputSchema.safeParse(data);
   if (!validation.success) {
     const errorMessages = validation.error.flatten().fieldErrors;
@@ -308,7 +313,14 @@ export async function addTransaction(data: TransactionInput): Promise<AppTransac
     throw new Error(`Invalid transaction data: ${readableErrors || "Validation failed."}`);
   }
 
-  const id = cuid();
+  const key = idempotencyKey && /^[0-9a-f-]{36}$/i.test(idempotencyKey) ? idempotencyKey : undefined;
+  if (key) {
+    const existing = await getSupabase().from('transactions_expanded').select('*').eq('id', key).limit(1);
+    if (existing.error) throw new Error(`Could not save transaction. Original error: ${existing.error.message}`);
+    if (existing.data?.length) return hydrateExpandedRow(existing.data[0]);
+  }
+
+  const id = key ?? cuid();
   const now = new Date().toISOString();
 
   const newItem: RawTransaction = {

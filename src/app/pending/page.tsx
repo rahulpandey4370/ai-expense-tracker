@@ -1,9 +1,11 @@
 "use client";
 
+import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -100,17 +102,15 @@ export default function PendingPage() {
     }
   };
 
-  const dismiss = async (item: PendingTransaction) => {
-    setBusyId(item.id);
-    try {
-      await dismissPendingTransaction(item.id);
-      setItems(list => list.filter(i => i.id !== item.id));
-      invalidateFinance();
-    } catch (e: any) {
-      toast({ title: "Could not dismiss", description: e.message, variant: "destructive" });
-    } finally {
-      setBusyId(null);
-    }
+  const dismiss = (item: PendingTransaction) => {
+    const index = items.findIndex(i => i.id === item.id);
+    deleteWithUndo({
+      title: 'Dismissed',
+      hide: () => setItems(list => list.filter(i => i.id !== item.id)),
+      restore: () => setItems(list => (list.some(i => i.id === item.id) ? list : [...list.slice(0, index), item, ...list.slice(index)])),
+      commit: () => dismissPendingTransaction(item.id),
+      onCommitted: invalidateFinance,
+    });
   };
 
   return (
@@ -143,10 +143,10 @@ export default function PendingPage() {
               <div className="space-y-1">
                 <Label htmlFor={`note-${item.id}`}>What was it? (AI fills the rest)</Label>
                 <div className="flex gap-2">
-                  <Input id={`note-${item.id}`} placeholder="e.g. team lunch, paid by credit card"
+                  <Textarea id={`note-${item.id}`} rows={1} className="min-h-10 flex-1 resize-none" placeholder="e.g. team lunch, paid by credit card"
                     value={notes[item.id] ?? ''}
                     onChange={e => setNotes(n => ({ ...n, [item.id]: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter') aiFill(item); }} />
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); aiFill(item); } }} />
                   <Button type="button" variant="secondary" onClick={() => aiFill(item)} disabled={aiBusyId === item.id || busyId === item.id}>
                     {aiBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     AI
@@ -157,7 +157,7 @@ export default function PendingPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2 space-y-1">
                   <Label htmlFor={`desc-${item.id}`}>Description</Label>
-                  <Input id={`desc-${item.id}`} value={item.description} onChange={e => update(item.id, { description: e.target.value })} />
+                  <Textarea id={`desc-${item.id}`} rows={1} className="min-h-10 resize-none" value={item.description} onChange={e => update(item.id, { description: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor={`amt-${item.id}`}>Amount (₹)</Label>

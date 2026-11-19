@@ -1,5 +1,6 @@
 "use client";
 
+import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,17 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PiggyBank, Loader2, Trash2, Plus, Pencil, X, Check, Wand2, Sparkles, Palette } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   getSavingsAllocations,
   addSavingsAllocation,
@@ -184,15 +174,18 @@ export default function SavingsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteSavingsAllocation(id);
-      toast({ title: "Deleted" });
-      if (editingId === id) { resetForm(); setShowForm(false); }
-      fetchAll();
-    } catch (err: any) {
-      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
-    }
+  const handleDelete = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const index = items.indexOf(item);
+    if (editingId === id) { resetForm(); setShowForm(false); }
+    deleteWithUndo({
+      title: `Deleted “${item.name}”`,
+      hide: () => setItems(list => list.filter(i => i.id !== id)),
+      restore: () => setItems(list => (list.some(i => i.id === id) ? list : [...list.slice(0, index), item, ...list.slice(index)])),
+      commit: () => deleteSavingsAllocation(id),
+      onCommitted: fetchAll,
+    });
   };
 
   const handleAiSubmit = async () => {
@@ -401,25 +394,9 @@ export default function SavingsPage() {
                               <Button variant="ghost" size="icon" onClick={() => startEdit(item)} title="Edit">
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete "{item.name}"?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This entry will be removed. You can re-add it any time.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDelete(item.id)}>Delete</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(item.id)} title="Delete" aria-label={`Delete ${item.name}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -727,23 +704,9 @@ function CrayonList({ isLoading, items, grouped, total, onEdit, onDelete }: {
                     <button className="crayon-btn" data-variant="ghost" onClick={() => onEdit(item)} title="Edit">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button className="crayon-btn" data-variant="danger" title="Delete">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete "{item.name}"?</AlertDialogTitle>
-                          <AlertDialogDescription>This entry will be removed. You can re-add it any time.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => onDelete(item.id)}>Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <button className="crayon-btn" data-variant="danger" title="Delete" aria-label={`Delete ${item.name}`} onClick={() => onDelete(item.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               ))}

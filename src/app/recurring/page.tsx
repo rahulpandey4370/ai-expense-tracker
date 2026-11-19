@@ -1,5 +1,6 @@
 "use client";
 
+import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,17 +15,6 @@ import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2,
 import { Textarea } from "@/components/ui/textarea";
 import { parseRecurringRuleFromText } from "@/ai/flows/parse-recurring-rule-flow";
 import { useAIModel } from "@/contexts/AIModelContext";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   getRecurringRules,
   addRecurringRule,
@@ -196,22 +186,27 @@ export default function RecurringPage() {
     }
   };
 
+  // Optimistic: flip it on screen now, flip it back if the server says no.
   const handleToggleActive = async (rule: RecurringRule) => {
+    const setActive = (isActive: boolean) =>
+      setRules(rs => rs.map(r => (r.id === rule.id ? { ...r, isActive } : r)));
+    setActive(!rule.isActive);
     try {
       await updateRecurringRule(rule.id, { isActive: !rule.isActive });
-      fetchAll();
     } catch (err: any) {
+      setActive(rule.isActive);
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteRecurringRule(id);
-      fetchAll();
-    } catch (err: any) {
-      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
-    }
+  const handleDelete = (rule: RecurringRule) => {
+    const index = rules.findIndex(r => r.id === rule.id);
+    deleteWithUndo({
+      title: `Deleted “${rule.description}”`,
+      hide: () => setRules(rs => rs.filter(r => r.id !== rule.id)),
+      restore: () => setRules(rs => (rs.some(r => r.id === rule.id) ? rs : [...rs.slice(0, index), rule, ...rs.slice(index)])),
+      commit: () => deleteRecurringRule(rule.id),
+    });
   };
 
   const [triggeringRuleId, setTriggeringRuleId] = useState<string | null>(null);
@@ -435,28 +430,12 @@ export default function RecurringPage() {
                       >
                         {triggeringRuleId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleActive(rule)} title={rule.isActive ? 'Pause' : 'Resume'}>
+                      <Button variant="ghost" size="icon" onClick={() => handleToggleActive(rule)} title={rule.isActive ? 'Pause' : 'Resume'} aria-label={rule.isActive ? `Pause ${rule.description}` : `Resume ${rule.description}`}>
                         {rule.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete recurring rule?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              "{rule.description}" will no longer auto-create transactions. Existing transactions are kept.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(rule.id)}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(rule)} title="Delete rule" aria-label={`Delete ${rule.description}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}

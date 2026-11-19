@@ -47,7 +47,7 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
           <AppHeader />
           {/* Bottom padding clears the fixed mobile nav so the last card
               isn't permanently hidden behind it. */}
-          <div className="min-w-0 pb-16 md:pb-0">{children}</div>
+          <div className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
           <MobileBottomNav />
         </SidebarInset>
       </SidebarProvider>
@@ -70,7 +70,7 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
       <AppSidebar />
       <SidebarInset className="min-w-0">
         <AppHeader />
-        <div className="min-w-0 pb-16 md:pb-0">{children}</div>
+        <div className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
         <MobileBottomNav />
       </SidebarInset>
     </SidebarProvider>

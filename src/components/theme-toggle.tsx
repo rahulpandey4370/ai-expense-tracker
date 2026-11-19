@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { withViewTransition } from "@/lib/view-transition";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,13 +26,13 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
+        <DropdownMenuItem onClick={() => withViewTransition(() => setTheme("light"))}>
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
+        <DropdownMenuItem onClick={() => withViewTransition(() => setTheme("dark"))}>
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
+        <DropdownMenuItem onClick={() => withViewTransition(() => setTheme("system"))}>
           System
         </DropdownMenuItem>
       </DropdownMenuContent>

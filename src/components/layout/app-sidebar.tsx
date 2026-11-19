@@ -27,7 +27,7 @@ import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, Hel
  * data entry with AI tools and analysis, so there was no way to scan for
  * "the thing I do every day" vs "the thing I check monthly".
  */
-const navGroups: { label: string | null; items: { href: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
+export const navGroups: { label: string | null; items: { href: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
   {
     label: null,
     items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],

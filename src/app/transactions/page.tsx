@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpenseType } from '@/lib/types';
 import { deleteTransaction, deleteMultipleTransactions } from '@/lib/actions/transactions';
+import { deleteWithUndo } from '@/lib/undo-toast';
 import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { format } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
@@ -47,7 +48,7 @@ import {
 import { TransactionForm } from '@/components/transaction-form';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { netAmount as netOfSplit } from '@/lib/split-utils';
 
@@ -95,15 +96,10 @@ export default function TransactionsPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
   
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const [editingTransaction, setEditingTransaction] = useState<AppTransaction | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const isMobile = useIsMobile();
-  const [isDeleting, setIsDeleting] = useState(false); // For single delete
-  // One shared confirm dialog instead of an AlertDialog instance mounted for
-  // every visible row.
-  const [pendingDelete, setPendingDelete] = useState<AppTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
@@ -124,7 +120,12 @@ export default function TransactionsPage() {
   }, [viewMode, selectedMonth, selectedYear]);
 
   const txQuery = useTransactionsInRange(rangeStart, rangeEnd);
-  const allTransactions = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  // Rows deleted in the last few seconds stay hidden while their Undo toast is up.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const allTransactions = useMemo(
+    () => (txQuery.data ?? []).filter(t => !hiddenIds.has(t.id)),
+    [txQuery.data, hiddenIds]
+  );
   const { data: allCategoriesState = [] } = useCategories();
   const { data: allPaymentMethodsState = [] } = usePaymentMethods();
   const isLoading = txQuery.isLoading;
@@ -147,6 +148,15 @@ export default function TransactionsPage() {
 
   const hasAppliedInitialParams = useRef(false);
   const { selectedModel } = useAIModel();
+
+  // `?new=1` (from the command menu) opens the add form straight away.
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setIsAddingNew(true);
+      router.replace('/transactions', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   // Clear row selection whenever the fetched period changes.
   useEffect(() => {
@@ -308,43 +318,38 @@ export default function TransactionsPage() {
     setEditingTransaction(null);
   };
 
-  const handleDeleteSingleTransaction = async (transactionId: string) => {
-    setIsDeleting(true);
-    try {
-      await deleteTransaction(transactionId);
-      toast({ title: "Transaction Deleted!", description: "The transaction has been successfully removed." });
-      invalidate();
-    } catch (error) {
-      console.error("Failed to delete transaction:", error);
-      toast({ title: "Deletion Failed", description: "Could not remove the transaction.", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
-    }
+  const setHidden = (ids: string[], hidden: boolean) =>
+    setHiddenIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => (hidden ? next.add(id) : next.delete(id)));
+      return next;
+    });
+
+  // No confirm dialog: the row goes now, and Undo brings it back before anything is sent.
+  const handleDeleteSingleTransaction = (t: AppTransaction) =>
+    deleteWithUndo({
+      title: `Deleted “${t.description || 'transaction'}”`,
+      hide: () => setHidden([t.id], true),
+      restore: () => setHidden([t.id], false),
+      commit: () => deleteTransaction(t.id),
+      onCommitted: () => { invalidate(); setHidden([t.id], false); },
+    });
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedTransactionIds);
+    setSelectedTransactionIds(new Set());
+    deleteWithUndo({
+      title: `Deleted ${ids.length} transaction${ids.length === 1 ? '' : 's'}`,
+      hide: () => setHidden(ids, true),
+      restore: () => setHidden(ids, false),
+      commit: async () => {
+        const result = await deleteMultipleTransactions(ids);
+        if (result.errorCount > 0) throw new Error(`${result.errorCount} of ${ids.length} could not be deleted.`);
+      },
+      onCommitted: () => { invalidate(); setHidden(ids, false); },
+    });
   };
 
-  const handleBulkDelete = async () => {
-    setIsBulkDeleting(true);
-    const idsToDelete = Array.from(selectedTransactionIds);
-    try {
-      const result = await deleteMultipleTransactions(idsToDelete);
-      toast({
-        title: "Bulk Deletion Complete",
-        description: `${result.successCount} transaction(s) deleted. ${result.errorCount > 0 ? `${result.errorCount} failed.` : ''}`,
-        variant: result.errorCount > 0 ? "destructive" : "default",
-      });
-      if (result.errors.length > 0) {
-        console.error("Bulk delete errors:", result.errors);
-      }
-      setSelectedTransactionIds(new Set());
-      invalidate(); // Refreshes list
-    } catch (error) {
-      console.error("Failed to bulk delete transactions:", error);
-      toast({ title: "Bulk Deletion Failed", description: "An unexpected error occurred.", variant: "destructive" });
-    } finally {
-      setIsBulkDeleting(false);
-    }
-  };
-  
   const toggleSelectTransaction = (id: string) => {
     setSelectedTransactionIds(prev => {
       const newSet = new Set(prev);
@@ -589,28 +594,10 @@ export default function TransactionsPage() {
                 </Button>
               )}
               {selectedTransactionIds.size > 0 && (
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" disabled={isBulkDeleting} className="w-full sm:w-auto">
-                        {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                        Delete Selected ({selectedTransactionIds.size})
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="text-destructive flex items-center gap-2"><ShieldAlert />Confirm Bulk Deletion</AlertDialogTitle>
-                        <AlertDialogDescription className="text-muted-foreground">
-                          Are you sure you want to permanently delete {selectedTransactionIds.size} selected transaction(s)? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleBulkDelete} disabled={isBulkDeleting} className="bg-red-600 hover:bg-red-700/80 text-primary-foreground">
-                          {isBulkDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Delete Selected"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="w-full sm:w-auto">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Selected ({selectedTransactionIds.size})
+                </Button>
               )}
             </div>
 
@@ -653,10 +640,7 @@ export default function TransactionsPage() {
                           </Badge>
                         )}
                          <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(t)} className="text-accent h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
-                         <AlertDialog>
-                           <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive h-7 w-7"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
-                           <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Transaction?</AlertDialogTitle><AlertDialogDescription>This will permanently remove "{t.description}".</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteSingleTransaction(t.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-                         </AlertDialog>
+                         <Button variant="ghost" size="icon" onClick={() => handleDeleteSingleTransaction(t)} className="text-destructive h-7 w-7" aria-label={`Delete ${t.description}`}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </motion.div>
                   ))
@@ -787,7 +771,7 @@ export default function TransactionsPage() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
-                                  onSelect={(e) => { e.preventDefault(); setPendingDelete(transaction); }}
+                                  onSelect={() => handleDeleteSingleTransaction(transaction)}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" /> Delete
                                 </DropdownMenuItem>
@@ -879,32 +863,8 @@ export default function TransactionsPage() {
         );
       })()}
 
-      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent className="bg-background/95 border-primary/50 shadow-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <ShieldAlert className="h-5 w-5" /> Delete this transaction?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              This permanently removes “{pendingDelete?.description}”
-              {pendingDelete && ` (${formatCurrency(pendingDelete.amount)})`}. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-primary/70 text-primary hover:bg-primary/20">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => { if (pendingDelete) handleDeleteSingleTransaction(pendingDelete.id); setPendingDelete(null); }}
-              disabled={isDeleting}
-              className="bg-red-600 text-primary-foreground hover:bg-red-700/80"
-            >
-              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
-      <div className="fixed bottom-20 right-4 z-40 md:hidden">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
         <Button
           onClick={() => setIsAddingNew(true)}
           className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"

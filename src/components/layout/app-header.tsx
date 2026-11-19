@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { ModelSelector } from '../model-selector';
 import { PeriodPicker } from '../period-picker';
 import { cn } from '@/lib/utils';
+import { CommandMenu } from './command-menu';
 
 /**
  * Routes where the global month/year selection actually changes what's on
@@ -41,7 +42,7 @@ export default function AppHeader() {
   const title = PAGE_TITLES[pathname] ?? (pathname.startsWith('/portfolio') ? 'Portfolio' : '');
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-x-3 border-b bg-background/85 px-3 backdrop-blur-sm md:h-16 md:px-6">
+    <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-x-3 border-b bg-background/85 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] backdrop-blur-sm md:h-16 md:px-6 md:pt-0">
       <div className="flex min-w-0 items-center gap-2">
         <SidebarTrigger />
         {/* The header never used to say where you were. On a phone the bottom
@@ -58,6 +59,7 @@ export default function AppHeader() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 md:gap-2">
+        {!isDemoRoute && <CommandMenu />}
         {showPeriod && <PeriodPicker />}
         <ThemeToggle />
         {!isDemoRoute && <ModelSelector />}

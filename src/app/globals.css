@@ -105,9 +105,59 @@ body {
   }
 
   /* Numeric columns shouldn't reflow as digits change. */
-  .tabular-nums {
+  .tabular-nums,
+  table,
+  input[type='number'] {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Headings break into even lines; paragraphs avoid a one-word last line. */
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+  p, li, dd {
+    text-wrap: pretty;
+  }
+
+  /* Squircle corners where the browser draws them (Chromium); others keep plain radius. */
+  [class*='rounded-']:not(.rounded-full):not(.rounded-none) {
+    corner-shape: squircle;
+  }
+}
+
+@layer components {
+  /* Touch targets: at least 44x44 on touch screens. Icon buttons are already >=40px
+     there and sit >=4px apart, so the extra 2px each side never reaches a neighbour. */
+  @media (pointer: coarse) {
+    .hit-slop {
+      position: relative;
+    }
+    .hit-slop::after {
+      content: '';
+      position: absolute;
+      inset: min(-2px, calc((100% - 44px) / 2));
+    }
+  }
+}
+
+/* Skeletons: hidden for the first 300ms, then pulse. Fast loads never flash. */
+.skeleton {
+  animation:
+    skeleton-reveal 0s linear 300ms both,
+    skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 300ms infinite;
+}
+@keyframes skeleton-reveal {
+  from { visibility: hidden; }
+  to { visibility: visible; }
+}
+@keyframes skeleton-pulse {
+  50% { opacity: 0.5; }
+}
+
+/* Theme switch cross-fade (document.startViewTransition), kept under 300ms. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
 }
 
 /*
