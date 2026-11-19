@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowRightLeft, BarChart3, LineChart, Bot, MessageSquareText } from 'lucide-react';
+import { LayoutDashboard, ArrowRightLeft, BarChart3, Bot, MessageSquareText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePendingCount } from '@/hooks/use-finance-queries';
 
@@ -10,14 +10,13 @@ import { usePendingCount } from '@/hooks/use-finance-queries';
  * Phone-first navigation (Inbox carries a count of SMS waiting for review). Without this, reaching any screen on mobile costs
  * two interactions (open the hamburger sheet, then tap) — for the five places
  * you actually go, that's the wrong cost. The sidebar sheet still exists for
- * the long tail (Savings, Split Expenses, Settings, …).
+ * the long tail (Portfolio, Savings, Split Expenses, Settings, …).
  */
 const ITEMS = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/transactions', label: 'Activity', icon: ArrowRightLeft },
   { href: '/pending', label: 'Inbox', icon: MessageSquareText },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/portfolio', label: 'Portfolio', icon: LineChart },
   { href: '/chatbot', label: 'Ask AI', icon: Bot },
 ];
 
@@ -34,7 +33,7 @@ export function MobileBottomNav() {
         'pb-[env(safe-area-inset-bottom)]'
       )}
     >
-      <ul className="grid grid-cols-6">
+      <ul className="grid grid-cols-5">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
