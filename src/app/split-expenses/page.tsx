@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from 'react';
+import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -195,9 +196,9 @@ export default function SplitExpensesPage() {
                           <div className="text-sm">
                             <strong className="text-foreground">{b.userName}</strong>
                             {b.net > 0 ? (
-                              <p className="text-green-600 dark:text-green-400">Owes you ₹{b.net.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              <p className="text-green-600 dark:text-green-400">Owes you {formatCurrency(b.net)}</p>
                             ) : b.net < 0 ? (
-                              <p className="text-red-600 dark:text-red-400">You owe ₹{Math.abs(b.net).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              <p className="text-red-600 dark:text-red-400">You owe {formatCurrency(Math.abs(b.net))}</p>
                             ) : (
                               <p className="text-muted-foreground">Settled up</p>
                             )}
@@ -238,7 +239,7 @@ export default function SplitExpensesPage() {
                             <div>
                               <h4 className="font-semibold text-accent">{t.description}</h4>
                               <p className="text-xs text-muted-foreground">
-                                {format(t.date, 'dd MMM, yyyy')} • Total: ₹{t.amount.toLocaleString()} • My share: ₹{(t.myShare ?? 0).toLocaleString()}
+                                {format(t.date, 'dd MMM, yyyy')} • Total: {formatCurrencyWhole(t.amount)} • My share: {formatCurrencyWhole(t.myShare ?? 0)}
                               </p>
                               {t.paidById && (
                                 <p className="text-xs text-muted-foreground">Paid by: <strong>{t.paidBy?.name ?? 'someone else'}</strong></p>
@@ -251,7 +252,7 @@ export default function SplitExpensesPage() {
                               <li className="flex justify-between items-center text-xs">
                                 <div className="flex items-center gap-2">
                                   <CircleDot className="h-4 w-4 text-orange-500" />
-                                  <span>You owe {t.paidBy?.name ?? 'them'} ₹{(t.myShare ?? 0).toLocaleString()}</span>
+                                  <span>You owe {t.paidBy?.name ?? 'them'} {formatCurrencyWhole(t.myShare ?? 0)}</span>
                                 </div>
                                 <Button
                                   size="sm" variant="outline" className="h-7 px-2 text-xs"
@@ -266,7 +267,7 @@ export default function SplitExpensesPage() {
                               <li key={s.userId} className="flex justify-between items-center text-xs">
                                 <div className="flex items-center gap-2">
                                   {s.isSettled ? <CheckCircle className="h-4 w-4 text-green-500" /> : <CircleDot className="h-4 w-4 text-orange-500" />}
-                                  <span>{s.userName} owes ₹{s.shareAmount.toLocaleString()}</span>
+                                  <span>{s.userName} owes {formatCurrencyWhole(s.shareAmount)}</span>
                                 </div>
                                 {!s.isSettled && (
                                   <Button
@@ -315,7 +316,7 @@ export default function SplitExpensesPage() {
                                   <span className="text-muted-foreground">{format(t.date, 'dd MMM, yyyy')}</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  Total ₹{t.amount.toLocaleString()} • My share ₹{(t.myShare ?? 0).toLocaleString()}
+                                  Total {formatCurrencyWhole(t.amount)} • My share {formatCurrencyWhole(t.myShare ?? 0)}
                                   {t.splits && t.splits.length > 0 && ` • Split with ${t.splits.map(s => s.userName).join(', ')}`}
                                 </p>
                               </div>

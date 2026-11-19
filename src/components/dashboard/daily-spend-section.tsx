@@ -71,7 +71,7 @@ export function DailySpendSection({
           <ComposedChart data={data} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" tick={{ fontSize: 11 }} />
-            <YAxis yAxisId="spent" tickLine={false} axisLine={false} tickFormatter={(value) => `₹${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} tick={{ fontSize: 11 }} />
+            <YAxis yAxisId="spent" tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrencyCompact(Number(value))} tick={{ fontSize: 11 }} />
             <YAxis yAxisId="count" orientation="right" allowDecimals={false} tickLine={false} axisLine={false} width={24} tick={{ fontSize: 11 }} />
             <Tooltip
               cursor={{ fill: 'hsl(var(--muted))', opacity: 0.45 }}

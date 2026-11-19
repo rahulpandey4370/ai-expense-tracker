@@ -2,6 +2,7 @@
 "use client"
 
 import { useMemo } from "react";
+import { formatCurrencyCompact, formatCurrencyWhole } from '@/lib/format';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import {
   Card,
@@ -104,11 +105,10 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
-                tickFormatter={(value) => value.slice(0, 6)}
                 className="fill-foreground"
               />
               <YAxis
-                tickFormatter={(value) => `₹${value / 1000}k`}
+                tickFormatter={(value) => formatCurrencyCompact(Number(value))}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -118,7 +118,7 @@ export function IncomeExpenseTrendChart({ transactions, numberOfMonths = 6 }: In
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent
-                    formatter={(value, name, props) => ([`₹${(value as number).toLocaleString()}`, chartConfig[name as keyof typeof chartConfig]?.label || name])}
+                    formatter={(value, name, props) => ([formatCurrencyWhole(value as number), chartConfig[name as keyof typeof chartConfig]?.label || name])}
                 />}
               />
               <ChartLegend content={<ChartLegendContent />} />

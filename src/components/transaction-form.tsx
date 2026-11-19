@@ -1,6 +1,7 @@
 
 
 import { useState, type FormEvent, type ChangeEvent, useEffect, useCallback, useMemo } from 'react';
+import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1103,7 +1104,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                       {pt.date && pt.date instanceof Date && !isNaN(pt.date.getTime()) ? format(pt.date, 'dd/MM/yy') : 'N/A'}
                     </TableCell>
                     <TableCell className="text-xs max-w-[150px] sm:max-w-[200px] truncate" title={pt.description}>{pt.description || 'N/A'}</TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">₹{pt.amount?.toFixed(2) || 'N/A'}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{pt.amount != null ? formatCurrency(pt.amount) : 'N/A'}</TableCell>
                     <TableCell className="text-xs max-w-[100px] truncate" title={pt.categoryName}>{pt.categoryName}</TableCell>
                     <TableCell className="text-xs max-w-[100px] truncate" title={pt.paymentMethodName}>{pt.paymentMethodName}</TableCell>
                     <TableCell className="text-xs whitespace-nowrap">{pt.expenseType}</TableCell>
@@ -1246,13 +1247,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant="outline" className="gap-1 text-[11px] font-normal">
                             <Users className="h-3 w-3" />
-                            {tx.splitMethod === 'not_mine' ? 'Not your expense' : `You: ₹${(tx.myShare ?? 0).toFixed(0)}`}
+                            {tx.splitMethod === 'not_mine' ? 'Not your expense' : `You: ${formatCurrencyWhole(tx.myShare ?? 0)}`}
                           </Badge>
                           {tx.splits.map(s => {
                             const person = splitUsers.find(u => u.id === s.userId);
                             return (
                               <Badge key={s.userId} variant="outline" className="text-[11px] font-normal">
-                                {person?.name ?? '?'}: ₹{s.shareAmount.toFixed(0)}
+                                {person?.name ?? '?'}: {formatCurrencyWhole(s.shareAmount)}
                               </Badge>
                             );
                           })}

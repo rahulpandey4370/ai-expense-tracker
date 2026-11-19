@@ -2,6 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { formatCurrency } from '@/lib/format';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -91,7 +92,7 @@ export function IncomeAllocationBar({ income, needs, wants, investments }: Incom
                         />
                         </TooltipTrigger>
                         <TooltipContent className="bg-background/80 backdrop-blur-sm border-primary/30">
-                            <p className="font-bold">{segment.name}: ₹{segment.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                            <p className="font-bold">{segment.name}: {formatCurrency(segment.value)}</p>
                             <p>{segment.percentage.toFixed(1)}% of income</p>
                         </TooltipContent>
                     </Tooltip>

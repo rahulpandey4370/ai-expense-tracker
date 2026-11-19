@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import { formatCurrency } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -235,7 +236,7 @@ export function SplitEditor({ totalAmount, users, value, onChange, onAddUser, fo
                 );
               })}
               <p className={cn("text-xs font-medium", Math.abs(remaining) > 0.01 ? 'text-red-500' : 'text-green-500')}>
-                Remaining: ₹{remaining.toFixed(2)}
+                Remaining: {formatCurrency(remaining)}
               </p>
             </div>
           )}
@@ -243,8 +244,8 @@ export function SplitEditor({ totalAmount, users, value, onChange, onAddUser, fo
           {participantIds.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {paidById
-                ? `You owe ₹${myComputedShare.toFixed(2)} to ${users.find(u => u.id === paidById)?.name ?? 'the payer'}.`
-                : `Your share: ₹${myComputedShare.toFixed(2)}`}
+                ? `You owe ${formatCurrency(myComputedShare)} to ${users.find(u => u.id === paidById)?.name ?? 'the payer'}.`
+                : `Your share: ${formatCurrency(myComputedShare)}`}
             </p>
           )}
         </>

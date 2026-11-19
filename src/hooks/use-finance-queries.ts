@@ -14,6 +14,7 @@ import { getGoals } from '@/lib/actions/goals';
 import { getSplitUsers, getSplitBalances, getSplitTransactions } from '@/lib/actions/splits';
 import { getPortfolioDashboardData } from '@/lib/actions/portfolio';
 import { getMonthlyRollups, getTransactionYears, getCategoryBreakdown } from '@/lib/actions/analytics';
+import { getPendingCount } from '@/lib/actions/pending';
 
 // Centralized query keys so any mutation can invalidate precisely.
 export const financeKeys = {
@@ -37,6 +38,7 @@ export const financeKeys = {
   splitTransactions: () => [...financeKeys.all, 'splitTransactions'] as const,
   splitBalances: () => [...financeKeys.all, 'splitBalances'] as const,
   portfolioDashboard: () => [...financeKeys.all, 'portfolioDashboard'] as const,
+  pendingCount: () => [...financeKeys.all, 'pendingCount'] as const,
 };
 
 export function useTransactionsInRange(startYmd: string, endYmd: string, enabled = true) {
@@ -111,6 +113,11 @@ export function useSplitBalances() {
 
 export function usePortfolioDashboard() {
   return useQuery({ queryKey: financeKeys.portfolioDashboard(), queryFn: () => getPortfolioDashboardData() });
+}
+
+/** SMS waiting in the inbox. Refetches on focus: new SMS land while the app is in the background. */
+export function usePendingCount(enabled = true) {
+  return useQuery({ queryKey: financeKeys.pendingCount(), queryFn: () => getPendingCount(), enabled, refetchOnWindowFocus: true });
 }
 
 /** Invalidate every finance query after a transaction add/edit/delete. */

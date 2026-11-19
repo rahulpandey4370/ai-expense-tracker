@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowRightLeft, BarChart3, LineChart, Bot } from 'lucide-react';
+import { LayoutDashboard, ArrowRightLeft, BarChart3, LineChart, Bot, MessageSquareText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePendingCount } from '@/hooks/use-finance-queries';
 
 /**
- * Phone-first navigation. Without this, reaching any screen on mobile costs
+ * Phone-first navigation (Inbox carries a count of SMS waiting for review). Without this, reaching any screen on mobile costs
  * two interactions (open the hamburger sheet, then tap) — for the five places
  * you actually go, that's the wrong cost. The sidebar sheet still exists for
  * the long tail (Savings, Split Expenses, Settings, …).
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 const ITEMS = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/transactions', label: 'Activity', icon: ArrowRightLeft },
+  { href: '/pending', label: 'Inbox', icon: MessageSquareText },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/portfolio', label: 'Portfolio', icon: LineChart },
   { href: '/chatbot', label: 'Ask AI', icon: Bot },
@@ -21,6 +23,7 @@ const ITEMS = [
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { data: pendingCount = 0 } = usePendingCount(!pathname.startsWith('/demo'));
 
   return (
     <nav
@@ -31,7 +34,7 @@ export function MobileBottomNav() {
         'pb-[env(safe-area-inset-bottom)]'
       )}
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
@@ -46,7 +49,14 @@ export function MobileBottomNav() {
                   active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <Icon className={cn('h-5 w-5', active && 'stroke-[2.4]')} />
+                <span className="relative">
+                  <Icon className={cn('h-5 w-5', active && 'stroke-[2.4]')} />
+                  {href === '/pending' && pendingCount > 0 && (
+                    <span aria-label={`${pendingCount} waiting`} className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                      {pendingCount}
+                    </span>
+                  )}
+                </span>
                 {label}
               </Link>
             </li>

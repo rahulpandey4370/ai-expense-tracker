@@ -10,11 +10,13 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuBadge,
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'; // Import Sheet components
 import { AppLogo } from "@/components/app-logo";
+import { usePendingCount } from "@/hooks/use-finance-queries";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
@@ -75,6 +77,7 @@ interface AppSidebarProps {
 export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, state: sidebarState, setOpenMobile } = useSidebar();
+  const { data: pendingCount = 0 } = usePendingCount(!isDemoMode);
 
   const handleLinkClick = () => {
     if (isMobile) {
@@ -129,6 +132,9 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
                       )}
                     </Tooltip>
                   </TooltipProvider>
+                  {item.href === "/pending" && pendingCount > 0 && (
+                    <SidebarMenuBadge className="bg-primary text-primary-foreground" aria-label={`${pendingCount} waiting`}>{pendingCount}</SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

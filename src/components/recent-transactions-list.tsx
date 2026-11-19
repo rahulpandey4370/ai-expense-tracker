@@ -2,6 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -96,7 +97,7 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                         "font-semibold text-sm",
                         transaction.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                       )}>
-                        {transaction.type === 'income' ? '+' : '-'} ₹{netAmount(transaction).toFixed(2)}
+                        {transaction.type === 'income' ? '+' : '-'} {formatCurrency(netAmount(transaction))}
                       </p>
                        <div className="flex justify-end items-center mt-1">
                         {transaction.type === 'expense' && transaction.isSplit && (

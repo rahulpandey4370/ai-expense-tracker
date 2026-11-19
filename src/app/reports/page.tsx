@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -407,7 +408,7 @@ export default function ReportsPage() {
                                             <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
                                         </div>
                                         <Progress value={percentage} indicatorClassName={colorClass} className="h-2" />
-                                        <p className="text-right font-bold text-sm text-primary">₹{cat.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        <p className="text-right font-bold text-sm text-primary">{formatCurrency(cat.totalAmount)}</p>
                                       </div>
                                     </PopoverTrigger>
                                     <PopoverContent className="p-2 bg-background border-primary/30 max-w-md w-full">
@@ -421,7 +422,7 @@ export default function ReportsPage() {
                                                   {format(tx.date, 'dd/MM')}: {tx.description}
                                                 </span>
                                                 <span className="flex-shrink-0 font-semibold text-foreground">
-                                                  ₹{tx.amount.toLocaleString()}
+                                                  {formatCurrencyWhole(tx.amount)}
                                                 </span>
                                               </li>
                                             ))}
@@ -436,7 +437,7 @@ export default function ReportsPage() {
                             })}
                           </div>
                            <div className="mt-6 text-right font-bold text-lg text-primary border-t pt-3">
-                              Total Expenses: ₹{currentPeriodExpensesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              Total Expenses: {formatCurrency(currentPeriodExpensesTotal)}
                            </div>
                         </CardContent>
                     </Card>

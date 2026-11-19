@@ -143,4 +143,4 @@ Repeat this for each keyword: **`debited`**, **`spent`**, **`Sent Rs`**, **`with
   - Shortcuts → Automation → open the automation and confirm **Run Immediately** is selected.
   - Confirm the keyword actually appears in your bank's SMS.
 - **Got `401` from curl:** the token doesn't match the environment variable. The header must be exactly `Bearer <token>`.
-- **No 9 PM notification:** in Supabase, run `select * from cron.job_run_details order by start_time desc limit 5;` and check the URL and secret in the cron block.
+- **No 9 PM notification:** `cron.job_run_details` says `succeeded` as soon as the request is queued, even if the app refused it. Check the app's actual answer instead: `select created, status_code, content from net._http_response order by created desc limit 5;`. A `401` means the secret in the cron job doesn't match `CRON_SECRET` on Vercel; fix it with `select cron.alter_job(jobid, command := replace(command, 'Bearer OLD', 'Bearer NEW')) from cron.job where jobname = 'finwise-daily-9pm';`.

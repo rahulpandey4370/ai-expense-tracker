@@ -2,6 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { formatCurrencyWhole } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Target, AlertTriangle } from "lucide-react";
@@ -73,16 +74,16 @@ export function BudgetTrackerCard({ budgets }: BudgetTrackerCardProps) {
                   <div className="flex justify-between items-baseline text-sm">
                     <p className="font-medium text-foreground">{budget.name}</p>
                     <p className={cn("font-semibold", isOverBudget ? "text-destructive" : "text-muted-foreground")}>
-                        ₹{budget.spentAmount.toLocaleString()} / ₹{budget.budgetAmount.toLocaleString()}
+                        {formatCurrencyWhole(budget.spentAmount)} / {formatCurrencyWhole(budget.budgetAmount)}
                     </p>
                   </div>
                   <Progress value={Math.min(progress, 100)} indicatorClassName={progressColor} />
                   <div className="flex justify-between items-baseline text-xs text-muted-foreground">
                     <span>{progress.toFixed(1)}% Used</span>
                     {isOverBudget ? (
-                        <span className="text-destructive font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Over by ₹{Math.abs(remainingAmount).toLocaleString()}</span>
+                        <span className="text-destructive font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Over by {formatCurrencyWhole(Math.abs(remainingAmount))}</span>
                     ) : (
-                        <span>₹{remainingAmount.toLocaleString()} Left</span>
+                        <span>{formatCurrencyWhole(remainingAmount)} Left</span>
                     )}
                   </div>
                 </motion.div>

@@ -2,6 +2,8 @@
 "use client"
 
 import { Pie, PieChart, Cell } from "recharts"
+import { formatCurrencyWhole } from '@/lib/format';
+import { TYPE_COLORS } from '@/lib/type-colors';
 import {
   Card,
   CardContent,
@@ -29,9 +31,9 @@ interface ExpenseTypeSplitChartProps {
 }
 
 const CHART_COLORS_EXPENSE_TYPE = {
-  need: "hsl(var(--chart-3))", 
-  want: "hsl(var(--chart-4))", 
-  investment: "hsl(var(--chart-2))", 
+  need: TYPE_COLORS.need,
+  want: TYPE_COLORS.want,
+  investment: TYPE_COLORS.investment,
   other: "hsl(var(--muted))", 
 };
 
@@ -116,7 +118,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
                 nameKey="name" 
                 formatter={(value, name, props) => {
                   const percentage = props.payload?.percentage || 0;
-                  return [`₹${(value as number || 0).toLocaleString()} (${percentage}%)`, name];
+                  return [`${formatCurrencyWhole(value as number || 0)} (${percentage}%)`, name];
                 }} 
               />}
             />
@@ -146,7 +148,7 @@ export function ExpenseTypeSplitChart({ transactions, selectedMonthName, selecte
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm mt-auto">
         <div className="flex items-center gap-2 font-medium leading-none text-foreground">
-          Total Expenses: ₹{totalExpenses.toLocaleString()}
+          Total Expenses: {formatCurrencyWhole(totalExpenses)}
         </div>
         <div className="leading-none text-muted-foreground">
           Breakdown by expense type for {selectedMonthName} {selectedYear}.

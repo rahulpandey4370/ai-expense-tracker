@@ -2,6 +2,7 @@
 "use client"
 
 import { Pie, PieChart, Cell } from "recharts"
+import { formatCurrencyWhole } from '@/lib/format';
 import {
   Card,
   CardContent,
@@ -93,7 +94,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
           <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel nameKey="name" formatter={(value) => `₹${(value as number).toLocaleString()}`} />}
+              content={<ChartTooltipContent hideLabel nameKey="name" formatter={(value) => formatCurrencyWhole(value as number)} />}
             />
             <Pie
               data={chartData}
@@ -113,7 +114,7 @@ export function ExpensePaymentMethodChart({ transactions, selectedMonthName, sel
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm mt-auto">
         <div className="flex items-center gap-2 font-medium leading-none text-foreground">
-          Total Expenses: ₹{totalExpenses.toLocaleString()}
+          Total Expenses: {formatCurrencyWhole(totalExpenses)}
         </div>
       </CardFooter>
     </Card>

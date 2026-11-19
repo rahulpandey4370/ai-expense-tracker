@@ -2,6 +2,7 @@
 "use client"
 
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts"
+import { formatCurrencyCompact, formatCurrencyWhole } from '@/lib/format';
 import {
   Card,
   CardContent,
@@ -72,7 +73,7 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
                 className="fill-foreground text-xs" 
               />
               <YAxis 
-                tickFormatter={(value) => `₹${Number(value) / 1000}k`} 
+                tickFormatter={(value) => formatCurrencyCompact(Number(value))} 
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -82,7 +83,7 @@ export function MonthlyIncomeExpenseSavingsChart({ monthlyData }: MonthlyIncomeE
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                    formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, chartConfig[name as keyof typeof chartConfig]?.label || String(name)])}
+                    formatter={(value, name) => ([formatCurrencyWhole(value as number), chartConfig[name as keyof typeof chartConfig]?.label || String(name)])}
                 />}
               />
               <ChartLegend content={<ChartLegendContent />} />

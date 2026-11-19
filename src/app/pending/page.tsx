@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useInvalidateFinance } from "@/hooks/use-finance-queries";
 import { cn } from "@/lib/utils";
 import { MessageSquareText, Loader2, Check, X, Sparkles } from "lucide-react";
 import { getCategories, getPaymentMethods } from "@/lib/actions/transactions";
@@ -29,6 +30,7 @@ const EXPENSE_TYPES = [
 
 export default function PendingPage() {
   const { toast } = useToast();
+  const invalidateFinance = useInvalidateFinance(); // inbox badge + dashboard totals
   const [items, setItems] = useState<PendingTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -71,6 +73,7 @@ export default function PendingPage() {
         expenseType: item.expenseType,
       });
       setItems(list => list.filter(i => i.id !== item.id));
+      invalidateFinance();
       toast({ title: "Logged", description: `₹${item.amount.toLocaleString('en-IN')} added to transactions.` });
     } catch (e: any) {
       toast({ title: "Could not log it", description: e.message, variant: "destructive" });
@@ -102,6 +105,7 @@ export default function PendingPage() {
     try {
       await dismissPendingTransaction(item.id);
       setItems(list => list.filter(i => i.id !== item.id));
+      invalidateFinance();
     } catch (e: any) {
       toast({ title: "Could not dismiss", description: e.message, variant: "destructive" });
     } finally {

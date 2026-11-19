@@ -2,6 +2,8 @@
 "use client"
 
 import { Pie, PieChart, Cell } from "recharts"
+import { formatCurrencyWhole } from '@/lib/format';
+import { TYPE_COLORS } from '@/lib/type-colors';
 import {
   Card,
   CardContent,
@@ -29,10 +31,10 @@ interface IncomeDistributionChartProps {
 }
 
 const CHART_COLORS_INCOME_DIST = {
-  "Needs": "hsl(var(--chart-4))",      // Orange-like
-  "Wants": "hsl(var(--chart-1))",      // Teal-like
-  "Investments": "hsl(var(--chart-2))", // Blue-like
-  "Cash Savings": "hsl(var(--chart-3))", // Purple-like
+  "Needs": TYPE_COLORS.need,
+  "Wants": TYPE_COLORS.want,
+  "Investments": TYPE_COLORS.investment,
+  "Cash Savings": TYPE_COLORS.savings,
 };
 
 const glowClass = "shadow-[var(--chart-glow-accent)]";
@@ -122,7 +124,7 @@ export function IncomeDistributionChart({ transactions, selectedMonthName, selec
                 nameKey="name" 
                 formatter={(value, name, props) => {
                   const percentage = props.payload?.percentage || 0;
-                  return [`₹${(value as number || 0).toLocaleString()} (${percentage}%)`, name];
+                  return [`${formatCurrencyWhole(value as number || 0)} (${percentage}%)`, name];
                 }} 
               />}
             />
@@ -151,7 +153,7 @@ export function IncomeDistributionChart({ transactions, selectedMonthName, selec
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm mt-auto">
         <div className="flex items-center gap-2 font-medium leading-none text-foreground">
-          Total Income: ₹{totalIncome.toLocaleString()}
+          Total Income: {formatCurrencyWhole(totalIncome)}
         </div>
         <div className="leading-none text-muted-foreground">
           Breakdown of your income allocation for {selectedMonthName} {selectedYear}.

@@ -2,6 +2,7 @@
 "use client"
 
 import { useState } from "react"
+import { formatCurrencyCompact, formatCurrencyWhole } from '@/lib/format';
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import {
   Card,
@@ -136,7 +137,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 className="fill-foreground text-xs" 
               />
               <YAxis
-                tickFormatter={(value) => `₹${Number(value) / 1000}k`}
+                tickFormatter={(value) => formatCurrencyCompact(Number(value))}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -146,7 +147,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                    formatter={(value, name) => ([`₹${(value as number).toLocaleString()}`, config[name as keyof typeof config]?.label || String(name)])} 
+                    formatter={(value, name) => ([formatCurrencyWhole(value as number), config[name as keyof typeof config]?.label || String(name)])} 
                     indicator="line" 
                 />}
               />

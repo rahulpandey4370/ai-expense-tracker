@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from 'react';
+import { formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -110,6 +111,7 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
             <div>
                 <Label htmlFor="user-income">Your Monthly Income (₹)</Label>
                 <Input id="user-income" type="number" value={userIncome} onChange={(e) => setUserIncome(e.target.value)} placeholder="e.g., 80000" className="mt-1" />
+                {parseFloat(userIncome) > 0 && <p className="text-xs text-muted-foreground mt-1">{formatCurrencyWhole(parseFloat(userIncome))} a month</p>}
                 {!averageMonthlyIncome && <p className="text-xs text-muted-foreground mt-1">Provide your income for an accurate time-cost calculation.</p>}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-primary/10">
@@ -167,7 +169,7 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
                           <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground"><Info className="h-3.5 w-3.5" /></Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">Based on income of ₹{parseFloat(userIncome).toLocaleString()} and a standard 22-day, 8-hour work schedule.</p>
+                          <p className="text-xs">Based on income of {formatCurrencyWhole(parseFloat(userIncome))} and a standard 22-day, 8-hour work schedule.</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

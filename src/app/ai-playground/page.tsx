@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent, useMemo } from 'react';
+import { formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -312,7 +313,7 @@ export default function AIPlaygroundPage() {
 
     try {
       await addAllocationToGoal(goalId, nameStr, amountToAllocate);
-      toast({ title: "Fund Allocated!", description: `₹${amountToAllocate} allocated to '${nameStr}'.` });
+      toast({ title: "Fund Allocated!", description: `${formatCurrencyWhole(amountToAllocate)} allocated to '${nameStr}'.` });
       // Clear inputs for this specific goal
       setAllocationAmounts(prev => ({ ...prev, [goalId]: '' }));
       setAllocationNames(prev => ({...prev, [goalId]: ''}));
@@ -387,10 +388,10 @@ export default function AIPlaygroundPage() {
     const topCategories = Object.entries(spendingByCategoryLast3Months)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
-      .map(([name, total]) => `${name}: ₹${(total / numberOfMonthsWithData).toFixed(0)}`)
+      .map(([name, total]) => `${name}: ${formatCurrencyWhole(total / numberOfMonthsWithData)}`)
       .join(', ');
 
-    const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ₹${(spendingByTypeLast3Months.need / numberOfMonthsWithData).toFixed(0)}, Wants: ₹${(spendingByTypeLast3Months.want / numberOfMonthsWithData).toFixed(0)}, Investments: ₹${(spendingByTypeLast3Months.investment / numberOfMonthsWithData).toFixed(0)}. Top categories: ${topCategories || 'N/A'}.`;
+    const pastSpendingBreakdown = `Average spending over last ${numberOfMonthsWithData} month(s): Needs: ${formatCurrencyWhole(spendingByTypeLast3Months.need / numberOfMonthsWithData)}, Wants: ${formatCurrencyWhole(spendingByTypeLast3Months.want / numberOfMonthsWithData)}, Investments: ${formatCurrencyWhole(spendingByTypeLast3Months.investment / numberOfMonthsWithData)}. Top categories: ${topCategories || 'N/A'}.`;
 
     return { averagePastMonthlyExpenses: averagePastMonthlyCoreExpenses, pastSpendingBreakdown };
   }, [allTransactions]);
@@ -464,10 +465,10 @@ export default function AIPlaygroundPage() {
     const topCategoriesString = Object.entries(spendingByCategory)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 4)
-      .map(([name, total]) => `${name}: ₹${total.toFixed(0)}`)
+      .map(([name, total]) => `${name}: ${formatCurrencyWhole(total)}`)
       .join(', ');
 
-    return `Needs: ₹${spendingByType.need.toFixed(0)}, Wants: ₹${spendingByType.want.toFixed(0)}, Investments: ₹${spendingByType.investment.toFixed(0)}. Top categories: ${topCategoriesString || 'N/A'}.`;
+    return `Needs: ${formatCurrencyWhole(spendingByType.need)}, Wants: ${formatCurrencyWhole(spendingByType.want)}, Investments: ${formatCurrencyWhole(spendingByType.investment)}. Top categories: ${topCategoriesString || 'N/A'}.`;
   };
 
   const handleGetHealthCheck = async () => {
@@ -681,7 +682,7 @@ export default function AIPlaygroundPage() {
                 <CardTitle className="text-lg text-accent dark:text-accent-foreground mb-3">FinWise AI Goal Forecast &amp; Plan</CardTitle>
                 <div className="space-y-3 text-sm">
                   <p><strong className="text-foreground">Goal:</strong> {goalDescription}</p>
-                  <p><strong className="text-foreground">Target:</strong> ₹{aiForecast.estimatedOrProvidedGoalAmount.toLocaleString()} in {goalDurationMonths} months
+                  <p><strong className="text-foreground">Target:</strong> {formatCurrencyWhole(aiForecast.estimatedOrProvidedGoalAmount)} in {goalDurationMonths} months
                     {aiForecast.wasAmountEstimatedByAI && <span className="text-xs text-muted-foreground italic ml-1">(AI Estimated Amount)</span>}
                   </p>
                   <hr className="border-accent/30 my-2" />
@@ -694,7 +695,7 @@ export default function AIPlaygroundPage() {
                   {aiForecast.projectedMonthsToGoal && (
                     <p><strong className="text-foreground">Projected time with current habits:</strong> {aiForecast.projectedMonthsToGoal} months</p>
                   )}
-                  <p><strong className="text-foreground">Required Monthly Savings for Goal:</strong> <span className="font-semibold text-primary">₹{aiForecast.requiredMonthlySavings.toLocaleString()}</span></p>
+                  <p><strong className="text-foreground">Required Monthly Savings for Goal:</strong> <span className="font-semibold text-primary">{formatCurrencyWhole(aiForecast.requiredMonthlySavings)}</span></p>
 
                   <div className="mt-2">
                     <strong className="text-foreground block mb-1">Actionable Suggestions:</strong>
@@ -745,7 +746,7 @@ export default function AIPlaygroundPage() {
                     <div className="text-right flex-shrink-0">
                         <p className="text-sm font-semibold text-primary">Total Progress</p>
                         <p className="text-xs text-muted-foreground">
-                            ₹{totalGoalsProgress.totalSaved.toLocaleString()} / ₹{totalGoalsProgress.totalTarget.toLocaleString()}
+                            {formatCurrencyWhole(totalGoalsProgress.totalSaved)} / {formatCurrencyWhole(totalGoalsProgress.totalTarget)}
                         </p>
                     </div>
                 )}
@@ -782,11 +783,11 @@ export default function AIPlaygroundPage() {
                     <div>
                       <h3 className="text-lg font-semibold text-accent">{goal.description}</h3>
                       <p className="text-xs text-muted-foreground">
-                        Target: ₹{goal.targetAmount.toLocaleString()} by {format(targetDate, "MMM yyyy")} ({goal.targetDurationMonths} months)
+                        Target: {formatCurrencyWhole(goal.targetAmount)} by {format(targetDate, "MMM yyyy")} ({goal.targetDurationMonths} months)
                       </p>
                       {goal.initialRequiredMonthlySavings && (
                         <p className="text-xs text-muted-foreground">
-                          AI Suggested Monthly Saving: ₹{goal.initialRequiredMonthlySavings.toLocaleString()}
+                          AI Suggested Monthly Saving: {formatCurrencyWhole(goal.initialRequiredMonthlySavings)}
                         </p>
                       )}
                     </div>
@@ -815,7 +816,7 @@ export default function AIPlaygroundPage() {
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Progress: ₹{goal.amountSavedSoFar.toLocaleString()} saved</span>
+                      <span>Progress: {formatCurrencyWhole(goal.amountSavedSoFar)} saved</span>
                       <span>{progress.toFixed(1)}%</span>
                     </div>
                     <Progress value={progress} className="h-3 [&>div]:bg-accent" />
@@ -837,7 +838,7 @@ export default function AIPlaygroundPage() {
                                 <li key={alloc.id} className="flex justify-between items-center text-xs p-1.5 rounded bg-background/50 border border-border/50">
                                     <span>{alloc.name}</span>
                                     <div className="flex items-center gap-2">
-                                      <span className="font-medium">₹{alloc.amount.toLocaleString()}</span>
+                                      <span className="font-medium">{formatCurrencyWhole(alloc.amount)}</span>
                                       <Button variant="ghost" size="icon" className="h-5 w-5 text-primary/70 hover:bg-primary/10" onClick={() => handleEditAllocation(goal.id, alloc)}>
                                         <Edit className="h-3 w-3" />
                                       </Button>
@@ -954,11 +955,11 @@ export default function AIPlaygroundPage() {
                   <div>
                     <h4 className="font-semibold text-foreground mb-1">Recommended Monthly Budget (₹):</h4>
                     <ul className="list-disc list-inside pl-4 space-y-1 text-foreground/90">
-                      <li>Needs: ₹{aiBudgetPlan.recommendedMonthlyBudget.needs.toLocaleString()}</li>
-                      <li>Wants: ₹{aiBudgetPlan.recommendedMonthlyBudget.wants.toLocaleString()}</li>
-                      <li>Investments (as Spending): ₹{aiBudgetPlan.recommendedMonthlyBudget.investmentsAsSpending.toLocaleString()}</li>
-                      <li>Target Savings: ₹{aiBudgetPlan.recommendedMonthlyBudget.targetSavings.toLocaleString()}</li>
-                      <li>Discretionary/Extra Savings: ₹{aiBudgetPlan.recommendedMonthlyBudget.discretionarySpendingOrExtraSavings.toLocaleString()}</li>
+                      <li>Needs: {formatCurrencyWhole(aiBudgetPlan.recommendedMonthlyBudget.needs)}</li>
+                      <li>Wants: {formatCurrencyWhole(aiBudgetPlan.recommendedMonthlyBudget.wants)}</li>
+                      <li>Investments (as Spending): {formatCurrencyWhole(aiBudgetPlan.recommendedMonthlyBudget.investmentsAsSpending)}</li>
+                      <li>Target Savings: {formatCurrencyWhole(aiBudgetPlan.recommendedMonthlyBudget.targetSavings)}</li>
+                      <li>Discretionary/Extra Savings: {formatCurrencyWhole(aiBudgetPlan.recommendedMonthlyBudget.discretionarySpendingOrExtraSavings)}</li>
                     </ul>
                   </div>
                   <hr className="border-accent/30 my-2" />
@@ -1185,13 +1186,13 @@ export default function AIPlaygroundPage() {
                               <li key={index} className="p-2 border-b border-accent/20">
                                  <div className="flex justify-between font-semibold">
                                     <span>{exp.description} <span className="text-xs text-muted-foreground">({exp.category})</span></span>
-                                    <span>₹{exp.estimatedAmount.toLocaleString()}</span>
+                                    <span>{formatCurrencyWhole(exp.estimatedAmount)}</span>
                                  </div>
                                  <p className="text-xs text-muted-foreground italic">Confidence: {exp.confidence} - {exp.reasoning}</p>
                               </li>
                            ))}
                         </ul>
-                         <p className="text-right font-bold mt-2 text-primary">Total Identified Fixed Expenses: ₹{aiFixedExpenseAnalysis.totalFixedExpenses.toLocaleString()}</p>
+                         <p className="text-right font-bold mt-2 text-primary">Total Identified Fixed Expenses: {formatCurrencyWhole(aiFixedExpenseAnalysis.totalFixedExpenses)}</p>
                      </div>
                    )}
                 </div>

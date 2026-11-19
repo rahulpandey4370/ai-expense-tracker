@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -401,7 +402,7 @@ export default function SettingsPage() {
                                      <li key={budget.id} className="flex justify-between items-center text-sm p-2 rounded-md bg-background/50 border">
                                         <div className="truncate pr-2">
                                             <p className="font-semibold truncate">{budget.name}</p>
-                                            <p className="text-xs text-muted-foreground">₹{budget.amount.toLocaleString()} / month</p>
+                                            <p className="text-xs text-muted-foreground">{formatCurrencyWhole(budget.amount)} / month</p>
                                         </div>
                                         <div className="flex items-center">
                                             <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10" onClick={() => handleOpenEditDialog(budget)}>
