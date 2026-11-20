@@ -2,7 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppLogo } from "@/components/app-logo";
 import { AtSign, Briefcase, Cpu, CheckCircle } from "lucide-react";
@@ -43,7 +43,7 @@ export default function AboutPage() {
           initial="hidden"
           animate="visible"
         >
-          <Card className={cn("shadow-xl border-primary/20 border-2 rounded-xl bg-card/90", glowClass)}>
+          <Card className={cn("shadow-xl border-primary/20 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
             <CardHeader className="text-center items-center">
               <motion.div variants={itemVariants} className="mb-4">
                 <AppLogo className="text-5xl justify-center" />

@@ -348,7 +348,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
+      <main className="flex-1 p-4 max-md:pb-24 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
         <motion.div 
           variants={sectionVariants} 
           initial="hidden" 
@@ -530,6 +530,7 @@ export default function DashboardPage() {
             {
               id: 'daily-spending',
               title: 'Daily spending',
+              label: 'Daily',
               icon: <LineChart className="h-4 w-4" />,
               activeClassName: 'text-amber-600 dark:text-amber-400',
               content: (
@@ -545,6 +546,7 @@ export default function DashboardPage() {
             {
               id: 'merchants',
               title: 'Where your money went',
+              label: 'Merchants',
               icon: <Store className="h-4 w-4" />,
               activeClassName: 'text-violet-600 dark:text-violet-400',
               content: (
@@ -561,6 +563,7 @@ export default function DashboardPage() {
             {
               id: 'payment-methods',
               title: 'Cards & payment methods',
+              label: 'Cards',
               icon: <CreditCard className="h-4 w-4" />,
               activeClassName: 'text-sky-600 dark:text-sky-400',
               badge: paymentMethodMonthly.length || undefined,
@@ -668,7 +671,7 @@ export default function DashboardPage() {
             middle of the dashboard, costing ~450px of prime space even when
             you only came to read your numbers. It is collapsed by default now
             and opens in place (or as a sheet from the mobile FAB). */}
-        <div ref={addTransactionRef} className="scroll-mt-20">
+        <div ref={addTransactionRef} className={cn("scroll-mt-20", !formOpen && "max-md:hidden")}>
           {formOpen ? (
             <Card className="bg-card/80">
               <div className="flex items-center justify-between border-b px-4 py-2">
@@ -689,7 +692,8 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setFormOpen(true)}
               className={cn(
-                'group relative isolate flex h-12 w-full items-center justify-center gap-2',
+                // Phones use the floating + button instead.
+                'group relative isolate h-12 w-full items-center justify-center gap-2 hidden md:flex',
                 'overflow-hidden rounded-lg text-sm font-semibold text-white shadow-lg',
                 'bg-[linear-gradient(110deg,hsl(var(--primary)),hsl(var(--accent)),hsl(var(--primary)))]',
                 'transition-transform hover:scale-[1.01] active:scale-[0.99]',
@@ -730,7 +734,8 @@ export default function DashboardPage() {
               selectedYear={selectedYear}
             />
           </motion.div>
-          <motion.div variants={itemVariants}>
+          {/* Phones have the Chat tab; a second chat squeezed into the dashboard is just scroll. */}
+          <motion.div variants={itemVariants} className="hidden md:block">
             <FinancialChatbot />
           </motion.div>
         </motion.div>

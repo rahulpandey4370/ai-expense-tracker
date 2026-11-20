@@ -7,8 +7,10 @@ import { cn } from '@/lib/utils';
 export interface KpiPanel {
   /** Stable id — also the localStorage key suffix for the open panel. */
   id: string;
-  /** Used as the tooltip and the accessible name, since the tab shows only an icon. */
+  /** Tooltip, accessible name and the open panel's heading. */
   title: string;
+  /** One-word caption under the icon. Falls back to `title`. */
+  label?: string;
   icon: ReactNode;
   /**
    * Tailwind classes for the icon's tint when the panel is active. Each panel
@@ -30,8 +32,8 @@ interface CollapsibleKpiGroupProps {
  * One compact row of icon tabs with a single expanding panel beneath.
  *
  * This replaces three separately-collapsing cards stacked vertically, which
- * cost three full-width rows of chrome to say very little. Icons alone keep
- * the row to a single line; the title survives as the tooltip and the
+ * cost three full-width rows of chrome to say very little. Each tab is an
+ * icon with a one-word caption; the full title is the tooltip and the
  * accessible name, and appears as a heading once a panel is open.
  *
  * Nothing is open by default — these are secondary to the main KPIs above.
@@ -74,15 +76,18 @@ export function CollapsibleKpiGroup({ panels, storageKey = 'finwise.kpiPanel' }:
               aria-label={panel.title}
               aria-expanded={isActive}
               className={cn(
-                'group relative flex flex-1 items-center justify-center gap-1.5 rounded-md py-2',
+                'group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-1.5',
                 'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 isActive ? cn('bg-muted', panel.activeClassName) : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >
-              {panel.icon}
-              {panel.badge !== undefined && panel.badge !== null && (
-                <span className="text-[11px] font-medium tabular-nums opacity-80">{panel.badge}</span>
-              )}
+              <span className="flex items-center gap-1.5">
+                {panel.icon}
+                {panel.badge !== undefined && panel.badge !== null && (
+                  <span className="text-[11px] font-medium tabular-nums opacity-80">{panel.badge}</span>
+                )}
+              </span>
+              <span className="max-w-full truncate text-[11px] leading-tight">{panel.label ?? panel.title}</span>
               {isActive && (
                 <motion.span
                   layoutId={`${storageKey}-underline`}

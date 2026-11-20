@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -163,7 +163,7 @@ export default function SplitExpensesPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
               <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">

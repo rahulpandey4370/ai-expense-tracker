@@ -112,6 +112,11 @@ export const MERCHANT_RULES: MerchantRule[] = [
   { id: 'cultfit', name: 'cult.fit', group: 'other', specificity: 20, patterns: [brand('cult fit', 'cultfit', 'cure fit', 'curefit')] },
   { id: 'google', name: 'Google', group: 'other', specificity: 20, patterns: [brand('google one', 'google play', 'google storage')] },
   { id: 'yatra', name: 'Yatra', group: 'travel', specificity: 20, patterns: [brand('yatra')] },
+
+  // --- Investments (merchant tiles skip investment rows; these only keep names consistent)
+  // Coin (mutual funds) must outrank plain Zerodha, which bank SMS also show as "Zerodha Broking Ltd".
+  { id: 'zerodha-coin', name: 'Zerodha Coin', group: 'other', specificity: 30, patterns: [brand('zerodha coins', 'zerodha coin')] },
+  { id: 'zerodha-kite', name: 'Zerodha Kite', group: 'other', specificity: 20, patterns: [brand('zerodha kite', 'zerodha broking', 'zerodha')] },
 ];
 
 // Sorted once at module load so `detectMerchant` can return on first hit.
@@ -147,6 +152,31 @@ export function detectMerchant(description: string | undefined | null): Detected
   }
   detectionCache.set(key, hit);
   return hit;
+}
+
+// Words the AI or the bank tacks onto a brand ("NSE Zerodha Coins investment", "Eternal Lim").
+const MERCHANT_FILLER = /\b(nse|bse|ltd|lim|limited|pvt|private|india|broking|order|purchase|payment|investment|sip)\b/gi;
+
+/**
+ * The canonical name for a merchant string, e.g. "NSE Zerodha Coins" → "Zerodha Coin".
+ * Only rewrites when the string is just a known brand plus filler; "Swiggy at Taco Bell"
+ * or "Goa Trip Day 4" come back untouched.
+ */
+export function canonicalMerchant(name: string): string {
+  const hit = detectMerchant(name);
+  const rule = hit && MERCHANT_RULES.find(r => r.id === hit.id);
+  if (!rule) return name;
+  let rest = ` ${name} `;
+  for (const p of rule.patterns) rest = rest.replace(p, ' ');
+  rest = rest.replace(MERCHANT_FILLER, '').replace(/[^\p{L}\p{N}]+/gu, '');
+  return rest ? name : rule.name;
+}
+
+/** Normalises the merchant part of "<emoji> <Merchant>: <detail>" (or of the whole text if there is no colon). */
+export function canonicalizeDescription(description: string): string {
+  const [, lead, merchant, rest] = description.match(/^([^\p{L}\p{N}]*)([^:]*)([\s\S]*)$/u)!;
+  const canon = canonicalMerchant(merchant.trim());
+  return canon === merchant.trim() ? description : `${lead}${canon}${rest}`;
 }
 
 export const MERCHANT_GROUP_LABELS: Record<MerchantGroup, string> = {

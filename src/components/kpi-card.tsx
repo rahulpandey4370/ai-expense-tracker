@@ -166,8 +166,8 @@ export function KpiCard({
           </span>
 
           {displayDescription && (
-            <span className="mt-1 flex items-center gap-1 text-[11px] leading-snug text-muted-foreground sm:text-xs">
-              <span className="truncate">{displayDescription}</span>
+            <span className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-muted-foreground sm:text-xs">
+              <span>{displayDescription}</span>
               {isClickable && <ChevronRight className="h-3 w-3 shrink-0 opacity-50" />}
             </span>
           )}

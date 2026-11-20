@@ -82,6 +82,16 @@ function isProbablyOffTopic(query: string): boolean {
   return OFF_TOPIC_PATTERNS.some(re => re.test(q));
 }
 
+const OFF_TOPIC_REPLY: FinancialChatbotOutput = {
+  response: "I'm a financial assistant for your transactions and money. That question looks unrelated — try asking about your spending, income, categories, savings, investments, or budgets.",
+  followUpQuestions: [
+    "What were my top 3 spending categories this month?",
+    "How much did I save this month?",
+    "Show me all 'want' expenses for this month.",
+  ],
+};
+
+/** Non-agentic chat over a given list of transactions. Only /demo uses it, with its sample data. */
 export async function askFinancialBot(input: {
   query: string;
   transactions: AppTransaction[];

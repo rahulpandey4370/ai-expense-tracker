@@ -3,7 +3,7 @@
 import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,7 @@ import { useAIModel } from "@/contexts/AIModelContext";
 import type { SavingsAllocation, SavingsAllocationCategory, SavingsAllocationInput } from "@/lib/types";
 import "@/components/savings/savings-crayon.css";
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 
 const todayYmd = () => {
   const d = new Date();
@@ -267,7 +267,7 @@ export default function SavingsPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>

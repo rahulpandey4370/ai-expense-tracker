@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Chat attachments (receipt photos, statement PDFs) go through server actions.
+  // 4mb stays under Vercel's 4.5MB request cap; photos are shrunk in the browser first.
+  experimental: {
+    serverActions: { bodySizeLimit: '4mb' },
+  },
   images: {
     remotePatterns: [
       {

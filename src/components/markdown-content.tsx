@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 const renderInline = (text: string) => {
   const segments = text.split(/(\*\*.*?\*\*|\*[^*\n]+\*|`[^`\n]+`)/g);
@@ -30,11 +31,19 @@ export const MarkdownContent = ({ content }: { content: string }) => {
           if (!tableContent) return null;
           const rows = tableContent.split("\n").map((row) => row.split("|").map((cell) => cell.trim()));
           const headers = ["Date", "Amount", "Description", "Category"];
+          // Like the ChatGPT/Claude apps: columns keep a readable width and the table
+          // scrolls sideways inside its own box, rather than squeezing words to fit.
+          const colClass = [
+            "whitespace-nowrap",
+            "whitespace-nowrap text-right tabular-nums font-medium",
+            "min-w-[9rem] max-w-[15rem]",
+            "min-w-[6.5rem] max-w-[10rem]",
+          ];
           return (
-            <div key={index} className="my-2 w-full max-w-full overflow-x-auto rounded-md border bg-background/50">
-              <Table className="text-xs min-w-[500px] sm:min-w-0">
-                <TableHeader><TableRow>{headers.map((header, i) => <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>{rows.map((row, i) => (<TableRow key={i}>{row.map((cell, j) => <TableCell key={j} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>))}</TableBody>
+            <div key={index} className="my-2 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border bg-background/50">
+              <Table className="w-max min-w-full text-[13px] leading-snug">
+                <TableHeader className="bg-muted/50"><TableRow className="hover:bg-transparent">{headers.map((header, i) => <TableHead key={i} className={cn("h-9 whitespace-nowrap px-3 font-semibold text-foreground", i === 1 && "text-right")}>{header}</TableHead>)}</TableRow></TableHeader>
+                <TableBody>{rows.map((row, i) => (<TableRow key={i} className="hover:bg-transparent">{row.map((cell, j) => <TableCell key={j} className={cn("px-3 py-2 align-top break-words", colClass[j])}>{cell}</TableCell>)}</TableRow>))}</TableBody>
               </Table>
             </div>
           );

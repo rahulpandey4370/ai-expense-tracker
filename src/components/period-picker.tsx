@@ -37,7 +37,7 @@ export function PeriodPicker({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-r-none"
+          className="h-8 w-8 rounded-r-none max-[359px]:hidden"
           onClick={() => stepMonth(-1)}
           aria-label="Previous month"
         >
@@ -48,7 +48,7 @@ export function PeriodPicker({ className }: { className?: string }) {
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
-              className="h-8 min-w-[86px] rounded-none border-x px-2 text-sm font-medium tabular-nums"
+              className="h-8 min-w-[76px] sm:min-w-[86px] rounded-none border-x px-1.5 sm:px-2 max-[359px]:rounded-md max-[359px]:border-x-0 text-sm font-medium tabular-nums"
               aria-label={`Selected period: ${monthNamesList[selectedMonth]} ${selectedYear}. Change period.`}
             >
               {label}
@@ -88,7 +88,7 @@ export function PeriodPicker({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-l-none disabled:opacity-30"
+          className="h-8 w-8 rounded-l-none disabled:opacity-30 max-[359px]:hidden"
           onClick={() => stepMonth(1)}
           disabled={!canStepForward}
           aria-label="Next month"
@@ -97,12 +97,13 @@ export function PeriodPicker({ className }: { className?: string }) {
         </Button>
       </div>
 
-      {/* Only offered when it does something. */}
+      {/* Only offered when it does something. Phones skip it (and, under 360px, the
+          arrows) so the header fits; the month grid is still one tap away. */}
       {!isCurrentMonth && (
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex"
           onClick={handleSetToCurrentMonth}
         >
           <CalendarDays className="h-3.5 w-3.5" />

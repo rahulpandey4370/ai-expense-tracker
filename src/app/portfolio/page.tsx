@@ -18,7 +18,7 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { formatDisplayDate } from '@/lib/date-utils';
 import { useAIModel } from '@/contexts/AIModelContext';
 import {
   addPortfolioEntry,
@@ -48,7 +49,7 @@ import type {
   PortfolioTransactionType,
 } from '@/lib/types';
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 
 const ASSET_TYPE_LABELS: Record<PortfolioAssetType, string> = {
   mutual_fund: 'Mutual Fund',
@@ -313,7 +314,7 @@ export default function PortfolioPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/30 backdrop-blur-sm">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
@@ -409,7 +410,7 @@ function KpiGrid({ data }: { data: PortfolioDashboardData | null }) {
     {
       label: 'Current Value',
       value: formatCurrency(summary?.totalCurrentValue || 0),
-      helper: summary?.latestUpdateDate ? `as of ${summary.latestUpdateDate}` : 'manual valuations',
+      helper: summary?.latestUpdateDate ? `as of ${formatDisplayDate(summary.latestUpdateDate)}` : 'manual valuations',
       icon: Landmark,
     },
     {
@@ -673,7 +674,7 @@ function AssetCard({ summary, onEdit }: { summary: PortfolioAssetSummary; onEdit
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{summary.transactionCount} txns</span>
-          <span>{summary.latestValuation ? `updated ${summary.latestValuation.date}` : 'no valuation yet'}</span>
+          <span>{summary.latestValuation ? `updated ${formatDisplayDate(summary.latestValuation.date)}` : 'no valuation yet'}</span>
         </div>
         <Button variant="outline" size="sm" className="w-full" asChild>
           <Link href={`/portfolio/${summary.asset.id}`}>Open ledger</Link>

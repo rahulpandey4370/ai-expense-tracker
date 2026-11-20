@@ -10,13 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, Paperclip, HandCoins, Users } from "lucide-react";
+import { CalendarIcon, FilePlus, Loader2, XCircle, Wand2, ListChecks, AlertTriangle, FileImage, HandCoins, Users } from "lucide-react";
 import { format, parse as parseDateFns } from "date-fns";
 import { toCalendarDate } from "@/lib/date-utils";
 import type { TransactionType as AppTransactionTypeEnum, ExpenseType as AppExpenseTypeEnum, TransactionInput, Category, PaymentMethod, AppTransaction, ParsedAITransaction, ParsedReceiptTransaction, AIModel, SplitUser } from "@/lib/types";
@@ -583,9 +583,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     } catch (error: any) {
       console.error("AI text processing error in component:", error);
-      const message = error.message || "Failed to process text with AI due to an unexpected error.";
+      const message = "Couldn't read that right now. Try again in a moment, or add it manually.";
       setAiProcessingError(message);
-      toast({ title: "AI Error", description: message, variant: "destructive" });
+      toast({ title: "AI couldn't help this time", description: message, variant: "destructive" });
     } finally {
       setIsProcessingAIText(false);
     }
@@ -838,9 +838,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       }
     } catch (error: any) {
       console.error("AI receipt processing error in component:", error);
-      const message = error.message || "Failed to process receipt with AI.";
+      const message = "Couldn't read that receipt right now. Try again in a moment, or add it manually.";
       setAiReceiptError(message);
-      toast({ title: "AI Receipt Error", description: message, variant: "destructive" });
+      toast({ title: "AI couldn't help this time", description: message, variant: "destructive" });
     } finally {
       setIsProcessingAIReceipt(false);
     }
@@ -892,8 +892,6 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   };
 
 
-  const cardTitleText = initialTransactionData ? "Edit Transaction" : "Add New Transaction";
-  const cardDescriptionText = initialTransactionData ? "Modify the details of this transaction." : "Log your income or expenses quickly using one of the methods below.";
   const submitButtonText = initialTransactionData ? "Update Transaction" : "Add Transaction";
 
   if (!isClient && !initialTransactionData && activeTab === 'single') {
@@ -1170,7 +1168,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       {aiProcessingError && !isProcessingAIText && (
           <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>AI Processing Error</AlertTitle>
+              <AlertTitle>Something went wrong</AlertTitle>
               <AlertDescription>{aiProcessingError}</AlertDescription>
           </Alert>
       )}
@@ -1181,14 +1179,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <h4 className="text-md font-semibold text-primary">Review AI Suggestions ({aiReviewTransactions.length} potential transactions)</h4>
             {lastUsedAIModel && <ModelInfoBadge model={lastUsedAIModel}/>}
           </div>
-           <Alert variant="destructive" className="text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>AI is not perfect!</AlertTitle>
-              <AlertDescription>
-                Carefully review each suggested transaction, especially dates, amounts, categories, and payment methods. Make corrections as needed before submitting.
-              </AlertDescription>
-            </Alert>
-          <ScrollArea className="h-[400px] border rounded-md p-0 bg-background/50">
+          <p className="text-xs text-muted-foreground">AI can make mistakes. Check dates, amounts and categories before saving.</p>
+          <div className="border rounded-md bg-background/50">
             <div className="space-y-4 p-3">
             {aiReviewTransactions.map((tx, index) => (
               <Card key={index} className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
@@ -1207,12 +1199,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                   </div>
                   <div>
                     <Label className={cn(labelClasses, "text-xs")}>Amount (₹)</Label>
-                    <Input type="number" value={tx.amount?.toString() || ''} onChange={(e) => handleAIReviewChange(index, 'amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                    <Input type="number" value={tx.amount?.toString() || ''} onChange={(e) => handleAIReviewChange(index, 'amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-base md:text-xs h-8 mt-0.5")} />
                   </div>
                 </div>
                 <div>
                   <Label className={cn(labelClasses, "text-xs")}>Description</Label>
-                  <Input value={tx.description || ''} onChange={(e) => handleAIReviewChange(index, 'description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                  <Textarea rows={1} value={tx.description || ''} onChange={(e) => handleAIReviewChange(index, 'description', e.target.value)} className={cn(inputClasses, "text-base md:text-xs min-h-8 py-1.5 mt-0.5 resize-none")} />
                 </div>
                  <div>
                     <Label className={cn(labelClasses, "text-xs")}>Type</Label>
@@ -1324,7 +1316,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         </div>
                          <div>
                             <Label className={cn(labelClasses, "text-xs")}>Source</Label>
-                            <Input value={tx.source || ''} onChange={(e) => handleAIReviewChange(index, 'source', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                            <Input value={tx.source || ''} onChange={(e) => handleAIReviewChange(index, 'source', e.target.value)} className={cn(inputClasses, "text-base md:text-xs h-8 mt-0.5")} />
                         </div>
                     </div>
                 )}
@@ -1337,7 +1329,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </Card>
             ))}
             </div>
-          </ScrollArea>
+          </div>
           <Button onClick={handleSubmitAIText} disabled={isLoading || aiReviewTransactions.length === 0} className="w-full bg-green-600 hover:bg-green-700 text-white" withMotion>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
             Submit Reviewed Transactions
@@ -1384,7 +1376,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         {aiReceiptError && !isProcessingAIReceipt && (
             <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>AI Receipt Processing Error</AlertTitle>
+                <AlertTitle>Something went wrong</AlertTitle>
                 <AlertDescription>{aiReceiptError}</AlertDescription>
             </Alert>
         )}
@@ -1395,13 +1387,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     <h4 className="text-md font-semibold text-primary">Review AI Receipt Suggestion</h4>
                     {lastUsedAIModel && <ModelInfoBadge model={lastUsedAIModel}/>}
                 </div>
-                <Alert variant="destructive" className="text-sm">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>AI is not perfect!</AlertTitle>
-                    <AlertDescription>
-                        Carefully review the extracted details, especially the date, amount, and category. Make corrections as needed.
-                    </AlertDescription>
-                </Alert>
+                <p className="text-xs text-muted-foreground">AI can make mistakes. Check the date, amount and category before saving.</p>
                 <Card className="p-3 space-y-2 bg-card/80 shadow-sm border-border/50">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                         <div>
@@ -1418,12 +1404,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         </div>
                         <div>
                             <Label className={cn(labelClasses, "text-xs")}>Amount (₹)</Label>
-                            <Input type="number" value={aiReceiptReviewTransaction.amount?.toString() || ''} onChange={(e) => handleAIReceiptReviewChange('amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                            <Input type="number" value={aiReceiptReviewTransaction.amount?.toString() || ''} onChange={(e) => handleAIReceiptReviewChange('amount', parseFloat(e.target.value))} className={cn(inputClasses, "text-base md:text-xs h-8 mt-0.5")} />
                         </div>
                     </div>
                     <div>
                         <Label className={cn(labelClasses, "text-xs")}>Description (Merchant)</Label>
-                        <Input value={aiReceiptReviewTransaction.description || ''} onChange={(e) => handleAIReceiptReviewChange('description', e.target.value)} className={cn(inputClasses, "text-xs h-8 mt-0.5")} />
+                        <Textarea rows={1} value={aiReceiptReviewTransaction.description || ''} onChange={(e) => handleAIReceiptReviewChange('description', e.target.value)} className={cn(inputClasses, "text-base md:text-xs min-h-8 py-1.5 mt-0.5 resize-none")} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
@@ -1473,15 +1459,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
   return (
     <FormWrapperComponent {...formWrapperProps}>
-      {!initialTransactionData && (
-        <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl text-primary">
-            <Paperclip className="h-5 w-5 sm:h-6 sm:w-6 text-accent" /> {cardTitleText}
-          </CardTitle>
-          <CardDescription className="text-xs sm:text-sm text-muted-foreground">{cardDescriptionText}</CardDescription>
-        </CardHeader>
-      )}
-      <CardContent className={cn(initialTransactionData ? 'p-4 sm:p-6' : 'p-4 sm:p-6 pt-2 sm:pt-4', "bg-card rounded-b-xl")}>
+      <CardContent className={cn('p-4 sm:p-6', "bg-card rounded-b-xl")}>
         {initialTransactionData ? (
             renderSingleTransactionForm()
         ) : (

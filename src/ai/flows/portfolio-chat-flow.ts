@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'genkit';
-import { callChatLLM } from '@/lib/ai-client';
+import { runPortfolioAgent } from '@/ai/adk/finance-agent';
 import { getDefaultModelForTask } from '@/lib/task-models';
 import type { AIModel, PortfolioDashboardData } from '@/lib/types';
 
@@ -18,59 +18,11 @@ export interface PortfolioChatOutput {
   model?: AIModel;
 }
 
-function summarizeDashboardForAI(dashboard: PortfolioDashboardData, scopedAssetId?: string) {
-  const summary = dashboard.summary;
-  const assets = scopedAssetId
-    ? dashboard.assetSummaries.filter(item => item.asset.id === scopedAssetId)
-    : dashboard.assetSummaries;
-
-  return {
-    portfolio: {
-      totalInvested: summary.totalInvested,
-      totalCurrentValue: summary.totalCurrentValue,
-      totalInflows: summary.totalInflows,
-      netPnl: summary.netPnl,
-      netPnlPercent: summary.netPnlPercent,
-      xirr: summary.xirr,
-      assetCount: summary.assetCount,
-      transactionCount: summary.transactionCount,
-      latestUpdateDate: summary.latestUpdateDate,
-      bestPerformer: summary.bestPerformer?.asset.name,
-      worstPerformer: summary.worstPerformer?.asset.name,
-    },
-    assets: assets.map(item => ({
-      id: item.asset.id,
-      name: item.asset.name,
-      assetType: item.asset.assetType,
-      currency: item.asset.currency,
-      totalInvested: item.totalInvested,
-      currentValue: item.currentValue,
-      netPnl: item.netPnl,
-      netPnlPercent: item.netPnlPercent,
-      xirr: item.xirr,
-      holdingDays: item.holdingDays,
-      transactionCount: item.transactionCount,
-      latestValuation: item.latestValuation
-        ? { date: item.latestValuation.date, totalValue: item.latestValuation.totalValue }
-        : null,
-      transactions: item.transactions.slice(0, 50).map(tx => ({
-        date: tx.date,
-        type: tx.type,
-        amount: tx.amount,
-        quantity: tx.quantity,
-        pricePerUnit: tx.pricePerUnit,
-        notes: tx.notes,
-      })),
-      valuations: item.valuations.slice(0, 20).map(v => ({
-        date: v.date,
-        totalValue: v.totalValue,
-        quantity: v.quantity,
-        pricePerUnit: v.pricePerUnit,
-      })),
-    })),
-  };
-}
-
+/**
+ * Portfolio chat: a Google ADK agent that looks up holdings, asset history and
+ * the expense ledger through read-only tools (src/ai/adk/finance-agent.ts).
+ * `dashboard` is only used for the scoped asset's name.
+ */
 export async function askPortfolioBot(input: {
   query: string;
   dashboard: PortfolioDashboardData;
@@ -79,58 +31,22 @@ export async function askPortfolioBot(input: {
   scopedAssetId?: string;
 }): Promise<PortfolioChatOutput> {
   const modelToUse = input.model || getDefaultModelForTask('portfolio_chat');
-  const today = new Date().toISOString().slice(0, 10);
-  const data = summarizeDashboardForAI(input.dashboard, input.scopedAssetId);
   const scopedAssetName = input.scopedAssetId
     ? input.dashboard.assets.find(a => a.id === input.scopedAssetId)?.name
     : undefined;
 
-  const systemPrompt = `## ROLE
-You are FinWise AI's Portfolio Assistant. You analyse the user's personal investment portfolio.
-
-## CONTEXT
-- Today: ${today}
-- Currency: INR by default (USD where indicated on individual assets).
-- ${scopedAssetName ? `You are scoped to a single asset: **${scopedAssetName}**.` : `You see the user's entire portfolio.`}
-- All data below is what the user has manually entered. There is NO live market price feed.
-
-## SCOPE
-You can analyse: holdings, allocation, concentration, XIRR, P&L (realized + unrealized), buy/sell cadence, average buy price (when units are available), holding period, best/worst performers, and what additional data (units, price, current NAV) the user should add to improve analysis.
-
-You must NOT invent live prices, predict the market, or recommend specific stocks/funds the user does not already hold. You may discuss tradeoffs of existing holdings.
-
-If the user asks a question your data cannot answer (e.g. "is RELIANCE going to go up?"), say so plainly and suggest what data they could add.
-
-## DATA
-${JSON.stringify(data, null, 2)}
-
-## OUTPUT
-- Markdown. Use ₹ for INR. Round to 2 decimals; percentages to 1 decimal.
-- Be concise. Lead with the answer. Add 2-4 bullet supporting points only when useful.
-- End every answer with this exact block listing 2-4 short follow-up questions (≤12 words each):
-[FOLLOWUPS]
-- question 1
-- question 2
-[/FOLLOWUPS]
-Omit the block only if nothing useful applies.`;
-
-  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: systemPrompt },
-  ];
-  (input.chatHistory || []).slice(-6).forEach(msg => {
-    messages.push({ role: msg.role, content: msg.content });
-  });
-  messages.push({ role: 'user', content: input.query });
-
   let responseText = '';
   try {
-    responseText = await callChatLLM(modelToUse, messages, {
-      temperature: 0.2,
-      maxOutputTokens: 1400,
+    responseText = await runPortfolioAgent({
+      query: input.query,
+      history: (input.chatHistory || []).map(m => ({ role: m.role, content: m.content })),
+      modelKey: modelToUse,
+      scopedAssetId: input.scopedAssetId,
+      scopedAssetName,
     });
   } catch (err: any) {
-    console.error('[portfolio-chat] AI generation failed:', err);
-    throw new Error(`Portfolio chat failed: ${err?.message || 'unknown AI error'}`);
+    console.error('[portfolio-chat] agent failed:', err);
+    throw new Error("The AI couldn't answer just now. Please try again in a moment.");
   }
 
   if (!responseText) {

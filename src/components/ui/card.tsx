@@ -76,4 +76,11 @@ const CardFooter = React.forwardRef<
 ))
 CardFooter.displayName = "CardFooter"
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+/**
+ * Add to a page's wrapper Card: below `md` it keeps its glow but slims down to a 1px
+ * border and 12px side padding, so phone content gets most of the screen width.
+ */
+const slimOnPhone =
+  "max-md:border max-md:[&>div]:px-3 max-md:[&>div:first-child]:pt-4"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, slimOnPhone }

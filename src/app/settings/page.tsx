@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +49,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 
 export default function SettingsPage() {
   const [userProfile, setUserProfile] = useState({
@@ -291,7 +291,7 @@ export default function SettingsPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
-        <Card className={cn("shadow-xl border-primary/20 border-2 rounded-xl bg-card/80", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/20 border-2 rounded-xl bg-card/80", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <SettingsIcon className="w-7 h-7 md:w-8 md:h-8 text-primary transform -rotate-3"/>

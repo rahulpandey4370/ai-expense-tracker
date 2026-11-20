@@ -29,11 +29,12 @@ const decimalWhole = new Intl.NumberFormat(INR, {
 });
 
 /**
- * ₹1,40,619.00 — use where exact paise matter (transaction rows, ledgers).
+ * ₹1,40,619.50 — use where exact paise matter (transaction rows, ledgers).
+ * Whole-rupee amounts drop the ".00": ₹1,40,619.
  */
 export function formatCurrency(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '₹0.00';
-  return currencyFull.format(value);
+  if (value === null || value === undefined || !Number.isFinite(value)) return '₹0';
+  return Math.round(value * 100) % 100 === 0 ? currencyWhole.format(value) : currencyFull.format(value);
 }
 
 /**

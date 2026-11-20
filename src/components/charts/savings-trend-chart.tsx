@@ -141,7 +141,7 @@ export function SavingsTrendChart({ monthlyData }: MonthlyFinancialTrendsChartPr
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                width={50}
+                width={64}
                 className="fill-foreground text-xs" 
               />
               <ChartTooltip

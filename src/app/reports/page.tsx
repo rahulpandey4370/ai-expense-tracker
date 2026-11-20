@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { formatCurrency, formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import type { AppTransaction, ExpenseType, AIModel, AITransactionForAnalysis } from '@/lib/types';
@@ -49,7 +49,7 @@ const buttonHoverTap = {
   whileTap: { scale: 0.97 },
 };
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 
 const progressColors = [
   "bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", 
@@ -277,7 +277,7 @@ export default function ReportsPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <FileText className="w-7 h-7 md:w-8 md:h-8 text-accent transform rotate-[-3deg]" />

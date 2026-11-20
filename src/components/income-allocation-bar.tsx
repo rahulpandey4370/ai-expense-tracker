@@ -23,19 +23,19 @@ const segmentConfig = {
     name: "Needs", 
     gradient: "from-blue-400 to-blue-600", 
     icon: HandCoins, 
-    ideal: "<=50%" 
+    ideal: "≤50%" 
   },
   wants: { 
     name: "Wants", 
     gradient: "from-purple-400 to-purple-600", 
     icon: ShoppingBasket, 
-    ideal: "<=30%" 
+    ideal: "≤30%" 
   },
   investments: { 
     name: "Investments", 
     gradient: "from-yellow-400 to-yellow-600", 
     icon: TrendingUp, 
-    ideal: ">=20%" 
+    ideal: "≥20%" 
   },
   savings: { 
     name: "Cash Savings", 
@@ -104,14 +104,12 @@ export function IncomeAllocationBar({ income, needs, wants, investments }: Incom
                 {segments.map((segment) => (
                     <div key={segment.name} className="flex items-center gap-2 p-2 rounded-lg bg-background/50 border border-primary/10 shadow-sm">
                         <segment.config.icon className={cn("w-5 h-5 shrink-0 bg-gradient-to-r rounded-full p-0.5 text-white", segment.config.gradient)} />
-                        <div className="flex flex-col flex-grow">
+                        <div className="flex min-w-0 flex-col flex-grow">
                             <span className="text-muted-foreground text-xs">{segment.name}</span>
-                            <div className="flex justify-between items-baseline">
-                                <span className="font-semibold text-foreground">
-                                    {segment.percentage.toFixed(1)}%
-                                </span>
-                                <span className="text-xs text-muted-foreground/80">(Ideal: {segment.config.ideal})</span>
-                            </div>
+                            <span className="font-semibold text-foreground">
+                                {segment.percentage.toFixed(1)}%
+                            </span>
+                            <span className="text-[11px] leading-tight text-muted-foreground/80">Ideal {segment.config.ideal}</span>
                         </div>
                     </div>
                 ))}

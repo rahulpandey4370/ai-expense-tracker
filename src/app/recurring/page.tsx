@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2, Sparkles, Zap } from "lucide-react";
+import { Repeat, Loader2, Trash2, Pause, Play, Plus, RefreshCw, Calendar, Wand2, Sparkles, Zap, Pencil } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 import { parseRecurringRuleFromText } from "@/ai/flows/parse-recurring-rule-flow";
 import { useAIModel } from "@/contexts/AIModelContext";
@@ -33,6 +34,9 @@ const todayYmd = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// "2026-05-04" -> "4 May 2026"
+const prettyDate = (ymd: string) => format(parseISO(ymd), 'd MMM yyyy');
+
 export default function RecurringPage() {
   const { toast } = useToast();
   const { selectedModel } = useAIModel();
@@ -42,14 +46,15 @@ export default function RecurringPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMaterializing, setIsMaterializing] = useState(false);
 
-  // Form state for "Add new rule"
+  // Form state for "Add new rule" (or "Edit rule" when editingId is set)
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
-  const [expenseType, setExpenseType] = useState<'need' | 'want' | 'investment'>('need');
+  const [expenseType, setExpenseType] = useState<NonNullable<RecurringRule['expenseType']>>('need');
   // dayOfMonth as text so we can disable spinner UI and validate manually.
   const [dayOfMonth, setDayOfMonth] = useState<string>('1');
   const [startDate, setStartDate] = useState(todayYmd());
@@ -90,6 +95,23 @@ export default function RecurringPage() {
     setStartDate(todayYmd());
     setEndDate('');
     setAiNote(null);
+    setEditingId(null);
+  };
+
+  const startEdit = (rule: RecurringRule) => {
+    setEditingId(rule.id);
+    setType(rule.type);
+    setAmount(String(rule.amount));
+    setDescription(rule.description);
+    setCategoryId(rule.categoryId ?? '');
+    setPaymentMethodId(rule.paymentMethodId ?? '');
+    setExpenseType(rule.expenseType ?? 'need');
+    setDayOfMonth(String(rule.dayOfMonth));
+    setStartDate(rule.startDate);
+    setEndDate(rule.endDate ?? '');
+    setAiNote(null);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDayOfMonthChange = (raw: string) => {
@@ -161,20 +183,36 @@ export default function RecurringPage() {
       toast({ title: "Missing fields", description: "Income rules need a category (e.g. Salary).", variant: "destructive" });
       return;
     }
+    const values = {
+      type,
+      amount: amountNum,
+      description: description.trim(),
+      categoryId: categoryId || undefined,
+      paymentMethodId: type === 'expense' ? paymentMethodId : undefined,
+      expenseType: type === 'expense' ? expenseType : undefined,
+      dayOfMonth: dayNum,
+      startDate,
+      endDate: endDate || undefined,
+    };
+    if (editingId) {
+      // Optimistic, like pause/resume: show the new values now, put the old rule back if the server says no.
+      const old = rules.find(r => r.id === editingId);
+      const id = editingId;
+      if (old) setRules(rs => rs.map(r => (r.id === id ? { ...r, ...values } : r)));
+      resetForm();
+      setShowForm(false);
+      try {
+        await updateRecurringRule(id, values);
+        toast({ title: "Rule updated", description: "Future months will use the new values." });
+      } catch (err: any) {
+        if (old) setRules(rs => rs.map(r => (r.id === id ? old : r)));
+        toast({ title: "Could not update rule", description: err.message, variant: "destructive" });
+      }
+      return;
+    }
     setSubmitting(true);
     try {
-      await addRecurringRule({
-        type,
-        amount: amountNum,
-        description: description.trim(),
-        categoryId: categoryId || undefined,
-        paymentMethodId: type === 'expense' ? paymentMethodId : undefined,
-        expenseType: type === 'expense' ? expenseType : undefined,
-        dayOfMonth: dayNum,
-        startDate,
-        endDate: endDate || undefined,
-        isActive: true,
-      });
+      await addRecurringRule({ ...values, isActive: true });
       toast({ title: "Recurring rule added", description: "Future months will auto-create this transaction." });
       resetForm();
       setShowForm(false);
@@ -266,7 +304,7 @@ export default function RecurringPage() {
                   {isMaterializing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                   Run now
                 </Button>
-                <Button onClick={() => setShowForm(s => !s)} size="sm">
+                <Button onClick={() => { if (showForm) resetForm(); setShowForm(s => !s); }} size="sm">
                   <Plus className="mr-2 h-4 w-4" /> {showForm ? 'Close' : 'New rule'}
                 </Button>
               </div>
@@ -301,6 +339,7 @@ export default function RecurringPage() {
 
             {showForm && (
               <div className="p-4 rounded-md border border-primary/20 bg-background/50 space-y-3">
+                {editingId && <h3 className="font-semibold text-foreground">Edit rule</h3>}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <Label>Type</Label>
@@ -379,7 +418,7 @@ export default function RecurringPage() {
                   <Button variant="ghost" onClick={() => { resetForm(); setShowForm(false); }}>Cancel</Button>
                   <Button onClick={handleSubmit} disabled={submitting}>
                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save rule
+                    {editingId ? 'Save changes' : 'Save rule'}
                   </Button>
                 </div>
               </div>
@@ -415,26 +454,36 @@ export default function RecurringPage() {
                         {categoryNameById(rule.categoryId)}
                         {rule.paymentMethodId && ` · ${pmNameById(rule.paymentMethodId)}`}
                         {rule.expenseType && ` · ${rule.expenseType}`}
-                        {` · from ${rule.startDate}`}
-                        {rule.endDate && ` to ${rule.endDate}`}
-                        {rule.lastGeneratedDate && ` · last run ${rule.lastGeneratedDate}`}
+                        {` · from ${prettyDate(rule.startDate)}`}
+                        {rule.endDate && ` to ${prettyDate(rule.endDate)}`}
+                        {rule.lastGeneratedDate && ` · last run ${prettyDate(rule.lastGeneratedDate)}`}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    {/* Text labels show on phones; on wider screens they're screen-reader only and the icons stand alone. */}
+                    <div className="flex items-center gap-1 flex-wrap">
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="sm"
+                        className="md:w-10 md:px-0"
                         onClick={() => handleTriggerNow(rule)}
                         disabled={triggeringRuleId === rule.id || !rule.isActive}
                         title="Trigger this rule for the current month using today's date (skips this month's auto-run)"
+                        aria-label={`Run ${rule.description} now`}
                       >
                         {triggeringRuleId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                        <span className="md:sr-only">Run now</span>
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleToggleActive(rule)} title={rule.isActive ? 'Pause' : 'Resume'} aria-label={rule.isActive ? `Pause ${rule.description}` : `Resume ${rule.description}`}>
+                      <Button variant="ghost" size="sm" className="md:w-10 md:px-0" onClick={() => handleToggleActive(rule)} title={rule.isActive ? 'Pause' : 'Resume'} aria-label={rule.isActive ? `Pause ${rule.description}` : `Resume ${rule.description}`}>
                         {rule.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        <span className="md:sr-only">{rule.isActive ? 'Pause' : 'Resume'}</span>
                       </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(rule)} title="Delete rule" aria-label={`Delete ${rule.description}`}>
+                      <Button variant="ghost" size="sm" className="md:w-10 md:px-0" onClick={() => startEdit(rule)} title="Edit rule" aria-label={`Edit ${rule.description}`}>
+                        <Pencil className="h-4 w-4" />
+                        <span className="md:sr-only">Edit</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" className="md:w-10 md:px-0 text-destructive" onClick={() => handleDelete(rule)} title="Delete rule" aria-label={`Delete ${rule.description}`}>
                         <Trash2 className="h-4 w-4" />
+                        <span className="md:sr-only">Delete</span>
                       </Button>
                     </div>
                   </div>

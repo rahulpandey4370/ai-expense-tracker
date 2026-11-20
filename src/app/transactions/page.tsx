@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,7 +11,7 @@ import type { AppTransaction, Category, PaymentMethod, ExpenseType as AppExpense
 import { deleteTransaction, deleteMultipleTransactions } from '@/lib/actions/transactions';
 import { deleteWithUndo } from '@/lib/undo-toast';
 import { useTransactionsInRange, useCategories, usePaymentMethods, useInvalidateFinance } from '@/hooks/use-finance-queries';
-import { format } from "date-fns";
+import { format, isSameDay, isToday, isYesterday } from "date-fns";
 import { getCalendarDateString, isSameCalendarMonth, isSameCalendarYear, toCalendarDate } from '@/lib/date-utils';
 import { ArrowDownCircle, ArrowUpCircle, ArrowDownUp, Edit3, Trash2, Download, BookOpen, Loader2, Sigma, List, ShieldAlert, Filter, Users, Plus, X, MoreHorizontal, CheckSquare } from "lucide-react";
 import {
@@ -72,7 +72,7 @@ const listItemVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 120 } },
 };
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 
 type ViewMode = 'selected_month' | 'full_year';
 type SortableKeys = keyof AppTransaction | 'categoryName' | 'paymentMethodName';
@@ -433,13 +433,14 @@ export default function TransactionsPage() {
       : (sortConfig.direction === 'ascending' ? 'A–Z' : 'Z–A');
 
   return (
-    <div className="p-0 space-y-6 bg-background/80 backdrop-blur-sm sm:p-2 md:p-4 lg:p-6">
+    <>
+    <div className="p-4 max-md:pb-24 space-y-6 bg-background/80 backdrop-blur-sm lg:p-6">
       <motion.div
         variants={pageVariants}
         initial="hidden"
         animate="visible"
       >
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 w-full", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90 w-full", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <BookOpen className="w-7 h-7 md:w-8 md:h-8 text-accent transform -rotate-6"/>
@@ -455,11 +456,11 @@ export default function TransactionsPage() {
               <div className="flex gap-2">
                 <Input
                   type="search"
-                  placeholder="Search description, category or source…"
+                  placeholder="Search transactions"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   aria-label="Search transactions"
-                  className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-sm md:text-base"
+                  className="w-full bg-background/70 border-primary/40 focus:border-accent focus:ring-accent text-foreground placeholder:text-muted-foreground/70 text-base"
                 />
                 <Button
                   variant={selectMode ? 'default' : 'outline'}
@@ -609,41 +610,91 @@ export default function TransactionsPage() {
             ) : (
             <div className="rounded-md border border-primary/30 bg-background/50">
               {/* Mobile View - Card List */}
-              <div className="md:hidden space-y-3 p-2">
+              <div className="md:hidden divide-y divide-border/60">
                 {filteredTransactions.length > 0 ? (
-                  pagedTransactions.map(t => (
-                    <motion.div key={t.id} variants={listItemVariants} className="p-3 border rounded-lg bg-card/80 shadow-sm space-y-2">
-                      <div className="flex justify-between items-start gap-2">
-                        <Checkbox
-                          checked={selectedTransactionIds.has(t.id)}
-                          onCheckedChange={() => toggleSelectTransaction(t.id)}
-                          aria-label={`Select transaction ${t.description}`}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <p className="line-clamp-2 text-sm font-semibold text-foreground" title={t.description}>{t.description}</p>
-                          <p className="text-xs text-muted-foreground">{format(toCalendarDate(t.date) || new Date(t.date), "dd MMM, yyyy")}</p>
-                        </div>
-                        <p className={cn("shrink-0 text-base font-bold tabular-nums", t.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500')}>
-                          {t.type === 'income' ? '+' : '−'}{formatCurrency(netOfSplit(t))}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pl-8">
-                         <Badge variant="outline">{t.category?.name || t.source}</Badge>
-                         {t.paymentMethod && <Badge variant="secondary">{t.paymentMethod.name}</Badge>}
-                         {t.expenseType && <Badge variant="default" className={cn('capitalize', t.expenseType === 'need' ? 'bg-blue-500/80' : t.expenseType === 'want' ? 'bg-purple-500/80' : 'bg-indigo-500/80', 'text-white')}>{t.expenseType.replace('_expense','')}</Badge>}
-                      </div>
-                      <div className="flex justify-end gap-1 pt-2">
-                         {t.type === 'expense' && t.isSplit && (
-                          <Badge variant="outline" className="h-7 gap-1 border-yellow-800/40 bg-yellow-900/20 px-1.5 text-yellow-400" title="This expense is split">
-                            <Users className="h-3.5 w-3.5" />
-                          </Badge>
+                  pagedTransactions.map((t, i) => {
+                    // Date headings only make sense when the list is in date order.
+                    const byDate = sortConfig.key === 'date';
+                    const day = toCalendarDate(t.date) || new Date(t.date);
+                    const prev = pagedTransactions[i - 1];
+                    const showHeading = byDate && (!prev || !isSameDay(day, toCalendarDate(prev.date) || new Date(prev.date)));
+                    const meta = [
+                      !byDate && format(day, "d MMM"),
+                      t.category?.name || t.source,
+                      t.paymentMethod?.name,
+                      t.type === 'expense' && t.expenseType && t.expenseType.charAt(0).toUpperCase() + t.expenseType.slice(1),
+                      t.isSplit && 'split',
+                    ].filter(Boolean).join(' · ');
+                    const selected = selectedTransactionIds.has(t.id);
+                    return (
+                      <Fragment key={t.id}>
+                        {showHeading && (
+                          <h3 className="bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                            {isToday(day) ? 'Today' : isYesterday(day) ? 'Yesterday' : format(day, "EEE, d MMM")}
+                          </h3>
                         )}
-                         <Button variant="ghost" size="icon" onClick={() => setEditingTransaction(t)} className="text-accent h-7 w-7"><Edit3 className="h-4 w-4" /></Button>
-                         <Button variant="ghost" size="icon" onClick={() => handleDeleteSingleTransaction(t)} className="text-destructive h-7 w-7" aria-label={`Delete ${t.description}`}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </motion.div>
-                  ))
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label={selectMode ? `Select ${t.description}` : `Edit ${t.description}`}
+                          aria-pressed={selectMode ? selected : undefined}
+                          onClick={() => (selectMode ? toggleSelectTransaction(t.id) : setEditingTransaction(t))}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+                            e.preventDefault();
+                            if (selectMode) toggleSelectTransaction(t.id); else setEditingTransaction(t);
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 py-2.5 pl-3 pr-1 transition-colors active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                            selected && "bg-primary/10 dark:bg-primary/20"
+                          )}
+                        >
+                          {selectMode && (
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={() => toggleSelectTransaction(t.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select transaction ${t.description}`}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-sm font-medium text-foreground">{t.description}</p>
+                            <p className="truncate text-xs text-muted-foreground">{meta}</p>
+                          </div>
+                          <p className={cn("shrink-0 text-sm font-semibold tabular-nums", t.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500')}>
+                            {t.type === 'income' ? '+' : '−'}{formatCurrency(netOfSplit(t))}
+                          </p>
+                          {!selectMode && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-9 w-9 shrink-0 text-muted-foreground"
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Actions for ${t.description}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem onSelect={() => setEditingTransaction(t)}>
+                                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onSelect={() => handleDeleteSingleTransaction(t)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      </Fragment>
+                    );
+                  })
                 ) : (
                   <p className="text-center text-muted-foreground py-10">No transactions found.</p>
                 )}
@@ -862,9 +913,11 @@ export default function TransactionsPage() {
           </AlertDialog>
         );
       })()}
+    </div>
 
-
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
+    {/* Outside the backdrop-blur div: backdrop-filter makes that div the containing
+        block for `position: fixed`, so the button scrolled away with the list. */}
+    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
         <Button
           onClick={() => setIsAddingNew(true)}
           className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"
@@ -874,6 +927,6 @@ export default function TransactionsPage() {
           <Plus className="h-8 w-8" />
         </Button>
       </div>
-    </div>
+    </>
   );
 }

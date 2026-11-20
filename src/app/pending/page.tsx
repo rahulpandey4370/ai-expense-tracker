@@ -2,7 +2,7 @@
 
 import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +22,7 @@ import {
 } from "@/lib/actions/pending";
 import type { Category, PaymentMethod } from "@/lib/types";
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 const EXPENSE_TYPES = [
   { value: 'need', label: 'Need' },
   { value: 'want', label: 'Want' },
@@ -115,7 +115,7 @@ export default function PendingPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
-      <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+      <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
             <MessageSquareText className="w-7 h-7 text-accent" />

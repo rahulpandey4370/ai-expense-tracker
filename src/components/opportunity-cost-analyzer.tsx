@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Loader2, Wand2, AlertTriangle, Lightbulb, Briefcase, TrendingUp, Sparkles, Info } from "lucide-react";
+import { BrainCircuit, Loader2, Wand2, AlertTriangle, Lightbulb, Briefcase, TrendingUp, Sparkles, Info, ChevronDown } from "lucide-react";
 import { Skeleton } from './ui/skeleton';
 import { Slider } from './ui/slider';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -43,6 +43,8 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
   const [analysis, setAnalysis] = useState<OpportunityCostOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Collapsed on phones until asked for; always open from md up.
+  const [expanded, setExpanded] = useState(false);
   const { selectedModel } = useAIModel();
 
   const handleAnalyze = async () => {
@@ -95,13 +97,25 @@ export function OpportunityCostAnalyzer({ averageMonthlyIncome }: OpportunityCos
           <CardDescription>
             Before you buy a 'want', see what it really costs.
           </CardDescription>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 w-fit md:hidden"
+            aria-expanded={expanded}
+            aria-controls="opportunity-cost-body"
+            onClick={() => setExpanded(v => !v)}
+          >
+            <ChevronDown className={cn("mr-1 h-4 w-4 transition-transform motion-reduce:transition-none", expanded && "rotate-180")} />
+            {expanded ? 'Hide' : 'Try it'}
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent id="opportunity-cost-body" className={cn("space-y-4", !expanded && "max-md:hidden")}>
           <div className="space-y-4 p-4 border rounded-lg bg-background/50 border-primary/20">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="item-name">"Want" Item Name</Label>
-                <Input id="item-name" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="e.g., New Gaming Mouse, Designer Bag" className="mt-1" />
+                <Input id="item-name" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="e.g., New headphones" className="mt-1" />
               </div>
               <div>
                 <Label htmlFor="item-cost">Item Cost (₹)</Label>

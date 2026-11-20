@@ -85,7 +85,18 @@ export const ANTHROPIC_CATALOG: CatalogModel[] = [
  * can't access simply fails at call time with OpenAI's own 404.
  */
 export const OPENAI_CATALOG: CatalogModel[] = [
-  // --- GPT-5.6 (current generation, GA 2026-07-09) -------------------------
+  // --- GPT-6.x (Oct–Nov 2026) ----------------------------------------------
+  // Ids confirmed against GET /v1/models on 2026-11-20. Prices left blank:
+  // published figures disagree, so check OpenAI's pricing page before relying on them.
+  { id: 'gpt-6.2-astra', provider: 'openai', label: 'GPT-6.2 Astra', tags: ['flagship', 'reasoning'], notes: 'Newest flagship (Nov 2026).' },
+  { id: 'gpt-6.2-sol', provider: 'openai', label: 'GPT-6.2 Sol', tags: ['balanced'], notes: 'Newest general-purpose tier (Nov 2026).' },
+  { id: 'gpt-6.1-sol', provider: 'openai', label: 'GPT-6.1 Sol', tags: ['balanced'] },
+  { id: 'gpt-6.1-terra', provider: 'openai', label: 'GPT-6.1 Terra', tags: ['fast'], notes: 'Fast mid tier.' },
+  { id: 'gpt-6-astra', provider: 'openai', label: 'GPT-6 Astra', tags: ['reasoning'] },
+  { id: 'gpt-6-sol', provider: 'openai', label: 'GPT-6 Sol', tags: ['balanced'] },
+  { id: 'gpt-6-luna', provider: 'openai', label: 'GPT-6 Luna', tags: ['cheap', 'fast'], notes: 'Cheapest GPT-6 tier.' },
+
+  // --- GPT-5.6 (GA 2026-07-09) ---------------------------------------------
   // Three named tiers rather than the mini/nano suffix scheme. Prices are the
   // short-context rates; long-context input bills at roughly double.
   {

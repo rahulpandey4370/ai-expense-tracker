@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, type FormEvent, useMemo } from 'react';
 import { formatCurrencyWhole } from '@/lib/format';
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, slimOnPhone } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,7 +53,7 @@ const cardVariants = {
   visible: { opacity: 1, scale: 1, transition: { duration: 0.4, ease: "easeOut" } },
 };
 
-const glowClass = "shadow-[var(--card-glow)] dark:shadow-[var(--card-glow-dark)]";
+const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
 type HealthCheckPeriodType = 'current_week' | 'current_month';
 
 export default function AIPlaygroundPage() {
@@ -602,7 +602,7 @@ export default function AIPlaygroundPage() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 bg-background/80 backdrop-blur-sm">
       {/* AI Financial Goal Planner & Funds Tracker Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <FlaskConical className="w-7 h-7 md:w-8 md:h-8 text-accent transform rotate-[-3deg]" />
@@ -730,7 +730,7 @@ export default function AIPlaygroundPage() {
 
       {/* Saved Goals & Funds Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
@@ -858,11 +858,11 @@ export default function AIPlaygroundPage() {
                       <div className="flex flex-col sm:flex-row items-end gap-2">
                           <div className="flex-grow w-full sm:w-auto">
                               <Label htmlFor={`allocate-name-${goal.id}`} className="text-xs text-foreground/80">Allocation Name</Label>
-                              <Input id={`allocate-name-${goal.id}`} type="text" placeholder="e.g., HDFC Bank, MF" value={allocationNames[goal.id] || ''} onChange={(e) => setAllocationNames(prev => ({...prev, [goal.id]: e.target.value}))} className="mt-1 h-9 text-sm bg-background/80 border-border/60 focus:border-accent" />
+                              <Input id={`allocate-name-${goal.id}`} type="text" placeholder="e.g., HDFC Bank, MF" value={allocationNames[goal.id] || ''} onChange={(e) => setAllocationNames(prev => ({...prev, [goal.id]: e.target.value}))} className="mt-1 h-9 text-base md:text-sm bg-background/80 border-border/60 focus:border-accent" />
                           </div>
                           <div className="flex-grow w-full sm:w-auto">
                               <Label htmlFor={`allocate-amount-${goal.id}`} className="text-xs text-foreground/80">Amount (₹)</Label>
-                              <Input id={`allocate-amount-${goal.id}`} type="number" placeholder="e.g., 5000" value={allocationAmounts[goal.id] || ''} onChange={(e) => setAllocationAmounts(prev => ({ ...prev, [goal.id]: e.target.value }))} className="mt-1 h-9 text-sm bg-background/80 border-border/60 focus:border-accent" />
+                              <Input id={`allocate-amount-${goal.id}`} type="number" placeholder="e.g., 5000" value={allocationAmounts[goal.id] || ''} onChange={(e) => setAllocationAmounts(prev => ({ ...prev, [goal.id]: e.target.value }))} className="mt-1 h-9 text-base md:text-sm bg-background/80 border-border/60 focus:border-accent" />
                           </div>
                           <Button onClick={() => handleAllocateSavings(goal.id)} disabled={isLoadingGoals || !allocationAmounts[goal.id]?.trim() || !allocationNames[goal.id]?.trim()} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto whitespace-nowrap" withMotion>
                               {isLoadingGoals && allocationAmounts[goal.id]?.trim() && allocationNames[goal.id]?.trim() ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FilePlus className="mr-1.5 h-4 w-4" />}
@@ -883,7 +883,7 @@ export default function AIPlaygroundPage() {
 
       {/* AI Budgeting Assistant Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <PiggyBank className="w-7 h-7 md:w-8 md:h-8 text-accent transform scale-x-[-1]" />
@@ -1010,7 +1010,7 @@ export default function AIPlaygroundPage() {
 
        {/* AI Financial Health Check Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <Activity className="w-7 h-7 md:w-8 md:h-8 text-accent" />
@@ -1120,7 +1120,7 @@ export default function AIPlaygroundPage() {
       
       {/* AI Fixed Expense Analyzer Section */}
       <motion.div variants={pageVariants} initial="hidden" animate="visible" className="mt-8">
-        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass)}>
+        <Card className={cn("shadow-xl border-primary/30 border-2 rounded-xl bg-card/90", glowClass, slimOnPhone)}>
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl font-bold text-primary flex items-center gap-2">
               <Repeat className="w-7 h-7 md:w-8 md:h-8 text-accent" />

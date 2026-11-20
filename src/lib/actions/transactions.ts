@@ -154,6 +154,12 @@ function hydrateExpandedRow(row: any): AppTransaction {
   } as AppTransaction;
 }
 
+/** One transaction with its names and splits, or null if the id doesn't exist. */
+export async function getTransactionById(id: string): Promise<AppTransaction | null> {
+  const { data } = await getSupabase().from('transactions_expanded').select('*').eq('id', id).maybeSingle();
+  return data ? hydrateExpandedRow(data) : null;
+}
+
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
   const supabase = getSupabase();
   let query = supabase.from('transactions_expanded').select('*').order('date', { ascending: false });

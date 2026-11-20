@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { formatDisplayDate } from '@/lib/date-utils';
 import { useAIModel } from '@/contexts/AIModelContext';
 import {
   addPortfolioEntry,
@@ -397,7 +398,7 @@ export default function PortfolioAssetPage() {
               <CardTitle className="text-2xl md:text-3xl font-bold text-primary">{asset.name}</CardTitle>
               <CardDescription>
                 {asset.assetType.replace(/_/g, ' ')} · {asset.currency}
-                {summary.latestValuation ? ` · last valuation ${summary.latestValuation.date}` : ' · no valuation yet'}
+                {summary.latestValuation ? ` · last valuation ${formatDisplayDate(summary.latestValuation.date)}` : ' · no valuation yet'}
               </CardDescription>
             </div>
             <Badge variant={positive ? 'default' : 'destructive'}>{formatPercent(summary.netPnlPercent)}</Badge>
@@ -405,7 +406,7 @@ export default function PortfolioAssetPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-            <MiniKpi label="Current Value" value={formatCurrency(summary.currentValue, asset.currency)} helper={summary.latestValuation ? summary.latestValuation.date : 'rough book value'} />
+            <MiniKpi label="Current Value" value={formatCurrency(summary.currentValue, asset.currency)} helper={summary.latestValuation ? formatDisplayDate(summary.latestValuation.date) : 'rough book value'} />
             <MiniKpi label="Invested" value={formatCurrency(summary.totalInvested, asset.currency)} helper="buys + fees" />
             <MiniKpi label="Inflows" value={formatCurrency(summary.totalInflows, asset.currency)} helper="sells + income" />
             <MiniKpi label="Net P&L" value={formatCurrency(summary.netPnl, asset.currency)} helper={formatPercent(summary.netPnlPercent)} danger={!positive} />
@@ -651,7 +652,7 @@ function LedgerSection(props: {
             <TableBody>
               {props.transactions.map(tx => (
                 <TableRow key={tx.id}>
-                  <TableCell>{tx.date}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDisplayDate(tx.date)}</TableCell>
                   <TableCell><Badge variant="secondary">{TRANSACTION_LABELS[tx.type]}</Badge></TableCell>
                   <TableCell className="text-right">{formatCurrency(tx.amount, props.currency)}</TableCell>
                   <TableCell className="text-right">{tx.quantity ?? '-'}</TableCell>
@@ -671,7 +672,7 @@ function LedgerSection(props: {
               ))}
               {props.valuations.map(v => (
                 <TableRow key={v.id}>
-                  <TableCell>{v.date}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDisplayDate(v.date)}</TableCell>
                   <TableCell><Badge>Valuation</Badge></TableCell>
                   <TableCell className="text-right">{formatCurrency(v.totalValue, props.currency)}</TableCell>
                   <TableCell className="text-right">{v.quantity ?? '-'}</TableCell>

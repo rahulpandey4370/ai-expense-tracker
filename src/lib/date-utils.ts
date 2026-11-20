@@ -107,3 +107,9 @@ export function isSameCalendarYear(
   const parts = getCalendarDateParts(value);
   return !!parts && parts.year === year;
 }
+
+/** "2026-11-18" → "18 Nov 2026", for showing stored dates. Leaves non-dates as they are. */
+export function formatDisplayDate(value: string | null | undefined): string {
+  const date = toCalendarDate(value);
+  return date ? date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : value ?? "";
+}

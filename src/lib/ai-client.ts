@@ -511,7 +511,10 @@ async function callOpenAIStructured<T extends ZodSchema>(
   const textPrompt = simpleTemplateRender(promptTemplate, input) + JSON_ONLY_SUFFIX;
 
   const content: any[] = [{ type: 'text', text: textPrompt }];
-  if (input.receiptImageUri) {
+  if (typeof input.receiptImageUri === 'string' && input.receiptImageUri.startsWith('data:application/pdf')) {
+    // Bank statements: Chat Completions takes PDFs as a file part.
+    content.push({ type: 'file', file: { filename: 'document.pdf', file_data: input.receiptImageUri } });
+  } else if (input.receiptImageUri) {
     content.push({ type: 'image_url', image_url: { url: input.receiptImageUri } });
   }
 
@@ -552,7 +555,9 @@ async function callAnthropicStructured<T extends ZodSchema>(
   // Receipt scanning sends a data URI; Anthropic wants the media type and the
   // bare base64 payload as separate fields.
   const image = parseDataUri(input.receiptImageUri);
-  if (image) {
+  if (image?.mediaType === 'application/pdf') {
+    content.unshift({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: image.data } });
+  } else if (image) {
     content.unshift({
       type: 'image',
       source: { type: 'base64', media_type: image.mediaType as any, data: image.data },
@@ -711,6 +716,156 @@ export async function callChatLLM(
     default:
       return callGeminiChat(modelId, messages, config);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Tool calling (used by the ADK agents in src/ai/adk). Same providers and
+// clients as callChatLLM, with function tools added. Gemini isn't here: the
+// agents use ADK's own Gemini class for it.
+// ---------------------------------------------------------------------------
+export type ToolCall = { id: string; name: string; args: Record<string, unknown> };
+export type ToolChatMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content?: string; toolCalls?: ToolCall[] }
+  | { role: 'tool'; toolCallId: string; name: string; content: string };
+export type ToolSpec = { name: string; description: string; parameters: Record<string, unknown> };
+
+export async function callToolChatLLM(
+  modelId: string,
+  messages: ToolChatMessage[],
+  tools: ToolSpec[],
+  config?: LLMConfig
+): Promise<{ text: string; toolCalls: ToolCall[] }> {
+  const provider = detectProvider(modelId);
+  if (provider === 'anthropic') return anthropicToolChat(modelId, messages, tools, config);
+  if (provider === 'google-ai') throw new Error('Gemini tool calls go through ADK’s Gemini model, not callToolChatLLM.');
+  // Current OpenAI reasoning models only take function tools on the Responses API.
+  if (provider === 'openai') return openAIResponsesToolChat(modelId, messages, tools, config);
+
+  const isAzure = provider === 'azure-openai';
+  const modelConfig = getModelConfig(modelId);
+  if (isAzure && !modelConfig) throw new Error(`Model "${modelId}" is not registered. Check AI_MODELS env var.`);
+  const client = isAzure ? getAzureClient(modelConfig!) : getOpenAIClient();
+  const isInference = isAzure && isInferenceEndpoint(modelConfig!.endpoint || '');
+  const apiModel = isAzure ? (isInference ? modelConfig!.id : modelConfig!.deployment!) : (modelConfig?.id ?? modelId);
+
+  const oaMessages = messages.map(m => {
+    if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+    if (m.role === 'assistant') {
+      return {
+        role: 'assistant',
+        content: m.content ?? null,
+        ...(m.toolCalls?.length
+          ? { tool_calls: m.toolCalls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } })) }
+          : {}),
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
+
+  const response = await chatCompletionsAdaptive(
+    client,
+    modelId,
+    {
+      model: apiModel,
+      messages: oaMessages,
+      ...(tools.length ? { tools: tools.map(t => ({ type: 'function', function: t })) } : {}),
+    },
+    config,
+    isInference ? 'max_tokens' : 'max_completion_tokens'
+  );
+  const msg = (response as any).choices?.[0]?.message ?? {};
+  const toolCalls: ToolCall[] = (msg.tool_calls ?? []).map((c: any) => ({
+    id: c.id,
+    name: c.function?.name,
+    args: safeJson(c.function?.arguments),
+  }));
+  return { text: msg.content ?? '', toolCalls };
+}
+
+async function openAIResponsesToolChat(
+  modelId: string,
+  messages: ToolChatMessage[],
+  tools: ToolSpec[],
+  config?: LLMConfig
+): Promise<{ text: string; toolCalls: ToolCall[] }> {
+  const client = getOpenAIClient();
+  const instructions = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+  const input: any[] = [];
+  for (const m of messages) {
+    if (m.role === 'user') input.push({ role: 'user', content: m.content });
+    else if (m.role === 'tool') input.push({ type: 'function_call_output', call_id: m.toolCallId, output: m.content });
+    else if (m.role === 'assistant') {
+      if (m.content) input.push({ role: 'assistant', content: m.content });
+      for (const c of m.toolCalls ?? []) input.push({ type: 'function_call', call_id: c.id, name: c.name, arguments: JSON.stringify(c.args) });
+    }
+  }
+  // No temperature: the reasoning models reject it, and the tool loop doesn't need it.
+  const response: any = await retryableProviderCall(() =>
+    client.responses.create({
+      model: getModelConfig(modelId)?.id ?? modelId,
+      ...(instructions ? { instructions } : {}),
+      input,
+      ...(tools.length ? { tools: tools.map(t => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false })) } : {}),
+      max_output_tokens: resolveTokenCap(config),
+      store: false,
+    } as any)
+  );
+  const toolCalls: ToolCall[] = (response.output ?? [])
+    .filter((o: any) => o.type === 'function_call')
+    .map((o: any) => ({ id: o.call_id, name: o.name, args: safeJson(o.arguments) }));
+  return { text: response.output_text ?? '', toolCalls };
+}
+
+function safeJson(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'string' || !raw.trim()) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+async function anthropicToolChat(
+  modelId: string,
+  messages: ToolChatMessage[],
+  tools: ToolSpec[],
+  config?: LLMConfig
+): Promise<{ text: string; toolCalls: ToolCall[] }> {
+  const client = getAnthropicClient();
+  const apiModel = getModelConfig(modelId)?.id ?? modelId;
+  const system = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+
+  // Anthropic wants tool results as user turns, and no two turns from the same side in a row.
+  const turns: Array<{ role: 'user' | 'assistant'; content: any[] }> = [];
+  const push = (role: 'user' | 'assistant', block: any) => {
+    const last = turns[turns.length - 1];
+    if (last?.role === role) last.content.push(block);
+    else turns.push({ role, content: [block] });
+  };
+  for (const m of messages) {
+    if (m.role === 'system') continue;
+    if (m.role === 'user') push('user', { type: 'text', text: m.content });
+    else if (m.role === 'tool') push('user', { type: 'tool_result', tool_use_id: m.toolCallId, content: m.content });
+    else {
+      if (m.content) push('assistant', { type: 'text', text: m.content });
+      for (const c of m.toolCalls ?? []) push('assistant', { type: 'tool_use', id: c.id, name: c.name, input: c.args });
+    }
+  }
+  if (turns.length === 0 || turns[0].role !== 'user') turns.unshift({ role: 'user', content: [{ type: 'text', text: 'Please continue.' }] });
+
+  const response = await retryableProviderCall(() =>
+    client.messages.create({
+      model: apiModel,
+      max_tokens: resolveTokenCap(config),
+      ...(system ? { system } : {}),
+      messages: turns as any,
+      ...(tools.length ? { tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters as any })) } : {}),
+    })
+  );
+
+  const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('');
+  const toolCalls = response.content
+    .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+    .map(b => ({ id: b.id, name: b.name, args: (b.input ?? {}) as Record<string, unknown> }));
+  return { text, toolCalls };
 }
 
 async function callOpenAIChat(
