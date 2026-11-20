@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { addTransaction, deleteTransaction, getCategories, getPaymentMethods, getTransactionById, updateTransaction } from '@/lib/actions/transactions';
 import { getSplitBalances, settleAllForUser, settleSplitShare } from '@/lib/actions/splits';
 import { getRecurringRules, updateRecurringRule } from '@/lib/actions/recurring';
+import { canonicalizeDescription } from '@/lib/merchants';
 import type { AppTransaction, TransactionInput } from '@/lib/types';
 import type { ActionPreview } from '@/lib/chat-types';
 
@@ -21,7 +22,7 @@ const txFields = {
   type: z.enum(['income', 'expense']),
   date: ymd,
   amount: z.number().positive(),
-  description: z.string().min(1).max(300),
+  description: z.string().min(1).max(300).describe('Written in the TRANSACTION DESCRIPTIONS format from your instructions, e.g. "🍽️ Zomato: Chicken Biryani"'),
   categoryName: z.string().optional().describe('Exact category name; required for expenses'),
   paymentMethodName: z.string().optional().describe('Exact payment method name; required for expenses'),
   expenseType: z.enum(expenseTypes).optional().describe('Required for expenses'),
@@ -58,7 +59,7 @@ async function toInput(t: NewTx): Promise<{ input?: TransactionInput; problems: 
   return {
     problems,
     input: {
-      type: t.type, date: toDate(t.date), amount: t.amount, description: t.description,
+      type: t.type, date: toDate(t.date), amount: t.amount, description: canonicalizeDescription(t.description),
       categoryId: category?.id, paymentMethodId: method?.id,
       source: t.type === 'income' ? t.source : undefined,
       expenseType: t.type === 'expense' ? t.expenseType : undefined,
@@ -113,7 +114,7 @@ export const updateTransactionTool = gated({
   parameters: z.object({
     id: z.string(),
     changes: z.object({
-      date: ymd.optional(), amount: z.number().positive().optional(), description: z.string().min(1).max(300).optional(),
+      date: ymd.optional(), amount: z.number().positive().optional(), description: z.string().min(1).max(300).optional().describe('Written in the TRANSACTION DESCRIPTIONS format from your instructions, e.g. "🍽️ Zomato: Chicken Biryani"'),
       categoryName: z.string().optional(), paymentMethodName: z.string().optional(),
       expenseType: z.enum(expenseTypes).optional(), source: z.string().optional(),
     }),
@@ -131,7 +132,7 @@ export const updateTransactionTool = gated({
     const patch: Partial<TransactionInput> = {};
     if (changes.date) patch.date = toDate(changes.date);
     if (changes.amount != null) patch.amount = changes.amount;
-    if (changes.description) patch.description = changes.description;
+    if (changes.description) patch.description = canonicalizeDescription(changes.description);
     if (changes.source != null) patch.source = changes.source;
     if (changes.expenseType) patch.expenseType = changes.expenseType;
     if (changes.categoryName) {
@@ -212,7 +213,7 @@ export async function previewAction(name: string, args: any): Promise<ActionPrev
           lines: [
             { label: 'Date', value: day(t.date) },
             { label: 'Amount', value: `${t.type === 'income' ? '+' : '−'}${inr(t.amount)}` },
-            { label: 'Description', value: t.description },
+            { label: 'Description', value: canonicalizeDescription(t.description) },
             { label: t.type === 'income' ? 'Source' : 'Category', value: (t.type === 'income' ? t.source ?? t.categoryName : t.categoryName) ?? '—' },
             ...(t.paymentMethodName ? [{ label: 'Paid with', value: t.paymentMethodName }] : []),
             ...(t.expenseType ? [{ label: 'Type', value: t.expenseType[0].toUpperCase() + t.expenseType.slice(1) }] : []),
@@ -222,7 +223,7 @@ export async function previewAction(name: string, args: any): Promise<ActionPrev
       return {
         title: txs.length === 1 ? 'Add this transaction?' : `Add these ${txs.length} transactions?`,
         lines: [],
-        rows: txs.map(t => [day(t.date), `${t.type === 'income' ? '+' : '−'}${inr(t.amount)}`, t.description, t.categoryName ?? t.source ?? '', t.paymentMethodName ?? '', t.expenseType ?? '']),
+        rows: txs.map(t => [day(t.date), `${t.type === 'income' ? '+' : '−'}${inr(t.amount)}`, canonicalizeDescription(t.description), t.categoryName ?? t.source ?? '', t.paymentMethodName ?? '', t.expenseType ?? '']),
       };
     }
     case 'update_transaction': {
@@ -239,7 +240,7 @@ export async function previewAction(name: string, args: any): Promise<ActionPrev
           ...(current ? [{ label: 'Transaction', value: human(current) }] : []),
           ...Object.entries(c).map(([k, v]) => ({
             label: label[k] ?? k,
-            value: `${before[k] ?? '—'} → ${k === 'amount' ? inr(Number(v)) : k === 'date' ? day(String(v)) : String(v)}`,
+            value: `${before[k] ?? '—'} → ${k === 'amount' ? inr(Number(v)) : k === 'date' ? day(String(v)) : k === 'description' ? canonicalizeDescription(String(v)) : String(v)}`,
           })),
         ],
       };

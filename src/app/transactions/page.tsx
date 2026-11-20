@@ -278,7 +278,9 @@ export default function TransactionsPage() {
         }
         if (aValue === undefined || bValue === undefined || aValue === null || bValue === null) return 0;
         if (sortConfig.key === 'date' && aValue instanceof Date && bValue instanceof Date) {
-           return sortConfig.direction === 'ascending' ? aValue.getTime() - bValue.getTime() : bValue.getTime() - aValue.getTime();
+           // Same day: order by when it was logged.
+           const diff = aValue.getTime() - bValue.getTime() || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+           return sortConfig.direction === 'ascending' ? diff : -diff;
         }
         if (typeof aValue === 'number' && typeof bValue === 'number') {
           return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;

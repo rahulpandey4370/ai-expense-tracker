@@ -301,6 +301,8 @@ export interface LLMConfig {
   temperature?: number;
   maxOutputTokens?: number;
   safetySettings?: Array<{ category: string; threshold: string }>;
+  /** callToolChatLLM only: receives the answer text as it is written (OpenAI and Anthropic). */
+  onText?: (delta: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -802,20 +804,28 @@ async function openAIResponsesToolChat(
     }
   }
   // No temperature: the reasoning models reject it, and the tool loop doesn't need it.
-  const response: any = await retryableProviderCall(() =>
-    client.responses.create({
-      model: getModelConfig(modelId)?.id ?? modelId,
-      ...(instructions ? { instructions } : {}),
-      input,
-      ...(tools.length ? { tools: tools.map(t => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false })) } : {}),
-      max_output_tokens: resolveTokenCap(config),
-      store: false,
-    } as any)
-  );
-  const toolCalls: ToolCall[] = (response.output ?? [])
-    .filter((o: any) => o.type === 'function_call')
-    .map((o: any) => ({ id: o.call_id, name: o.name, args: safeJson(o.arguments) }));
-  return { text: response.output_text ?? '', toolCalls };
+  const body: any = {
+    model: getModelConfig(modelId)?.id ?? modelId,
+    ...(instructions ? { instructions } : {}),
+    input,
+    ...(tools.length ? { tools: tools.map(t => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false })) } : {}),
+    max_output_tokens: resolveTokenCap(config),
+    store: false,
+  };
+  const onText = config?.onText;
+  const response: any = await retryableProviderCall(() => {
+    if (!onText) return client.responses.create(body);
+    const stream = client.responses.stream(body);
+    stream.on('response.output_text.delta', (e: any) => onText(e.delta));
+    return stream.finalResponse();
+  });
+  const output: any[] = response.output ?? [];
+  const toolCalls: ToolCall[] = output
+    .filter(o => o.type === 'function_call')
+    .map(o => ({ id: o.call_id, name: o.name, args: safeJson(o.arguments) }));
+  const text = response.output_text
+    ?? output.filter(o => o.type === 'message').flatMap(o => o.content ?? []).filter((c: any) => c.type === 'output_text').map((c: any) => c.text).join('');
+  return { text, toolCalls };
 }
 
 function safeJson(raw: unknown): Record<string, unknown> {
@@ -851,15 +861,20 @@ async function anthropicToolChat(
   }
   if (turns.length === 0 || turns[0].role !== 'user') turns.unshift({ role: 'user', content: [{ type: 'text', text: 'Please continue.' }] });
 
-  const response = await retryableProviderCall(() =>
-    client.messages.create({
-      model: apiModel,
-      max_tokens: resolveTokenCap(config),
-      ...(system ? { system } : {}),
-      messages: turns as any,
-      ...(tools.length ? { tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters as any })) } : {}),
-    })
-  );
+  const params = {
+    model: apiModel,
+    max_tokens: resolveTokenCap(config),
+    ...(system ? { system } : {}),
+    messages: turns as any,
+    ...(tools.length ? { tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters as any })) } : {}),
+  };
+  const onText = config?.onText;
+  const response = await retryableProviderCall(() => {
+    if (!onText) return client.messages.create(params);
+    const stream = client.messages.stream(params);
+    stream.on('text', onText);
+    return stream.finalMessage();
+  });
 
   const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('');
   const toolCalls = response.content

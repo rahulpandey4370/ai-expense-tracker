@@ -56,6 +56,15 @@ export class PastChatsMemoryService implements BaseMemoryService {
   }
 }
 
+/** Saves a fact, refusing anything that looks like a card or account number. */
+export async function saveMemoryFact(raw: string): Promise<{ saved: true; fact: string } | { saved: false; reason: string }> {
+  const fact = raw.replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (fact.length < 3) return { saved: false, reason: 'That is too short to remember.' };
+  if (/\b\d{9,}\b/.test(fact)) return { saved: false, reason: 'Looks like an account or card number; not stored.' };
+  const { error } = await getSupabase().from('ai_memories').insert({ id: cuid(), fact });
+  return error ? { saved: false, reason: error.message } : { saved: true, fact };
+}
+
 export const rememberFactTool = new FunctionTool({
   name: 'remember_fact',
   description:
@@ -63,12 +72,7 @@ export const rememberFactTool = new FunctionTool({
     '"Zomato orders are always a Want". Use when the user asks you to remember something, or states a lasting preference. ' +
     'Never store passwords, card or account numbers.',
   parameters: z.object({ fact: z.string().min(3).max(200) }) as any,
-  execute: async (input: any) => {
-    const fact = String(input.fact).trim();
-    if (/\b\d{9,}\b/.test(fact)) return { saved: false, reason: 'Looks like an account or card number; not stored.' };
-    const { error } = await getSupabase().from('ai_memories').insert({ id: cuid(), fact });
-    return error ? { saved: false, reason: error.message } : { saved: true, fact };
-  },
+  execute: async (input: any) => saveMemoryFact(String(input.fact)),
 });
 
 export const forgetFactTool = new FunctionTool({

@@ -23,10 +23,14 @@ export async function runMonthlyReview(input: { year: number; month: number; mod
   const { year, month } = input;
   const modelKey = input.modelKey || getDefaultModelForTask('chat');
   const start = `${year}-${pad(month + 1)}-01`;
-  const end = `${year}-${pad(month + 1)}-${pad(new Date(year, month + 1, 0).getDate())}`;
+  const monthEnd = `${year}-${pad(month + 1)}-${pad(new Date(year, month + 1, 0).getDate())}`;
+  // A month still running (from /review in chat) is reviewed up to today, IST.
+  const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+  const soFar = today < monthEnd;
+  const end = soFar ? today : monthEnd;
   const prev = month === 0 ? `${MONTHS[11]} ${year - 1}` : `${MONTHS[month - 1]} ${year}`;
-  const period = `${MONTHS[month]} ${year} (${start} to ${end})`;
-  const title = `${MONTHS[month]} ${year} review`;
+  const period = `${MONTHS[month]} ${year} (${start} to ${end}${soFar ? ', the month is not over yet' : ''})`;
+  const title = `${MONTHS[month]} ${year} review${soFar ? ' so far' : ''}`;
   const model = adkModelFor(modelKey);
   const facts = 'Use the tools for every number. Reply with terse bullet notes (numbers in ₹ with Indian grouping), no prose, no follow-up questions.';
 
@@ -51,7 +55,7 @@ export async function runMonthlyReview(input: { year: number; month: number; mod
   const writer = new LlmAgent({
     name: 'review_writer',
     model,
-    instruction: `You are FinWise AI writing the user's monthly money review for ${MONTHS[month]} ${year}. Be warm, specific and brief (under 250 words).
+    instruction: `You are FinWise AI writing the user's monthly money review for ${period}. Be warm, specific and brief (under 250 words).${soFar ? ' The month is still running: say it is a review so far and compare fairly (e.g. pace, not totals).' : ''}
 Structure: one-line verdict; "**Highlights**" (3 bullets); "**Watch out**" (2-3 bullets, budgets over or spending spikes); "**Next month**" (2 concrete, doable suggestions).
 Use only these notes; never invent numbers.
 

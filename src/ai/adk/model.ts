@@ -21,7 +21,7 @@ export function adkModelFor(modelKey: string): BaseLlm {
 class FinwiseLlm extends BaseLlm {
   static readonly supportedModels: Array<string | RegExp> = [];
 
-  async *generateContentAsync(llmRequest: LlmRequest): AsyncGenerator<LlmResponse, void> {
+  async *generateContentAsync(llmRequest: LlmRequest, stream = false): AsyncGenerator<LlmResponse, void> {
     const messages: ToolChatMessage[] = [];
     const system = textOf(llmRequest.config?.systemInstruction);
     if (system) messages.push({ role: 'system', content: system });
@@ -37,11 +37,25 @@ class FinwiseLlm extends BaseLlm {
       }))
     );
 
+    // When streaming, text arrives through onText while the call runs; it is
+    // passed on as partial responses, then the full answer follows as usual.
+    const pending: string[] = [];
+    let finished = false;
+    let wake = () => {};
+    const call = callToolChatLLM(this.model, messages, tools, {
+      temperature: llmRequest.config?.temperature,
+      maxOutputTokens: llmRequest.config?.maxOutputTokens,
+      onText: stream ? d => { pending.push(d); wake(); } : undefined,
+    }).finally(() => { finished = true; wake(); });
+    call.catch(() => {}); // awaited below
+    while (stream) {
+      await new Promise<void>(r => { wake = r; if (pending.length || finished) r(); });
+      if (pending.length) yield { content: { role: 'model', parts: [{ text: pending.splice(0).join('') }] }, partial: true };
+      if (finished && !pending.length) break;
+    }
+
     try {
-      const { text, toolCalls } = await callToolChatLLM(this.model, messages, tools, {
-        temperature: llmRequest.config?.temperature,
-        maxOutputTokens: llmRequest.config?.maxOutputTokens,
-      });
+      const { text, toolCalls } = await call;
       const parts: Part[] = [];
       if (text) parts.push({ text });
       for (const c of toolCalls) parts.push({ functionCall: { id: c.id, name: c.name, args: c.args } });

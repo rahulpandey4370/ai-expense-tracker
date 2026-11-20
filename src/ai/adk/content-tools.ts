@@ -2,6 +2,7 @@ import { FunctionTool, type Context } from '@google/adk';
 import { z } from 'zod';
 import { callStructuredLLM } from '@/lib/ai-client';
 import { getCategories, getPaymentMethods } from '@/lib/actions/transactions';
+import { DESCRIPTION_RULES } from '@/ai/flows/parse-transactions-prompt';
 
 /*
  * show_table: the agent hands the chat real rows and columns instead of
@@ -48,7 +49,7 @@ Dates as YYYY-MM-DD (today is {{today}}; for a receipt with no year, use the cur
 Guess each category from this list only: {{categories}}.
 Guess the payment method from this list only when the document makes it clear: {{paymentMethods}}.
 Guess expenseTypeGuess for expenses: need, want or investment.
-Write each description short and human, like "🛒 BigBasket groceries" or "🍽️ Lunch at Truffles".
+Write each description in this format: ${DESCRIPTION_RULES}
 Return JSON: { "documentKind": "receipt" | "bank_statement" | "card_statement" | "other",
   "transactions": [{ "date", "type": "income" | "expense", "amount" (number), "description", "categoryGuess", "paymentMethodGuess", "expenseTypeGuess" }],
   "note": "anything the user should check" }`;

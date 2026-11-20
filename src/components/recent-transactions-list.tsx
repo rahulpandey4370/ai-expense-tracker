@@ -45,7 +45,7 @@ const glowClass = "shadow-[0_0_8px_hsl(var(--accent)/0.3)] dark:shadow-[0_0_10px
 export function RecentTransactionsList({ transactions, count = 5, onDataChange }: RecentTransactionsListProps) {
   const [selected, setSelected] = useState<AppTransaction | null>(null);
   const recentTransactions = [...transactions]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, count);
 
   if (recentTransactions.length === 0) {

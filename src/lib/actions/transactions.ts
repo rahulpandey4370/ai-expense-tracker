@@ -162,7 +162,7 @@ export async function getTransactionById(id: string): Promise<AppTransaction | n
 
 export async function getTransactions(options?: { limit?: number }): Promise<AppTransaction[]> {
   const supabase = getSupabase();
-  let query = supabase.from('transactions_expanded').select('*').order('date', { ascending: false });
+  let query = supabase.from('transactions_expanded').select('*').order('date', { ascending: false }).order('created_at', { ascending: false });
   if (options?.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
@@ -193,6 +193,7 @@ export async function getTransactionsInRange(startYmd: string, endYmd: string): 
       .gte('date', startYmd)
       .lte('date', endYmd)
       .order('date', { ascending: false })
+      .order('created_at', { ascending: false }) // same day: latest logged first
       .order('id', { ascending: true }) // stable order across pages
       .range(from, from + PAGE - 1);
     if (error) {
@@ -275,7 +276,7 @@ export async function queryTransactions(
     case 'categoryName': q = q.order('category_name', { ascending: asc, nullsFirst: false }); break;
     case 'paymentMethodName': q = q.order('payment_method_name', { ascending: asc, nullsFirst: false }); break;
     case 'date':
-    default: q = q.order('date', { ascending: asc });
+    default: q = q.order('date', { ascending: asc }).order('created_at', { ascending: asc });
   }
   q = q.order('id', { ascending: true }); // stable tiebreaker for pagination
   q = q.range(from, to);

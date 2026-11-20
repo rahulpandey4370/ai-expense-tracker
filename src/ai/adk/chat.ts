@@ -1,8 +1,9 @@
-import { InMemoryArtifactService, LlmAgent, LoadMemoryTool, Runner, createEvent, getFunctionCalls, getFunctionResponses, isCompactedEvent, type Event, type Session } from '@google/adk';
+import { InMemoryArtifactService, LlmAgent, LoadMemoryTool, Runner, StreamingMode, createEvent, getFunctionCalls, getFunctionResponses, isCompactedEvent, type Event, type Session } from '@google/adk';
 import type { Content } from '@google/genai';
 import { getSupabase } from '@/lib/supabase';
 import { getDefaultModelForTask } from '@/lib/task-models';
 import type { ChatAttachment, ChatItem, ChatOptions, ChatSummary, ChatTurnResult } from '@/lib/chat-types';
+import { DESCRIPTION_RULES } from '@/ai/flows/parse-transactions-prompt';
 import { ACTION_TOOLS, previewAction } from './action-tools';
 import { ExchangeCountCompactor } from './compactor';
 import { attachmentName, readAttachmentTool, showTableTool } from './content-tools';
@@ -29,6 +30,10 @@ const CHAT_RULES = `## CHANGING DATA
 - If something essential is missing (the amount, or which of several cards), ask one short question instead of guessing. Date defaults to today.
 - The app shows the user a Confirm card for every change and runs it only after they tap Confirm. So call the tool directly with the final values; never ask "shall I?" in text first. Then say one short line such as "Tap Confirm to add it."
 - When a change is done, confirm it in one line. If a tool result says cancelledByUser, the user tapped Cancel: say so in a few words and do not retry.
+
+## TRANSACTION DESCRIPTIONS
+- Every description you add, and every description you change, is written the same way as the app's AI transaction parser: ${DESCRIPTION_RULES.replace(/[{}]/g, '')}
+- Turn what the user typed into this format (e.g. "450 swiggy biryani" → "🍽️ Swiggy: Biryani"). When editing other fields, leave the description as it is.
 
 ## ATTACHED FILES
 - When the message lists attached files, call read_attachment for each. Show what was found with show_table, then call add_transactions with those rows mapped to exact category and payment method names, so the user can confirm.
@@ -77,6 +82,8 @@ export async function runChatTurn(input: {
   attachments?: ChatAttachment[];
   confirmation?: { id: string; confirmed: boolean };
   options: ChatOptions;
+  /** Receives the assistant's words as they are written. */
+  onText?: (delta: string) => void;
 }): Promise<ChatTurnResult> {
   const modelKey = input.options.modelKey || getDefaultModelForTask('chat');
   const agent = buildAgent(modelKey, input.options, factsInstruction(await listMemoryFacts()));
@@ -89,6 +96,9 @@ export async function runChatTurn(input: {
   if (!session) {
     if (input.confirmation) throw new Error('That chat no longer exists.');
     session = await sessionService.createSession({ appName: APP_NAME, userId: USER_ID });
+  }
+  // The first message names the chat (a new one, or one emptied with /clear).
+  if (!session.events.length && !input.confirmation) {
     await getSupabase().from('chat_sessions').update({ title: titleFrom(input.text ?? '') }).eq('id', session.id);
   }
 
@@ -110,7 +120,14 @@ export async function runChatTurn(input: {
   let error: string | undefined;
   const turnEvents: Event[] = [];
   try {
-    for await (const event of runner.runAsync({ userId: USER_ID, sessionId: session.id, newMessage, runConfig: { maxLlmCalls: 12 } })) {
+    const runConfig = { maxLlmCalls: 12, streamingMode: input.onText ? StreamingMode.SSE : StreamingMode.NONE };
+    for await (const event of runner.runAsync({ userId: USER_ID, sessionId: session.id, newMessage, runConfig })) {
+      if (event.author === AGENT_NAME && input.onText) {
+        // Partial events carry the new words; a finished model reply separates the next one.
+        if (event.partial) input.onText((event.content?.parts ?? []).filter(p => p.text && !p.thought).map(p => p.text).join(''));
+        else input.onText('\n\n');
+      }
+      if (event.partial) continue;
       turnEvents.push(event);
       if (event.errorMessage) error = event.errorMessage;
       for (const c of getFunctionCalls(event)) console.info(`[adk] ${event.author} → ${c.name}(${JSON.stringify(c.args).slice(0, 300)})`);
