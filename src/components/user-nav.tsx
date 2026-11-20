@@ -17,12 +17,7 @@ import { User, LogOut, Settings, LifeBuoy, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 import { useRouter } from "next/navigation"; // Import useRouter
 import { useToast } from "@/hooks/use-toast";
-import { savePushSubscription, sendTestPush } from "@/lib/actions/pending";
-
-function urlBase64ToUint8Array(base64: string): Uint8Array {
-  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
-}
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 export function UserNav() {
   const { logout } = useAuth(); // Get logout function
@@ -34,41 +29,18 @@ export function UserNav() {
     // The logout function in AuthContext already handles router.push('/login')
   };
 
-  // Subscribes this device to Web Push and stores it on the server.
-  // On iPhone this only works from the Home Screen app (iOS 16.4+), not a Safari tab.
-  const handleEnableNotifications = async () => {
-    const fail = (title: string, description: string) =>
-      toast({ title, description, variant: "destructive" });
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-      return fail(
-        "Push not available here",
-        "On iPhone: open this site in Safari, tap Share → Add to Home Screen, then enable notifications from the Home Screen app."
-      );
-    }
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidKey) return fail("Push not configured", "NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing on the server.");
-
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      return fail("Notifications blocked", "Allow notifications for FinWise in iPhone Settings → Notifications.");
-    }
+  const push = usePushNotifications();
+  const togglePush = async () => {
     try {
-      const registration = await navigator.serviceWorker.ready;
-      // Always start a fresh subscription: an old one can go stale on iPhone, where
-      // Apple still accepts pushes for it but the phone no longer shows them.
-      const old = await registration.pushManager.getSubscription();
-      await old?.unsubscribe().catch(() => {});
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      });
-      await savePushSubscription(subscription.toJSON(), navigator.userAgent, old?.endpoint);
-      const reached = await sendTestPush();
-      if (!reached) return fail("Test notification didn't go through", "Try again in a minute, or check FinWise in iPhone Settings → Notifications.");
-      toast({ title: "Notifications enabled", description: "A test notification is on its way." });
-    } catch (error: any) {
-      fail("Could not enable notifications", error?.message ?? "Unknown error");
+      if (push.status === 'on') {
+        await push.disable();
+        toast({ title: "Notifications off", description: "This phone won't get FinWise notifications." });
+      } else {
+        await push.enable();
+        toast({ title: "Notifications on", description: "A test notification is on its way." });
+      }
+    } catch (e: any) {
+      toast({ title: "Notifications", description: e?.message ?? "Something went wrong.", variant: "destructive" });
     }
   };
 
@@ -98,9 +70,9 @@ export function UserNav() {
             <span>Profile</span>
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
           </DropdownMenuItem>
-           <DropdownMenuItem onClick={handleEnableNotifications}>
+           <DropdownMenuItem onClick={togglePush} disabled={push.busy || push.status === 'loading'}>
             <Bell className="mr-2 h-4 w-4" />
-            <span>Enable Notifications</span>
+            <span>{push.status === 'on' ? 'Turn off notifications' : 'Turn on notifications'}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/settings')}>
             <Settings className="mr-2 h-4 w-4" />

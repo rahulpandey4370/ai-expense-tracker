@@ -73,6 +73,7 @@ export async function POST(req: Request) {
       body: [row.description, [guess.paymentMethodName, guess.categoryName].filter(Boolean).join(' · '), 'Tap to review'].filter(Boolean).join('\n'),
       url: '/pending',
       tag: `sms-${row.id}`,
+      kind: 'sms',
     });
   } catch (e) {
     console.error('SMS push failed (transaction still saved for review):', e);

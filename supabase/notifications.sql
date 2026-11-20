@@ -77,3 +77,14 @@ select cron.schedule(
   );
   $$
 );
+
+-- ---------------------------------------------------------------------------
+-- Which kinds of notification are on (Settings → Alerts). A kind with no row
+-- is on; switching one off stores enabled = false.
+-- ---------------------------------------------------------------------------
+create table if not exists notification_prefs (
+  kind text primary key,
+  enabled boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+alter table notification_prefs enable row level security;

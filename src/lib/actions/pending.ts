@@ -1,6 +1,7 @@
 'use server';
 
 import { getSupabase } from '@/lib/supabase';
+import { NOTIFICATION_KINDS, type NotificationKind } from '@/lib/notification-kinds';
 import { addTransaction } from '@/lib/actions/transactions';
 import { sendPush } from '@/lib/push';
 import { guessFromSms } from '@/lib/sms-ai';
@@ -174,4 +175,29 @@ export async function sendTestPush(): Promise<number> {
     url: '/',
     tag: 'test',
   });
+}
+
+/** Settings → Alerts: turning this device off. */
+export async function removePushSubscription(endpoint: string): Promise<void> {
+  const { error } = await getSupabase().from('push_subscriptions').delete().eq('endpoint', endpoint);
+  if (error) throw new Error(`Could not turn off notifications: ${error.message}`);
+}
+
+/** Whether the server still sends to this device's subscription. */
+export async function isPushSubscriptionSaved(endpoint: string): Promise<boolean> {
+  const { count } = await getSupabase().from('push_subscriptions').select('endpoint', { count: 'exact', head: true }).eq('endpoint', endpoint);
+  return (count ?? 0) > 0;
+}
+
+/** Which kinds are on. Kinds without a saved row are on. */
+export async function getNotificationPrefs(): Promise<Record<NotificationKind, boolean>> {
+  const { data } = await getSupabase().from('notification_prefs').select('kind, enabled');
+  const saved = new Map((data ?? []).map(r => [r.kind, r.enabled as boolean]));
+  return Object.fromEntries(NOTIFICATION_KINDS.map(k => [k.kind, saved.get(k.kind) !== false])) as Record<NotificationKind, boolean>;
+}
+
+export async function setNotificationPref(kind: NotificationKind, enabled: boolean): Promise<void> {
+  if (!NOTIFICATION_KINDS.some(k => k.kind === kind)) throw new Error('Unknown notification type.');
+  const { error } = await getSupabase().from('notification_prefs').upsert({ kind, enabled: !!enabled, updated_at: new Date().toISOString() });
+  if (error) throw new Error(`Could not save: ${error.message}`);
 }

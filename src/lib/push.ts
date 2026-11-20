@@ -1,13 +1,21 @@
 // Server-only: imported by route handlers and server actions, never by client components.
 import webpush from 'web-push';
 import { getSupabase } from '@/lib/supabase';
+import type { NotificationKind } from '@/lib/notification-kinds';
 
 export type PushPayload = {
   title: string;
   body: string;
   url?: string;   // page opened when the notification is tapped
   tag?: string;   // same tag replaces an older notification instead of stacking
+  kind?: NotificationKind; // skipped when switched off in Settings → Alerts; none = always sent (tests)
 };
+
+/** Whether a kind of notification is on. No saved preference means on. */
+export async function isKindEnabled(kind: NotificationKind): Promise<boolean> {
+  const { data } = await getSupabase().from('notification_prefs').select('enabled').eq('kind', kind).maybeSingle();
+  return data?.enabled !== false;
+}
 
 let configured = false;
 function configure() {
@@ -23,6 +31,7 @@ function configure() {
 
 /** Sends to every subscribed device. Returns how many devices accepted it. */
 export async function sendPush(payload: PushPayload): Promise<number> {
+  if (payload.kind && !(await isKindEnabled(payload.kind))) return 0;
   configure();
   const supabase = getSupabase();
   const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, p256dh, auth');
@@ -54,6 +63,7 @@ export async function sendPush(payload: PushPayload): Promise<number> {
 
 /** Sends only the first time `key` is seen (e.g. one alert per budget threshold per month). */
 export async function sendPushOnce(key: string, payload: PushPayload): Promise<boolean> {
+  if (payload.kind && !(await isKindEnabled(payload.kind))) return false;
   const { error } = await getSupabase().from('notification_log').insert({ key });
   if (error) {
     if (error.code === '23505') return false; // already sent

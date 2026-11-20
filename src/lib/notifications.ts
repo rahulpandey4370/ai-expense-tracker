@@ -104,6 +104,7 @@ export async function checkBudgetAlerts(): Promise<number> {
         : `${inr(spent)} of ${inr(b.amount)} used, ${inr(left)} left for the rest of the month.`,
       url: '/',
       tag: `budget-${b.id}`,
+      kind: 'budget',
     });
     if (ok) sent++;
   }
@@ -138,13 +139,13 @@ export async function sendDailyNotifications(): Promise<{ sent: string[] }> {
     `Month so far: ${inr(monthTotal)} (${inr(monthTotal / dayOfMonth)}/day avg).`,
   ];
   if (pendingCount) lines.push(`📩 ${pendingCount} SMS transaction${pendingCount > 1 ? 's' : ''} waiting for review.`);
-  await sendPush({
+  if (await sendPush({
     title: todays.length ? `🌙 Today: ${inr(todayTotal)} spent` : '🌙 Today: nothing spent',
     body: lines.join(' '),
     url: pendingCount ? '/pending' : '/transactions',
     tag: 'daily-summary',
-  });
-  sent.push('daily-summary');
+    kind: 'daily',
+  })) sent.push('daily-summary');
 
   // 2. Recurring bills due tomorrow (they auto-log, this is the heads-up)
   const tomorrow = addDays(today, 1);
@@ -162,13 +163,13 @@ export async function sendDailyNotifications(): Promise<{ sent: string[] }> {
   );
   if (dueTomorrow.length) {
     const total = dueTomorrow.reduce((s, r) => s + Number(r.amount), 0);
-    await sendPush({
+    if (await sendPush({
       title: `📅 Due tomorrow: ${inr(total)}`,
       body: dueTomorrow.map(r => `${r.description} ${inr(Number(r.amount))}`).join(', '),
       url: '/recurring',
       tag: 'bills-tomorrow',
-    });
-    sent.push('bills-tomorrow');
+      kind: 'bills',
+    })) sent.push('bills-tomorrow');
   }
 
   // 3. Last month's recap on the 1st
@@ -181,19 +182,19 @@ export async function sendDailyNotifications(): Promise<{ sent: string[] }> {
     ]);
     const label = new Date(`${lastMonthStart}T00:00:00Z`).toLocaleString('en-IN', { month: 'long', timeZone: 'UTC' });
     const saved = income > 0 ? Math.round(((income - spent) / income) * 100) : null;
-    await sendPush({
+    if (await sendPush({
       title: `📊 ${label} recap`,
       body: `Spent ${inr(spent)}, earned ${inr(income)}${saved !== null ? `, saved ${saved}%` : ''}.`,
       url: '/reports',
       tag: 'monthly-recap',
-    });
-    sent.push('monthly-recap');
+      kind: 'monthly',
+    })) sent.push('monthly-recap');
   }
 
   // 4. Sunday: the weekly digest
   if (new Date(`${today}T00:00:00Z`).getUTCDay() === 0) {
     const digest = await buildWeeklyDigest(today);
-    if (await sendPushOnce(`weekly-digest:${today}`, { ...digest, url: '/reports', tag: 'weekly-digest' })) sent.push('weekly-digest');
+    if (await sendPushOnce(`weekly-digest:${today}`, { ...digest, url: '/reports', tag: 'weekly-digest', kind: 'weekly' })) sent.push('weekly-digest');
   }
 
   // 5. Budget alerts missed during the day (e.g. recurring auto-logs)

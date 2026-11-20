@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       body: review.preview.slice(0, 140),
       url: `/chatbot?chat=${review.sessionId}`,
       tag: 'monthly-review',
+      kind: 'monthly',
     });
     return NextResponse.json({ sessionId: review.sessionId, title: review.title, pushed });
   } catch (e: any) {

@@ -14,6 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag, Target, Edit } from "lucide-react";
 import { ThemeToggle } from '@/components/theme-toggle';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { NOTIFICATION_KINDS, type NotificationKind } from '@/lib/notification-kinds';
+import { getNotificationPrefs, setNotificationPref } from '@/lib/actions/pending';
 import { cn } from '@/lib/utils';
 import type { Category, PaymentMethod, Budget } from '@/lib/types';
 import { getCategories, getPaymentMethods, addCategory, addPaymentMethod, deleteCategory, deletePaymentMethod } from '@/lib/actions/transactions';
@@ -56,11 +59,25 @@ export default function SettingsPage() {
     name: "Me (FinWise User)",
     email: "user@finwise.ai",
   });
-  const [notifications, setNotifications] = useState({
-    spendingAlerts: true,
-    monthlySummary: false,
-    aiInsightsEmail: true,
-  });
+  const push = usePushNotifications();
+  const [prefs, setPrefs] = useState<Record<NotificationKind, boolean> | null>(null);
+  useEffect(() => { getNotificationPrefs().then(setPrefs).catch(() => setPrefs(null)); }, []);
+  const togglePref = async (kind: NotificationKind, enabled: boolean) => {
+    setPrefs(p => p && { ...p, [kind]: enabled });
+    try { await setNotificationPref(kind, enabled); }
+    catch (e: any) {
+      setPrefs(p => p && { ...p, [kind]: !enabled });
+      toast({ title: "Couldn't save", description: e?.message, variant: "destructive" });
+    }
+  };
+  const togglePush = async (on: boolean) => {
+    try {
+      if (on) { await push.enable(); toast({ title: "Notifications on", description: "A test notification is on its way." }); }
+      else { await push.disable(); toast({ title: "Notifications off", description: "This phone won't get FinWise notifications." }); }
+    } catch (e: any) {
+      toast({ title: "Notifications", description: e?.message ?? "Something went wrong.", variant: "destructive" });
+    }
+  };
 
   // State for categories and payment methods
   const [categories, setCategories] = useState<Category[]>([]);
@@ -115,8 +132,6 @@ export default function SettingsPage() {
     try {
       const p = localStorage.getItem('finwise.userProfile');
       if (p) setUserProfile(JSON.parse(p));
-      const n = localStorage.getItem('finwise.notifications');
-      if (n) setNotifications(JSON.parse(n));
     } catch { /* malformed or blocked storage — keep defaults */ }
   }, []);
 
@@ -132,10 +147,9 @@ export default function SettingsPage() {
   const handleSaveChanges = () => {
     try {
       localStorage.setItem('finwise.userProfile', JSON.stringify(userProfile));
-      localStorage.setItem('finwise.notifications', JSON.stringify(notifications));
       toast({
         title: "Saved on this device",
-        description: "Your profile and notification preferences will persist here.",
+        description: "Your profile will persist here.",
       });
     } catch {
       toast({
@@ -524,30 +538,47 @@ export default function SettingsPage() {
               </TabsContent>
 
               <TabsContent value="notifications" className="space-y-5">
-            <motion.section variants={sectionVariants}>
-              <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Bell className="text-accent"/>Notifications</h3>
-              <motion.div variants={itemVariants} className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
-                  <Label htmlFor="spendingAlerts" className="text-sm text-foreground">Spending Alerts</Label>
-                  <Switch id="spendingAlerts" checked={notifications.spendingAlerts} onCheckedChange={() => setNotifications({ ...notifications, spendingAlerts: !notifications.spendingAlerts })} />
+            <motion.section variants={sectionVariants} className="space-y-5">
+              <h3 className="text-lg sm:text-xl font-semibold text-primary flex items-center gap-2"><Bell className="text-accent"/>Notifications</h3>
+              <motion.div variants={itemVariants} className="space-y-3 rounded-md border border-primary/10 bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="pushOn" className="text-sm font-medium text-foreground">Notifications on this phone</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {{
+                        loading: 'Checking…',
+                        unsupported: 'Open FinWise from its Home Screen icon to use notifications (Safari → Share → Add to Home Screen).',
+                        blocked: 'Blocked. Allow FinWise in iPhone Settings → Notifications, then switch this on.',
+                        off: 'Off. This phone gets no FinWise notifications.',
+                        on: 'On. If notifications stop arriving, switch this off and on again.',
+                      }[push.status]}
+                    </p>
+                  </div>
+                  {push.busy || push.status === 'loading'
+                    ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+                    : <Switch id="pushOn" checked={push.status === 'on'} disabled={push.status === 'unsupported'} onCheckedChange={togglePush} />}
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
-                  <Label htmlFor="monthlySummary" className="text-sm text-foreground">Monthly Summary Email</Label>
-                  <Switch id="monthlySummary" checked={notifications.monthlySummary} onCheckedChange={() => setNotifications({ ...notifications, monthlySummary: !notifications.monthlySummary })} />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
-                  <Label htmlFor="aiInsightsEmail" className="text-sm text-foreground">Receive AI Insights by Email</Label>
-                  <Switch id="aiInsightsEmail" checked={notifications.aiInsightsEmail} onCheckedChange={() => setNotifications({ ...notifications, aiInsightsEmail: !notifications.aiInsightsEmail })} />
-                </div>
+                {push.status === 'on' && (
+                  <Button variant="outline" size="sm" disabled={push.busy} onClick={() => push.test().then(n => toast({ title: n ? "Test sent" : "Test didn't go through", description: n ? "It should arrive in a few seconds." : "Switch notifications off and on again.", variant: n ? undefined : "destructive" }))}>
+                    Send a test notification
+                  </Button>
+                )}
+              </motion.div>
+
+              <motion.div variants={itemVariants} className="space-y-2">
+                <p className="text-sm font-medium text-foreground">What to send</p>
+                {NOTIFICATION_KINDS.map(k => (
+                  <div key={k.kind} className="flex items-center justify-between gap-3 rounded-md border border-primary/10 bg-background/50 p-3">
+                    <div className="min-w-0">
+                      <Label htmlFor={`pref-${k.kind}`} className="text-sm text-foreground">{k.label}</Label>
+                      <p className="text-xs text-muted-foreground">{k.hint}</p>
+                    </div>
+                    <Switch id={`pref-${k.kind}`} checked={prefs?.[k.kind] ?? true} disabled={!prefs} onCheckedChange={on => togglePref(k.kind, on)} />
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">Saved on the server straight away, for every phone you use.</p>
               </motion.div>
             </motion.section>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Stored on this device only.</p>
-                  <Button onClick={handleSaveChanges} size="sm" className="shrink-0" withMotion>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save preferences
-                  </Button>
-                </div>
               </TabsContent>
 
               <TabsContent value="data">
