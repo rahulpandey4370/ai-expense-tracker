@@ -150,9 +150,13 @@ export async function dismissPendingTransaction(id: string): Promise<void> {
 export async function savePushSubscription(sub: {
   endpoint?: string;
   keys?: { p256dh?: string; auth?: string };
-}, userAgent?: string): Promise<void> {
+}, userAgent?: string, replacesEndpoint?: string): Promise<void> {
   if (!sub.endpoint?.startsWith('https://') || !sub.keys?.p256dh || !sub.keys?.auth) {
     throw new Error('Invalid push subscription.');
+  }
+  // The device's previous subscription, now replaced: stop sending to it.
+  if (replacesEndpoint && replacesEndpoint !== sub.endpoint) {
+    await getSupabase().from('push_subscriptions').delete().eq('endpoint', replacesEndpoint);
   }
   const { error } = await getSupabase().from('push_subscriptions').upsert({
     endpoint: sub.endpoint,

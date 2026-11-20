@@ -55,14 +55,17 @@ export function UserNav() {
     }
     try {
       const registration = await navigator.serviceWorker.ready;
-      const subscription =
-        (await registration.pushManager.getSubscription()) ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        }));
-      await savePushSubscription(subscription.toJSON(), navigator.userAgent);
-      await sendTestPush();
+      // Always start a fresh subscription: an old one can go stale on iPhone, where
+      // Apple still accepts pushes for it but the phone no longer shows them.
+      const old = await registration.pushManager.getSubscription();
+      await old?.unsubscribe().catch(() => {});
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+      await savePushSubscription(subscription.toJSON(), navigator.userAgent, old?.endpoint);
+      const reached = await sendTestPush();
+      if (!reached) return fail("Test notification didn't go through", "Try again in a minute, or check FinWise in iPhone Settings → Notifications.");
       toast({ title: "Notifications enabled", description: "A test notification is on its way." });
     } catch (error: any) {
       fail("Could not enable notifications", error?.message ?? "Unknown error");
