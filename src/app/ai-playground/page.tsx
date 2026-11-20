@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { goalForecast } from '@/lib/goal-forecast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -772,6 +773,7 @@ export default function AIPlaygroundPage() {
               const progress = goal.targetAmount > 0 ? (goal.amountSavedSoFar / goal.targetAmount) * 100 : 0;
               const targetDate = addMonths(new Date(goal.createdAt), goal.targetDurationMonths);
               const monthsRemaining = differenceInMonths(targetDate, new Date());
+              const forecast = goal.status === 'active' ? goalForecast(goal) : null;
 
               return (
                 <motion.div
@@ -826,6 +828,23 @@ export default function AIPlaygroundPage() {
                      )}
                      {goal.status === 'active' && monthsRemaining >= 0 && (
                         <p className="text-xs text-muted-foreground">{monthsRemaining} month(s) remaining.</p>
+                     )}
+                     {forecast && (
+                       <div className="mt-2 space-y-0.5 rounded-md border border-dashed px-3 py-2 text-xs">
+                         <p className={forecast.onTrack ? "text-green-600 dark:text-green-400" : "text-orange-600 dark:text-orange-400"}>
+                           {!forecast.reachBy
+                             ? "Nothing saved yet, so there's no pace to forecast from."
+                             : differenceInMonths(forecast.reachBy, new Date()) > 120
+                               ? <>At your pace ({formatCurrencyWhole(forecast.pacePerMonth)}/month) it would take over 10 years.</>
+                               : <>At your pace ({formatCurrencyWhole(forecast.pacePerMonth)}/month) you&apos;ll reach it by <span className="font-semibold">{format(forecast.reachBy, "MMM yyyy")}</span>{forecast.onTrack ? ", on track." : "."}</>}
+                         </p>
+                         {!forecast.onTrack && forecast.neededPerMonth !== null && (
+                           <p className="text-muted-foreground">
+                             To hit {format(forecast.targetDate, "MMM yyyy")}, save {formatCurrencyWhole(forecast.neededPerMonth)}/month
+                             {forecast.extraPerMonth > 0 && forecast.reachBy ? <> ({formatCurrencyWhole(forecast.extraPerMonth)} more than now)</> : null}.
+                           </p>
+                         )}
+                       </div>
                      )}
                   </div>
                   

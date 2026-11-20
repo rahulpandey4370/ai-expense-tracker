@@ -51,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { netAmount as netOfSplit } from '@/lib/split-utils';
+import { downloadFile, toCsv } from '@/lib/export';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -395,29 +396,21 @@ export default function TransactionsPage() {
       toast({ title: "No Data to Export", description: "There are no transactions matching your current filters.", variant: "default"});
       return;
     }
-    const headers = ["ID", "Type", "Date", "Amount (₹)", "Description", "Category/Source", "Payment Method", "Expense Type", "Is Split", "My Share (₹)", "Split With"];
+    const headers = ["Date", "Type", "Amount (₹)", "My share (₹)", "Description", "Category/Source", "Payment Method", "Expense Type", "Split With", "ID"];
     const rows = filteredTransactions.map(t => [
-      t.id,
-      t.type,
       getCalendarDateString(t.date) || format(new Date(t.date), "yyyy-MM-dd"),
+      t.type,
       t.amount.toFixed(2),
-      `"${(t.description || '').replace(/"/g, '""')}"`,
+      netOfSplit(t).toFixed(2),
+      t.description || '',
       t.category?.name || t.source || '',
       t.paymentMethod?.name || '',
       t.expenseType || '',
-      t.isSplit ? 'Yes' : 'No',
-      netOfSplit(t).toFixed(2),
-      `"${(t.splits ?? []).map(s => s.userName).join(', ')}"`
-    ].join(','));
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `finwise_transactions_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      (t.splits ?? []).map(s => s.userName).join(', '),
+      t.id,
+    ]);
+    const period = currentPeriodText.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '');
+    downloadFile(`finwise_${period || 'transactions'}.csv`, toCsv([headers, ...rows]));
     toast({ title: "Data Exported!", description: "Your transactions have been exported to a CSV file." });
   };
 
@@ -531,12 +524,6 @@ export default function TransactionsPage() {
                           <SelectItem value="not_split" className="text-xs md:text-sm">Only Non-Split</SelectItem>
                         </SelectContent>
                       </Select>
-                      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                        <Button onClick={exportToCSV} variant="outline" className="w-full bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
-                          <Download className="mr-2 h-4 w-4" />
-                          Export to CSV
-                        </Button>
-                      </motion.div>
                     </div>
                     <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 md:hidden">
                       <Select
@@ -582,6 +569,10 @@ export default function TransactionsPage() {
                 <Sigma className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 <span>Net Total: <strong className={cn("tabular-nums", filteredSummary.netAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(filteredSummary.netAmount)}</strong></span>
               </div>
+              <Button variant="outline" size="sm" onClick={exportToCSV} className="text-xs" disabled={filteredSummary.count === 0}>
+                <Download className="mr-1 h-3 w-3" />
+                Export these as CSV
+              </Button>
               {(filterExpenseTypes.length > 0 || filterCategoryNames.length > 0 || filterMerchantId) && (
                 <Button
                   variant="outline"

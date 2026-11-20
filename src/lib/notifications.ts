@@ -2,6 +2,7 @@
 import { getSupabase } from '@/lib/supabase';
 import { getAppCalendarDayString } from '@/lib/date-utils';
 import { sendPush, sendPushOnce } from '@/lib/push';
+import { weeklyDigest } from '@/lib/weekly-digest';
 
 const THRESHOLDS = [100, 80, 50]; // highest first: one alert per crossing, never three at once
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -16,14 +17,14 @@ function addDays(ymd: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-type ExpenseRow = { net_amount: number; category_id: string | null; category_name: string | null; expense_type: string | null; date: string };
+type ExpenseRow = { net_amount: number; category_id: string | null; category_name: string | null; expense_type: string | null; date: string; description: string };
 
 async function expensesBetween(startYmd: string, endYmd: string): Promise<ExpenseRow[]> {
   const rows: ExpenseRow[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await getSupabase()
       .from('transactions_expanded')
-      .select('net_amount, category_id, category_name, expense_type, date')
+      .select('net_amount, category_id, category_name, expense_type, date, description')
       .eq('type', 'expense')
       .gte('date', startYmd)
       .lte('date', endYmd)
@@ -49,6 +50,33 @@ async function incomeBetween(startYmd: string, endYmd: string): Promise<number> 
 
 const sum = (rows: ExpenseRow[]) => rows.reduce((s, r) => s + Number(r.net_amount), 0);
 
+type BudgetRow = { id: string; name: string; amount: number; type: string; target_id: string };
+
+async function getBudgets(): Promise<BudgetRow[]> {
+  const { data, error } = await getSupabase().from('budgets').select('id, name, amount, type, target_id');
+  if (error) throw new Error(`Could not read budgets: ${error.message}`);
+  return (data ?? []) as BudgetRow[];
+}
+
+const budgetSpent = (b: BudgetRow, expenses: ExpenseRow[]) =>
+  sum(expenses.filter(e => (b.type === 'category' ? e.category_id : e.expense_type) === b.target_id));
+
+/** The Sunday digest: this week vs last, budgets so far this month, one thing worth noticing. */
+export async function buildWeeklyDigest(today = todayIST()) {
+  const toDigest = (rows: ExpenseRow[]) => rows.map(e => ({ amount: Number(e.net_amount), category: e.category_name ?? 'Other', description: e.description }));
+  const [week, lastWeek, prior, monthSoFar, budgets] = await Promise.all([
+    expensesBetween(addDays(today, -6), today),
+    expensesBetween(addDays(today, -13), addDays(today, -7)),
+    expensesBetween(addDays(today, -34), addDays(today, -7)),
+    expensesBetween(`${today.slice(0, 7)}-01`, today),
+    getBudgets(),
+  ]);
+  return weeklyDigest({
+    week: toDigest(week), lastWeek: toDigest(lastWeek), priorFourWeeks: toDigest(prior),
+    budgets: budgets.map(b => ({ name: b.name, limit: Number(b.amount), spent: budgetSpent(b, monthSoFar) })),
+  });
+}
+
 /**
  * Budget alerts at 50/80/100% of each monthly budget. Same rule as the
  * dashboard's budget card (category or need/want/investment, net of splits).
@@ -57,15 +85,14 @@ const sum = (rows: ExpenseRow[]) => rows.reduce((s, r) => s + Number(r.net_amoun
 export async function checkBudgetAlerts(): Promise<number> {
   const today = todayIST();
   const month = today.slice(0, 7);
-  const { data: budgets, error } = await getSupabase().from('budgets').select('id, name, amount, type, target_id');
-  if (error) throw new Error(`Could not read budgets: ${error.message}`);
-  if (!budgets?.length) return 0;
+  const budgets = await getBudgets();
+  if (!budgets.length) return 0;
 
   const expenses = await expensesBetween(`${month}-01`, today);
   let sent = 0;
   for (const b of budgets) {
     if (!(b.amount > 0)) continue;
-    const spent = sum(expenses.filter(e => (b.type === 'category' ? e.category_id : e.expense_type) === b.target_id));
+    const spent = budgetSpent(b, expenses);
     const pct = (spent / b.amount) * 100;
     const crossed = THRESHOLDS.find(t => pct >= t);
     if (!crossed) continue;
@@ -83,7 +110,7 @@ export async function checkBudgetAlerts(): Promise<number> {
   return sent;
 }
 
-/** The 9 PM notifications: today's summary, tomorrow's bills, last month's recap on the 1st. */
+/** The 9 PM notifications: today's summary, tomorrow's bills, last month's recap on the 1st, the weekly digest on Sundays. */
 export async function sendDailyNotifications(): Promise<{ sent: string[] }> {
   const sent: string[] = [];
   const today = todayIST();
@@ -163,7 +190,13 @@ export async function sendDailyNotifications(): Promise<{ sent: string[] }> {
     sent.push('monthly-recap');
   }
 
-  // 4. Budget alerts missed during the day (e.g. recurring auto-logs)
+  // 4. Sunday: the weekly digest
+  if (new Date(`${today}T00:00:00Z`).getUTCDay() === 0) {
+    const digest = await buildWeeklyDigest(today);
+    if (await sendPushOnce(`weekly-digest:${today}`, { ...digest, url: '/reports', tag: 'weekly-digest' })) sent.push('weekly-digest');
+  }
+
+  // 5. Budget alerts missed during the day (e.g. recurring auto-logs)
   if (await checkBudgetAlerts()) sent.push('budget-alerts');
 
   return { sent };

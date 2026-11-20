@@ -23,6 +23,7 @@ import { MarkdownContent } from '@/components/markdown-content';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { jsPDF } from "jspdf";
+import { downloadMonthlyStatement } from '@/lib/export';
 import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
@@ -314,6 +315,20 @@ export default function ReportsPage() {
                     Export to PDF
                 </Button>
               </motion.div>
+              {reportMonth !== -1 && (
+                <motion.div {...buttonHoverTap}>
+                  <Button
+                    variant="outline"
+                    disabled={isLoadingData || filteredTransactionsForPeriod.length === 0}
+                    onClick={() => downloadMonthlyStatement(filteredTransactionsForPeriod, `${monthNamesList[reportMonth]} ${reportYear}`, `finwise_statement_${monthNamesList[reportMonth]}_${reportYear}.pdf`)
+                      .catch(e => toast({ title: "Couldn't make the statement", description: e?.message, variant: "destructive" }))}
+                    className="w-full sm:w-auto text-xs md:text-sm"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Monthly statement
+                  </Button>
+                </motion.div>
+              )}
             </div>
 
             <motion.div

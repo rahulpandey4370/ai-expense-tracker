@@ -7,7 +7,7 @@ import { runChatTurn } from '@/ai/adk/chat';
 import { runMonthlyReview } from '@/ai/adk/monthly-review';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300; // long multi-tool answers and /review; Vercel's Fluid compute allows up to 300s
 
 const MAX_ATTACHMENT_BYTES = 3_000_000;
 
