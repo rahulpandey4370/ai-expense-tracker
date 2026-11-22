@@ -22,9 +22,9 @@ import { getMonthlyReport, loadStoredMonthlyReport, getYearlyReport, loadStoredY
 import { MarkdownContent } from '@/components/markdown-content';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { jsPDF } from "jspdf";
-import { downloadMonthlyStatement } from '@/lib/export';
-import html2canvas from "html2canvas";
+import { monthlyStatementPdf } from '@/lib/export';
+import { renderReport } from '@/lib/report-pdf';
+import { ShareFileDialog, type ShareFiles } from '@/components/share-file-dialog';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
@@ -225,55 +225,38 @@ export default function ReportsPage() {
     return () => { cancelled = true; };
   }, [reportMonth, reportYear]);
 
-  const exportReportToPDF = async () => {
-    const reportContentElement = document.getElementById('report-content-area');
-    if (!reportContentElement) {
-      toast({ title: "Export Failed", description: "Could not find report content.", variant: "destructive"});
-      return;
-    }
+  // "PDF & share": make the files, then offer share / download in a dialog
+  // (sharing must start from a tap, so it can't happen right after a slow render).
+  const [shareFiles, setShareFiles] = useState<ShareFiles | null>(null);
+  const [preparing, setPreparing] = useState<'report' | 'statement' | null>(null);
+  const periodName = reportMonth === -1 ? `${reportYear}` : `${monthNamesList[reportMonth]} ${reportYear}`;
 
-    toast({ title: "Generating PDF...", description: "Please wait while your report is being generated."});
-
+  const prepareReport = async () => {
+    const el = document.getElementById('report-content-area');
+    if (!el) return;
+    setPreparing('report');
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const canvas = await html2canvas(reportContentElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-         backgroundColor: document.documentElement.classList.contains('dark')
-            ? getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
-            : "#FFFFFF",
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const newImgWidth = imgWidth * ratio * 0.95;
-      const newImgHeight = imgHeight * ratio * 0.95;
-
-      const x = (pdfWidth - newImgWidth) / 2;
-      const y = (pdfHeight - newImgHeight) / 2;
-
-      pdf.addImage(imgData, 'PNG', x, y, newImgWidth, newImgHeight);
-      pdf.save(`financial_report_${reportMonth === -1 ? reportYear : monthNamesList[reportMonth] + '_' + reportYear}.pdf`);
-      toast({ title: "Report Exported!", description: "Your financial report PDF has been generated." });
-    } catch (error: any)
-     {
+      const { pdf, image } = await renderReport(el, `FinWise_report_${periodName.replace(' ', '_')}`);
+      setShareFiles({ title: `FinWise ${reportMonth === -1 ? 'annual' : 'monthly'} report, ${periodName}`, pdf, image });
+    } catch (error: any) {
       console.error("Error exporting PDF:", error);
-      toast({ title: "Export Failed", description: `An error occurred during PDF generation: ${error.message || 'Unknown error'}.`, variant: "destructive"});
+      toast({ title: "Couldn't make the PDF", description: error?.message || 'Please try again.', variant: "destructive" });
+    } finally {
+      setPreparing(null);
     }
   };
 
+  const prepareStatement = async () => {
+    setPreparing('statement');
+    try {
+      const pdf = await monthlyStatementPdf(filteredTransactionsForPeriod, periodName, `FinWise_statement_${periodName.replace(' ', '_')}.pdf`);
+      setShareFiles({ title: `FinWise statement, ${periodName}`, pdf });
+    } catch (e: any) {
+      toast({ title: "Couldn't make the statement", description: e?.message, variant: "destructive" });
+    } finally {
+      setPreparing(null);
+    }
+  };
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 bg-background/80 backdrop-blur-sm">
@@ -310,21 +293,20 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
               <motion.div {...buttonHoverTap}>
-                <Button onClick={exportReportToPDF} variant="outline" className="w-full sm:w-auto bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
-                    <Download className="mr-2 h-4 w-4" />
-                    Export to PDF
+                <Button onClick={prepareReport} disabled={!!preparing || isLoadingData} variant="outline" className="w-full sm:w-auto bg-accent/20 border-accent/50 hover:bg-accent/30 text-accent dark:text-accent-foreground text-xs md:text-sm">
+                    {preparing === 'report' ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Download className="mr-2 h-4 w-4" />}
+                    PDF &amp; share
                 </Button>
               </motion.div>
               {reportMonth !== -1 && (
                 <motion.div {...buttonHoverTap}>
                   <Button
                     variant="outline"
-                    disabled={isLoadingData || filteredTransactionsForPeriod.length === 0}
-                    onClick={() => downloadMonthlyStatement(filteredTransactionsForPeriod, `${monthNamesList[reportMonth]} ${reportYear}`, `finwise_statement_${monthNamesList[reportMonth]}_${reportYear}.pdf`)
-                      .catch(e => toast({ title: "Couldn't make the statement", description: e?.message, variant: "destructive" }))}
+                    disabled={!!preparing || isLoadingData || filteredTransactionsForPeriod.length === 0}
+                    onClick={prepareStatement}
                     className="w-full sm:w-auto text-xs md:text-sm"
                   >
-                    <FileText className="mr-2 h-4 w-4" />
+                    {preparing === 'statement' ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <FileText className="mr-2 h-4 w-4" />}
                     Monthly statement
                   </Button>
                 </motion.div>
@@ -546,6 +528,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </motion.div>
+      <ShareFileDialog files={shareFiles} onClose={() => setShareFiles(null)} />
     </main>
   );
 }

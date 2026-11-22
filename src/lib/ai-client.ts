@@ -340,6 +340,11 @@ function getQuirks(modelKey: string): ChatParamQuirks {
   let quirks = quirksByModel.get(modelKey);
   if (!quirks) {
     quirks = { tokenParamsTried: new Set(), drop: new Set() };
+    // Known up front: OpenAI's reasoning models (GPT-5 family, o-series) reject any
+    // temperature but the default. Learning it from a 400 on every cold start cost
+    // a failed call (~1.3s) per request on serverless.
+    const id = modelKey.split('::').pop() ?? modelKey;
+    if (/^(gpt-5|o\d)/i.test(id)) quirks.drop.add('temperature');
     quirksByModel.set(modelKey, quirks);
   }
   return quirks;
@@ -448,15 +453,26 @@ async function chatCompletionsAdaptive(
   defaultTokenParam: TokenParam
 ): Promise<any> {
   const quirks = getQuirks(modelKey);
+  // One usage record per logical call, however many request shapes it took.
+  return tracked(
+    { modelKey, operation: base.response_format ? 'structured' : base.tools ? 'tool_chat' : 'chat', feature: config?.feature },
+    () => adaptiveAttempts(client, modelKey, quirks, base, config, defaultTokenParam),
+    (r: any) => usageFrom.openaiChat(r?.usage),
+  );
+}
 
+async function adaptiveAttempts(
+  client: OpenAI | AzureOpenAI,
+  modelKey: string,
+  quirks: ChatParamQuirks,
+  base: Record<string, any>,
+  config: LLMConfig | undefined,
+  defaultTokenParam: TokenParam
+): Promise<any> {
   for (let attempt = 0; ; attempt++) {
     const params = buildChatParams(quirks, base, config, defaultTokenParam);
     try {
-      return await tracked(
-        { modelKey, operation: base.response_format ? 'structured' : base.tools ? 'tool_chat' : 'chat', feature: config?.feature },
-        () => retryableProviderCall(() => client.chat.completions.create(params as any)),
-        (r: any) => usageFrom.openaiChat(r?.usage),
-      );
+      return await retryableProviderCall(() => client.chat.completions.create(params as any));
     } catch (error: any) {
       // 5 is a safe bound: token spelling (x2), temperature, response_format,
       // plus slack. Beyond that the 400 is about something we can't fix here.
