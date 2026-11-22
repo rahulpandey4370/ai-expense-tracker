@@ -1,5 +1,6 @@
 
 "use client";
+import { read } from '@/lib/read-client';
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { formatCurrencyWhole } from '@/lib/format';
@@ -109,9 +110,9 @@ export default function SettingsPage() {
     setIsLoadingData(true);
     try {
         const [fetchedCategories, fetchedPaymentMethods, fetchedBudgets] = await Promise.all([
-            getCategories(),
-            getPaymentMethods(),
-            getBudgets(),
+            read('getCategories'),
+            read('getPaymentMethods'),
+            read('getBudgets'),
         ]);
         setCategories(fetchedCategories);
         setPaymentMethods(fetchedPaymentMethods);

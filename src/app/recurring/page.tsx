@@ -1,4 +1,5 @@
 "use client";
+import { read } from '@/lib/read-client';
 
 import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback } from 'react';
@@ -69,7 +70,7 @@ export default function RecurringPage() {
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [r, c, pm] = await Promise.all([getRecurringRules(), getCategories(), getPaymentMethods()]);
+      const [r, c, pm] = await Promise.all([read('getRecurringRules'), read('getCategories'), read('getPaymentMethods')]);
       setRules(r);
       setCategories(c);
       setPaymentMethods(pm);

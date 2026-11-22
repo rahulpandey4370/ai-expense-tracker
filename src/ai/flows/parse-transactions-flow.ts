@@ -124,7 +124,7 @@ const parseTransactionsFlow = ai.defineFlow(
 
     let output;
     try {
-      output = await callStructuredLLM(model, PARSE_TRANSACTIONS_PROMPT, input, ParseTransactionTextOutputSchemaInternal, {
+      output = await callStructuredLLM(model, PARSE_TRANSACTIONS_PROMPT, input, ParseTransactionTextOutputSchemaInternal, { feature: 'parse',
         temperature: 0.2,
         maxOutputTokens: 2500,
         safetySettings: [

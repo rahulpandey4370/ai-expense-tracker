@@ -143,7 +143,7 @@ const parseReceiptImageFlow = ai.defineFlow(
         model,
         receiptPromptTemplate,
         input,
-        z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() })
+        z.object({ parsedTransaction: ParsedReceiptTransactionSchema.omit({ model: true }).nullable() }), { feature: 'receipt' }
       );
     } catch (aiError: any) {
       console.error("AI generation failed in parseReceiptImageFlow:", aiError);

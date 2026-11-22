@@ -52,7 +52,7 @@ export async function computeSavingsSmartKpis(input: {
     year: input.year,
   };
 
-  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, SavingsSmartKpisOutputSchema, {
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, SavingsSmartKpisOutputSchema, { feature: 'savings-kpis',
     temperature: 0.2,
     maxOutputTokens: 700,
   });

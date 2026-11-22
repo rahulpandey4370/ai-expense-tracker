@@ -40,7 +40,7 @@ const comparativeExpenseAnalysisFlow = ai.defineFlow(
   },
   async (input) => {
     const model = (input as any).model || getDefaultModelForTask('comparative_analysis');
-    let output = await callStructuredLLM(model, universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }));
+    let output = await callStructuredLLM(model, universalPromptTemplate, input, ComparativeExpenseAnalysisOutputSchema.omit({ model: true }), { feature: 'comparison' });
 
     if (!output) {
       throw new Error("AI analysis failed to produce a valid output structure.");

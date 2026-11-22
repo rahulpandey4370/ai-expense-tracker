@@ -92,7 +92,7 @@ const budgetingAssistantFlow = ai.defineFlow(
       };
     }
 
-    let output = await callStructuredLLM(model, budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }), {
+    let output = await callStructuredLLM(model, budgetPromptTemplate, input, BudgetingAssistantOutputSchema.omit({ model: true }), { feature: 'budgeting',
       temperature: 0.6,
       maxOutputTokens: 1000,
       safetySettings: [

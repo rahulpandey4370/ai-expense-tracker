@@ -182,7 +182,7 @@ const financialGoalForecasterFlow = ai.defineFlow(
       alternativeTimelines,
     };
 
-    let output = await callStructuredLLM(model, financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }), {
+    let output = await callStructuredLLM(model, financialGoalPromptTemplate, promptInput, GoalForecasterOutputSchema.omit({ model: true }), { feature: 'goal-forecaster',
       temperature: 0.4,
       maxOutputTokens: 800,
       safetySettings: [

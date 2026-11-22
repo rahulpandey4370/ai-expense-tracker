@@ -1,5 +1,6 @@
 import { FunctionTool, InMemoryRunner, LlmAgent, createEvent, isFinalResponse, type BaseTool } from '@google/adk';
 import { z } from 'zod';
+import { withAiFeature } from '@/lib/usage';
 import { queryTransactions, getCategories, getPaymentMethods } from '@/lib/actions/transactions';
 import { getCategoryBreakdown, getMonthlyRollups, getTransactionYears } from '@/lib/actions/analytics';
 import { getBudgets } from '@/lib/actions/budgets';
@@ -332,5 +333,5 @@ export async function runPortfolioAgent(input: { query: string; history?: AgentT
     tools: PORTFOLIO_TOOLS,
     generateContentConfig: { temperature: 0.1 },
   });
-  return runAgentTurn(agent, input.query, input.history);
+  return withAiFeature('portfolio-chat', () => runAgentTurn(agent, input.query, input.history));
 }

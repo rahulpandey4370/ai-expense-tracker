@@ -95,7 +95,7 @@ const monthlyFinancialReportFlow = ai.defineFlow(
       transactions: input.transactions,
     };
 
-    let output = await callStructuredLLM(model, reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }));
+    let output = await callStructuredLLM(model, reportPromptTemplate, promptInput, MonthlyFinancialReportOutputSchema.omit({ model: true }), { feature: 'monthly-report' });
 
     if (!output) {
       throw new Error("Financial report generation failed to produce an output.");

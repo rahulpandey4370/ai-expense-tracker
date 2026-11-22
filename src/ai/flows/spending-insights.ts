@@ -102,7 +102,7 @@ const spendingInsightsFlow = ai.defineFlow(
     const model = input.model || getDefaultModelForTask('insights');
     let output: SpendingInsightsOutput | undefined;
 
-    output = await callStructuredLLM(model, spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }), {
+    output = await callStructuredLLM(model, spendingInsightsPromptTemplate, promptInput, SpendingInsightsOutputSchema.omit({ model: true }), { feature: 'insights',
       temperature: 0.8,
       maxOutputTokens: 3000,
       safetySettings: [

@@ -11,6 +11,7 @@
  */
 
 import { AzureOpenAI, OpenAI } from 'openai';
+import { tracked, usageFrom } from '@/lib/usage';
 import Anthropic from '@anthropic-ai/sdk';
 import { z, ZodSchema } from 'zod';
 import { ai } from '@/ai/genkit';
@@ -303,6 +304,8 @@ export interface LLMConfig {
   safetySettings?: Array<{ category: string; threshold: string }>;
   /** callToolChatLLM only: receives the answer text as it is written (OpenAI and Anthropic). */
   onText?: (delta: string) => void;
+  /** Which feature made the call, for the Usage page (e.g. "parse", "insights"). */
+  feature?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -449,8 +452,10 @@ async function chatCompletionsAdaptive(
   for (let attempt = 0; ; attempt++) {
     const params = buildChatParams(quirks, base, config, defaultTokenParam);
     try {
-      return await retryableProviderCall(() =>
-        client.chat.completions.create(params as any)
+      return await tracked(
+        { modelKey, operation: base.response_format ? 'structured' : base.tools ? 'tool_chat' : 'chat', feature: config?.feature },
+        () => retryableProviderCall(() => client.chat.completions.create(params as any)),
+        (r: any) => usageFrom.openaiChat(r?.usage),
       );
     } catch (error: any) {
       // 5 is a safe bound: token spelling (x2), temperature, response_format,
@@ -569,14 +574,14 @@ async function callAnthropicStructured<T extends ZodSchema>(
   // No temperature/top_p: the current Claude models reject them outright.
   // The cap must stay generous — adaptive thinking spends the same budget, so
   // a flow's small hint would truncate the answer (see resolveTokenCap).
-  const response = await retryableProviderCall(() =>
+  const response = await tracked({ modelKey: modelId, operation: 'structured', feature: (config as LLMConfig | undefined)?.feature }, () => retryableProviderCall(() =>
     client.messages.create({
       model: apiModel,
       max_tokens: resolveTokenCap(config),
       system: 'You are a precise financial data extraction engine. You always reply with a single JSON object.',
       messages: [{ role: 'user', content }],
     })
-  );
+  ), r => usageFrom.anthropic(r.usage));
 
   // Safety classifiers can decline with HTTP 200 — check before reading content.
   if (response.stop_reason === 'refusal') {
@@ -689,7 +694,8 @@ async function callGeminiStructured<T extends ZodSchema>(
   });
 
   const geminiId = getModelConfig(modelId)?.id ?? modelId;
-  const result = await retryableAIGeneration(() => prompt(input, { model: googleAI.model(geminiId) }));
+  const result = await tracked({ modelKey: modelId, operation: 'structured', feature: config?.feature },
+    () => retryableAIGeneration(() => prompt(input, { model: googleAI.model(geminiId) })), (r: any) => usageFrom.gemini(r?.usage));
 
   if (!result.output) {
     throw new Error(`Gemini (${modelId}) returned no structured output.`);
@@ -813,12 +819,12 @@ async function openAIResponsesToolChat(
     store: false,
   };
   const onText = config?.onText;
-  const response: any = await retryableProviderCall(() => {
+  const response: any = await tracked({ modelKey: modelId, operation: 'tool_chat', feature: config?.feature }, () => retryableProviderCall(() => {
     if (!onText) return client.responses.create(body);
     const stream = client.responses.stream(body);
     stream.on('response.output_text.delta', (e: any) => onText(e.delta));
     return stream.finalResponse();
-  });
+  }), (r: any) => usageFrom.openaiResponses(r?.usage));
   const output: any[] = response.output ?? [];
   const toolCalls: ToolCall[] = output
     .filter(o => o.type === 'function_call')
@@ -869,12 +875,12 @@ async function anthropicToolChat(
     ...(tools.length ? { tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters as any })) } : {}),
   };
   const onText = config?.onText;
-  const response = await retryableProviderCall(() => {
+  const response = await tracked({ modelKey: modelId, operation: 'tool_chat', feature: config?.feature }, () => retryableProviderCall(() => {
     if (!onText) return client.messages.create(params);
     const stream = client.messages.stream(params);
     stream.on('text', onText);
     return stream.finalMessage();
-  });
+  }), r => usageFrom.anthropic(r.usage));
 
   const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('');
   const toolCalls = response.content
@@ -920,14 +926,14 @@ async function callAnthropicChat(
     turns.unshift({ role: 'user', content: 'Please continue.' });
   }
 
-  const response = await retryableProviderCall(() =>
+  const response = await tracked({ modelKey: modelId, operation: 'chat', feature: (config as LLMConfig | undefined)?.feature }, () => retryableProviderCall(() =>
     client.messages.create({
       model: apiModel,
       max_tokens: resolveTokenCap(config),
       ...(system ? { system } : {}),
       messages: turns,
     })
-  );
+  ), r => usageFrom.anthropic(r.usage));
 
   if (response.stop_reason === 'refusal') {
     return "I can't help with that particular request. Try rephrasing, or switch to a different model.";
@@ -971,7 +977,7 @@ async function callGeminiChat(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   config?: { temperature?: number; maxOutputTokens?: number; safetySettings?: Array<{ category: string; threshold: string }> }
 ): Promise<string> {
-  const llmResponse = await retryableAIGeneration(() =>
+  const llmResponse = await tracked({ modelKey: modelId, operation: 'chat', feature: (config as LLMConfig | undefined)?.feature }, () => retryableAIGeneration(() =>
     ai.generate({
       prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:',
       model: googleAI.model(getModelConfig(modelId)?.id ?? modelId),
@@ -981,7 +987,7 @@ async function callGeminiChat(
         safetySettings: config?.safetySettings,
       } as any,
     })
-  );
+  ), (r: any) => usageFrom.gemini(r?.usage));
 
   return llmResponse.text || '';
 }

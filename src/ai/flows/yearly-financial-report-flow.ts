@@ -120,7 +120,7 @@ const yearlyFinancialReportFlow = ai.defineFlow(
       isAggregated: input.isAggregated,
     };
 
-    let output = await callStructuredLLM(model, yearlyReportPromptTemplate, promptInput, YearlyFinancialReportOutputSchema.omit({ model: true }));
+    let output = await callStructuredLLM(model, yearlyReportPromptTemplate, promptInput, YearlyFinancialReportOutputSchema.omit({ model: true }), { feature: 'yearly-report' });
 
     if (!output) {
       throw new Error("Yearly financial report generation failed to produce an output.");

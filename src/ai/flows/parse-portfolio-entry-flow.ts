@@ -91,7 +91,7 @@ const parsePortfolioEntryFlow = ai.defineFlow(
   },
   async (input) => {
     const model = input.model || getDefaultModelForTask('portfolio_entry_parsing');
-    const output = await callStructuredLLM(model, promptTemplate, input, ParsePortfolioEntryOutputSchema, {
+    const output = await callStructuredLLM(model, promptTemplate, input, ParsePortfolioEntryOutputSchema, { feature: 'portfolio-parse',
       temperature: 0.1,
       maxOutputTokens: 1400,
     });

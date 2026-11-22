@@ -21,9 +21,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { AppTransaction } from '@/lib/types';
+import type { AppTransaction, UserBalance } from '@/lib/types';
 import { addSplitUser, deleteSplitUser, settleSplitShare, settleMyShare, settleAllForUser } from '@/lib/actions/splits';
-import { useSplitUsers, useSplitBalances, useSplitTransactions, useInvalidateFinance } from '@/hooks/use-finance-queries';
+import { useSplitUsers, useSplitBalances, useSplitTransactions, useInvalidateFinance, financeKeys } from '@/hooks/use-finance-queries';
+import { useOptimisticAction } from '@/hooks/use-optimistic';
 import { UserPlus, Trash2, Loader2, Users, ListChecks, Scale, CheckCircle, CircleDot, Plus } from "lucide-react";
 import { format } from 'date-fns';
 import { TransactionForm } from '@/components/transaction-form';
@@ -60,7 +61,6 @@ export default function SplitExpensesPage() {
   const [newUserName, setNewUserName] = useState("");
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState<string | null>(null);
-  const [settlingKey, setSettlingKey] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
 
   const usersQuery = useSplitUsers();
@@ -116,46 +116,40 @@ export default function SplitExpensesPage() {
     }
   };
 
-  const handleSettleShare = async (transactionId: string, userId: string) => {
-    const key = `${transactionId}:${userId}`;
-    setSettlingKey(key);
-    try {
-      await settleSplitShare(transactionId, userId);
-      invalidate();
-      toast({ title: "Settled!", description: "That share has been marked as paid back." });
-    } catch (error: any) {
-      toast({ title: "Settlement Error", description: error.message || "Could not settle this share.", variant: "destructive" });
-    } finally {
-      setSettlingKey(null);
-    }
-  };
+  // Settling is optimistic: the list changes at once, the server catches up, and a
+  // failure puts things back. Balances refresh in the background.
+  const optimistic = useOptimisticAction();
+  type SplitPage = { rows: AppTransaction[]; total: number };
+  const editRows = (fn: (t: AppTransaction) => AppTransaction) =>
+    ({ key: financeKeys.splitTransactions(), update: (old: SplitPage) => ({ ...old, rows: old.rows.map(fn) }) });
+  const failed = (error: any, fallback: string) =>
+    toast({ title: "Settlement Error", description: error?.message || fallback, variant: "destructive" });
 
-  const handleSettleMyShare = async (transactionId: string) => {
-    const key = `mine:${transactionId}`;
-    setSettlingKey(key);
-    try {
-      await settleMyShare(transactionId);
-      invalidate();
-      toast({ title: "Settled!", description: "Marked as paid back." });
-    } catch (error: any) {
-      toast({ title: "Settlement Error", description: error.message || "Could not settle this share.", variant: "destructive" });
-    } finally {
-      setSettlingKey(null);
-    }
-  };
+  const handleSettleShare = (transactionId: string, userId: string) =>
+    optimistic(
+      [editRows(t => t.id !== transactionId ? t : { ...t, splits: (t.splits ?? []).map(s => s.userId === userId ? { ...s, isSettled: true } : s) })],
+      () => settleSplitShare(transactionId, userId),
+    ).catch(e => failed(e, "Could not settle this share."));
 
-  const handleSettleAllForUser = async (userId: string, userName: string) => {
-    setSettlingKey(`all:${userId}`);
-    try {
-      const { successCount } = await settleAllForUser(userId);
-      invalidate();
-      toast({ title: "Settled Up!", description: `${successCount} balance(s) with ${userName} cleared.` });
-    } catch (error: any) {
-      toast({ title: "Settlement Error", description: error.message || "Could not settle up.", variant: "destructive" });
-    } finally {
-      setSettlingKey(null);
-    }
-  };
+  const handleSettleMyShare = (transactionId: string) =>
+    optimistic(
+      [editRows(t => t.id !== transactionId ? t : { ...t, myShareSettled: true })],
+      () => settleMyShare(transactionId),
+    ).catch(e => failed(e, "Could not settle this share."));
+
+  const handleSettleAllForUser = (userId: string, userName: string) =>
+    optimistic(
+      [
+        editRows(t => ({
+          ...t,
+          splits: (t.splits ?? []).map(s => s.userId === userId ? { ...s, isSettled: true } : s),
+          myShareSettled: t.paidById === userId ? true : t.myShareSettled,
+        })),
+        { key: financeKeys.splitBalances(), update: (old: UserBalance[]) => old.map(b => b.userId === userId ? { ...b, theyOweMe: 0, iOweThem: 0, net: 0 } : b) },
+      ],
+      () => settleAllForUser(userId),
+    ).then(({ successCount }) => toast({ title: "Settled up", description: `${successCount} balance(s) with ${userName} cleared.` }))
+     .catch(e => failed(e, "Could not settle up."));
 
   const closeAddForm = () => setIsAddingNew(false);
   const onAdded = () => { invalidate(); setIsAddingNew(false); };
@@ -206,10 +200,9 @@ export default function SplitExpensesPage() {
                           {Math.abs(b.net) > 0.01 && (
                             <Button
                               size="sm" variant="outline"
-                              disabled={settlingKey === `all:${b.userId}`}
                               onClick={() => handleSettleAllForUser(b.userId, b.userName)}
                             >
-                              {settlingKey === `all:${b.userId}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Settle up"}
+                              Settle up
                             </Button>
                           )}
                         </div>
@@ -257,9 +250,8 @@ export default function SplitExpensesPage() {
                                 <Button
                                   size="sm" variant="outline" className="h-7 px-2 text-xs"
                                   onClick={() => handleSettleMyShare(t.id)}
-                                  disabled={settlingKey === `mine:${t.id}`}
                                 >
-                                  {settlingKey === `mine:${t.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : "Settle"}
+                                  Settle
                                 </Button>
                               </li>
                             )}
@@ -273,9 +265,8 @@ export default function SplitExpensesPage() {
                                   <Button
                                     size="sm" variant="outline" className="h-7 px-2 text-xs"
                                     onClick={() => handleSettleShare(t.id, s.userId)}
-                                    disabled={settlingKey === `${t.id}:${s.userId}`}
                                   >
-                                    {settlingKey === `${t.id}:${s.userId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : "Settle"}
+                                    Settle
                                   </Button>
                                 )}
                               </li>

@@ -39,7 +39,7 @@ export async function parseRecurringRuleFromText(input: {
     paymentMethods: pms,
   };
 
-  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedRecurringRuleSchema, {
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedRecurringRuleSchema, { feature: 'recurring-parse',
     temperature: 0.1,
     maxOutputTokens: 400,
   });

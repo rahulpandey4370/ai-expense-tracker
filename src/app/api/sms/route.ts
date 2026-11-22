@@ -2,6 +2,7 @@
 // POST { "text": "<sms body>", "sender": "<sender>" } with Authorization: Bearer SMS_INGEST_TOKEN.
 // Debit alerts become a pending transaction + a "Log it?" push; everything else is skipped.
 import { NextResponse } from 'next/server';
+import { withAiFeature } from '@/lib/usage';
 import cuid from 'cuid';
 import { getSupabase } from '@/lib/supabase';
 import { hasBearer } from '@/lib/bearer';
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
 
   // Card digits are read here, locally; the AI only gets a redacted copy.
   const accountHint = extractAccountHint(text);
-  const guess = await guessFromSms({ text, sender, amount, accountHint });
+  const guess = await withAiFeature('sms', () => guessFromSms({ text, sender, amount, accountHint }));
 
   const today = getAppCalendarDayString(new Date())!;
   const threeDaysAgo = getAppCalendarDayString(new Date(Date.now() - 3 * 864e5))!;

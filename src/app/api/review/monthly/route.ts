@@ -1,6 +1,7 @@
 // Called on the 1st at 8 AM IST by Supabase pg_cron (supabase/chat.sql).
 // Authorization: Bearer CRON_SECRET. Optional body { year, month } (month 0-11) to re-run a month.
 import { NextResponse } from 'next/server';
+import { withAiFeature } from '@/lib/usage';
 import { hasBearer } from '@/lib/bearer';
 import { sendPushOnce } from '@/lib/push';
 import { runMonthlyReview } from '@/ai/adk/monthly-review';
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const month = Number.isInteger(body.month) && body.month >= 0 && body.month <= 11 ? body.month : defaultMonth;
   const year = Number.isInteger(body.year) ? body.year : defaultYear;
   try {
-    const review = await runMonthlyReview({ year, month });
+    const review = await withAiFeature('review', () => runMonthlyReview({ year, month }));
     const pushed = await sendPushOnce(`monthly-review-${year}-${month}`, {
       title: `Your ${review.title} is ready`,
       body: review.preview.slice(0, 140),

@@ -302,7 +302,7 @@ Remember: Accuracy is paramount. Always verify calculations and provide precise,
 
     let responseText = '';
 
-    responseText = await callChatLLM(modelToUse, messages, {
+    responseText = await callChatLLM(modelToUse, messages, { feature: 'demo-chat',
       temperature: 0.1,
       maxOutputTokens: verbose ? 2000 : 800,
       safetySettings: [

@@ -149,7 +149,7 @@ const financialHealthCheckFlow = ai.defineFlow(
       anomalies,
     };
 
-    const output = await callStructuredLLM(model, healthCheckPromptTemplate, promptInput, FinancialHealthCheckOutputSchema.omit({ model: true }), {
+    const output = await callStructuredLLM(model, healthCheckPromptTemplate, promptInput, FinancialHealthCheckOutputSchema.omit({ model: true }), { feature: 'health-check',
       temperature: 0.4,
       maxOutputTokens: 600,
       safetySettings: [

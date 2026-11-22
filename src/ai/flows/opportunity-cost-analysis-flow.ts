@@ -66,7 +66,7 @@ const opportunityCostAnalysisFlow = ai.defineFlow(
   },
   async (input) => {
     const model = (input as any).model || getDefaultModelForTask('opportunity_cost');
-    let output = await callStructuredLLM(model, analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }));
+    let output = await callStructuredLLM(model, analysisPromptTemplate, input, OpportunityCostOutputSchema.omit({ model: true }), { feature: 'opportunity-cost' });
 
     if (!output) {
       throw new Error("Opportunity cost analysis failed to produce a valid output.");

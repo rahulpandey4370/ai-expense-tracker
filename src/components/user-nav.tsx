@@ -13,7 +13,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, LogOut, Settings, LifeBuoy, Bell } from "lucide-react";
+import { User, LogOut, Settings, LifeBuoy, Bell, Gauge } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 import { useRouter } from "next/navigation"; // Import useRouter
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +69,10 @@ export function UserNav() {
             <User className="mr-2 h-4 w-4" />
             <span>Profile</span>
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+          </DropdownMenuItem>
+           <DropdownMenuItem onClick={() => router.push('/usage')}>
+            <Gauge className="mr-2 h-4 w-4" />
+            <span>AI usage &amp; cost</span>
           </DropdownMenuItem>
            <DropdownMenuItem onClick={togglePush} disabled={push.busy || push.status === 'loading'}>
             <Bell className="mr-2 h-4 w-4" />

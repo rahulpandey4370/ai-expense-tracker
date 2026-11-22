@@ -3,13 +3,14 @@
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 
-const UNDO_MS = 7000;
+// Matches the toast's 3s limit, so Undo is available exactly as long as it is shown.
+const UNDO_MS = 3000;
 
 /**
  * Gmail-style delete: hide the item now, offer Undo, and only send the delete
  * once the toast runs out. Undo just un-hides; the server never heard about it.
  *
- * ponytail: closing the tab inside the 7s window cancels the delete (the safe
+ * ponytail: closing the tab inside the 3s window cancels the delete (the safe
  * direction). Flush on `pagehide` with sendBeacon if that ever matters.
  */
 export function deleteWithUndo({ title, hide, restore, commit, onCommitted }: {

@@ -2,6 +2,7 @@ import { BaseLlm, Gemini, type BaseLlmConnection, type LlmRequest, type LlmRespo
 import type { Content, Part, Schema } from '@google/genai';
 import { callToolChatLLM, type ToolChatMessage, type ToolSpec } from '@/lib/ai-client';
 import { detectProvider, getModelConfig } from '@/lib/model-registry';
+import { recordUsage, usageFrom } from '@/lib/usage';
 
 /**
  * Lets ADK agents run on the models this app already supports, through the
@@ -10,12 +11,28 @@ import { detectProvider, getModelConfig } from '@/lib/model-registry';
  */
 export function adkModelFor(modelKey: string): BaseLlm {
   if (detectProvider(modelKey) === 'google-ai') {
-    return new Gemini({
+    return new TrackedGemini(modelKey, {
       model: getModelConfig(modelKey)?.id ?? modelKey.replace(/^google-ai::/, ''),
       apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY,
     });
   }
   return new FinwiseLlm({ model: modelKey });
+}
+
+/** ADK's Gemini, plus a usage record for each call (from the last response's usageMetadata). */
+class TrackedGemini extends Gemini {
+  constructor(private readonly modelKey: string, params: ConstructorParameters<typeof Gemini>[0]) { super(params); }
+  async *generateContentAsync(llmRequest: LlmRequest, stream = false, abortSignal?: AbortSignal): AsyncGenerator<LlmResponse, void> {
+    const t = Date.now();
+    let usage: unknown;
+    let failed: string | undefined;
+    for await (const r of super.generateContentAsync(llmRequest, stream, abortSignal)) {
+      if (r.usageMetadata) usage = r.usageMetadata;
+      if (r.errorMessage) failed = r.errorMessage;
+      yield r;
+    }
+    await recordUsage({ modelKey: this.modelKey, operation: 'tool_chat', usage: usageFrom.gemini(usage), latencyMs: Date.now() - t, ok: !failed, error: failed });
+  }
 }
 
 class FinwiseLlm extends BaseLlm {

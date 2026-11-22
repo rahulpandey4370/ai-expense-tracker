@@ -1,3 +1,4 @@
+import { read } from '@/lib/read-client';
 import { useEffect, useState } from 'react';
 import { Brain, CalendarCheck, Check, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ export function ChatHistorySheet({ open, onOpenChange, currentId, onOpen, onNew,
   const [toDelete, setToDelete] = useState<ChatSummary | null>(null);
 
   const refresh = async () => {
-    const [c, f] = await Promise.all([getChatList(), getMemoryFacts()]);
+    const [c, f] = await Promise.all([read('listChats'), read('listMemoryFacts')]);
     setChats(c);
     setFacts(f);
   };

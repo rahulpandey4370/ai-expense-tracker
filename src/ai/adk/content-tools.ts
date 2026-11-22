@@ -76,7 +76,7 @@ export function readAttachmentTool(modelKey: string) {
           categories: cats.map(c => `${c.name} (${c.type})`).join(', '),
           paymentMethods: pms.map(p => p.name).join(', '),
           receiptImageUri: `data:${data.mimeType};base64,${data.data}`,
-        }, Extracted);
+        }, Extracted, { feature: 'chat-attachment' });
       } catch (e) {
         console.error('[adk] read_attachment failed:', e);
         return { error: 'Could not read that file. A clearer photo or a text-based PDF works best.' };

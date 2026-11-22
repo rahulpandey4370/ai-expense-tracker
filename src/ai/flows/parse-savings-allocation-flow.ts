@@ -57,7 +57,7 @@ export async function parseSavingsAllocationFromText(input: {
     mode: input.mode || 'auto',
   };
 
-  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedSavingsActionSchema, {
+  const output = await callStructuredLLM(modelToUse, promptTemplate, promptInput, ParsedSavingsActionSchema, { feature: 'savings-parse',
     temperature: 0.1,
     maxOutputTokens: 800,
   });

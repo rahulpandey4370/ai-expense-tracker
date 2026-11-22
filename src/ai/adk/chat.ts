@@ -52,7 +52,8 @@ function buildAgent(modelKey: string, options: ChatOptions, factsText: string): 
     name: AGENT_NAME,
     description: "Answers questions about the user's money and makes changes they confirm.",
     model,
-    instruction: [financeContext({ viewing: options.viewing, investmentFocus: options.investmentMode, verbose: options.verbose }), HOW_TO_WORK, CHAT_RULES, factsText, `## OUTPUT\n${ANSWER_STYLE}`]
+    // Fixed text first and today's context last, so the provider's prompt cache can reuse the start.
+    instruction: [HOW_TO_WORK, CHAT_RULES, `## OUTPUT\n${ANSWER_STYLE}`, financeContext({ viewing: options.viewing, investmentFocus: options.investmentMode, verbose: options.verbose }), factsText]
       .filter(Boolean).join('\n\n'),
     tools: [
       ...LEDGER_TOOLS, ...(options.investmentMode ? [portfolioOverview] : []),
@@ -86,13 +87,16 @@ export async function runChatTurn(input: {
   onText?: (delta: string) => void;
 }): Promise<ChatTurnResult> {
   const modelKey = input.options.modelKey || getDefaultModelForTask('chat');
-  const agent = buildAgent(modelKey, input.options, factsInstruction(await listMemoryFacts()));
+  // Saved facts and the chat load at the same time.
+  const [facts, existing] = await Promise.all([
+    listMemoryFacts(),
+    input.sessionId ? sessionService.getSession({ appName: APP_NAME, userId: USER_ID, sessionId: input.sessionId }) : undefined,
+  ]);
+  const agent = buildAgent(modelKey, input.options, factsInstruction(facts));
   const artifactService = new InMemoryArtifactService();
   const runner = new Runner({ appName: APP_NAME, agent, sessionService, memoryService, artifactService });
 
-  let session = input.sessionId
-    ? await sessionService.getSession({ appName: APP_NAME, userId: USER_ID, sessionId: input.sessionId })
-    : undefined;
+  let session = existing;
   if (!session) {
     if (input.confirmation) throw new Error('That chat no longer exists.');
     session = await sessionService.createSession({ appName: APP_NAME, userId: USER_ID });
@@ -154,7 +158,10 @@ export async function runChatTurn(input: {
     await sessionService.appendEvent({ session: fresh, event: createEvent({ invocationId: 'ui', author: 'user', actions: { stateDelta: uiState } as any }) });
   }
 
-  const loaded = await loadChat(session.id);
+  // `fresh` already holds every event of this turn; no need to read the chat again.
+  const loaded = fresh
+    ? { title: (await getSupabase().from('chat_sessions').select('title').eq('id', session.id).maybeSingle()).data?.title ?? 'Chat', items: eventsToItems(fresh) }
+    : await loadChat(session.id);
   return {
     sessionId: session.id,
     title: loaded?.title ?? 'New chat',
@@ -247,8 +254,4 @@ export async function loadChat(id: string): Promise<{ id: string; title: string;
   return { id, title: data?.title ?? 'Chat', kind: data?.kind ?? 'chat', items: eventsToItems(session) };
 }
 
-export async function listChats(): Promise<ChatSummary[]> {
-  const { data } = await getSupabase().from('chat_sessions').select('id, title, kind, updated_at')
-    .eq('app_name', APP_NAME).eq('user_id', USER_ID).order('updated_at', { ascending: false }).limit(10);
-  return (data ?? []).map(r => ({ id: r.id, title: r.title, kind: r.kind, updatedAt: r.updated_at }));
-}
+export { listChats } from '@/lib/chat-store';

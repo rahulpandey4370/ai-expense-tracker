@@ -98,7 +98,7 @@ const fixedExpenseAnalyzerFlow = ai.defineFlow(
   },
   async (input) => {
     const model = (input as any).model || getDefaultModelForTask('fixed_expenses');
-    let output = await callStructuredLLM(model, fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({ model: true }), {
+    let output = await callStructuredLLM(model, fixedExpensePromptTemplate, input, FixedExpenseAnalyzerOutputSchema.omit({ model: true }), { feature: 'fixed-expenses',
       temperature: 0.2,
       maxOutputTokens: 1000,
       safetySettings: [

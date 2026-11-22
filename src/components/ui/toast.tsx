@@ -7,7 +7,10 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const ToastProvider = ToastPrimitives.Provider
+// Toasts last at most 3s and are swiped up to dismiss (they sit at the top).
+const ToastProvider = (props: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Provider>) => (
+  <ToastPrimitives.Provider duration={3000} swipeDirection="up" {...props} />
+)
 
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Viewport>,
@@ -16,8 +19,9 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      // Phones: bottom, just above the 4rem tab bar, where the thumb already is.
-      "fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[100] flex max-h-screen w-full flex-col p-4 md:bottom-0 md:right-0 md:max-w-[420px]",
+      // Just below the header, centred and compact, so it covers neither the header's
+      // controls nor the tab bar and buttons at the bottom. The empty area lets taps through.
+      "pointer-events-none fixed inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)] z-[100] mx-auto flex w-full max-w-sm flex-col items-center gap-2 px-3 md:top-[4.5rem]",
       className
     )}
     {...props}
@@ -26,7 +30,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
+  "group pointer-events-auto relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-lg border px-3 py-2.5 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-y-0 data-[swipe=end]:translate-y-[var(--radix-toast-swipe-end-y)] data-[swipe=move]:translate-y-[var(--radix-toast-swipe-move-y)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-top-full data-[state=open]:slide-in-from-top-full motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
   {
     variants: {
       variant: {
@@ -107,7 +111,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm opacity-90", className)}
+    className={cn("text-xs opacity-90", className)}
     {...props}
   />
 ))

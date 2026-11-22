@@ -11,12 +11,8 @@ import { getSupabase } from '@/lib/supabase';
  *   always put in its instructions, and listed in the chat drawer to delete.
  */
 
-export interface MemoryFact { id: string; fact: string; createdAt: string }
-
-export async function listMemoryFacts(): Promise<MemoryFact[]> {
-  const { data } = await getSupabase().from('ai_memories').select('id, fact, created_at').order('created_at', { ascending: true });
-  return (data ?? []).map(r => ({ id: r.id, fact: r.fact, createdAt: r.created_at }));
-}
+import { listMemoryFacts, type MemoryFact } from '@/lib/chat-store';
+export { listMemoryFacts, type MemoryFact };
 
 export async function deleteMemoryFact(id: string): Promise<void> {
   await getSupabase().from('ai_memories').delete().eq('id', id);

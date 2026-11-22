@@ -1,6 +1,7 @@
 'use server';
 
 import { getSupabase } from '@/lib/supabase';
+import { withAiFeature } from '@/lib/usage';
 import { NOTIFICATION_KINDS, type NotificationKind } from '@/lib/notification-kinds';
 import { addTransaction } from '@/lib/actions/transactions';
 import { sendPush } from '@/lib/push';
@@ -122,13 +123,13 @@ export async function aiFillPendingTransaction(id: string, note: string): Promis
     .eq('status', 'pending')
     .single();
   if (error || !row) throw new Error('This SMS was already confirmed or dismissed.');
-  const guess = await guessFromSms({
+  const guess = await withAiFeature('sms', () => guessFromSms({
     text: row.raw_text,
     sender: row.sender,
     amount: Number(row.amount),
     accountHint: row.account_hint,
     note: String(note ?? ''),
-  });
+  }));
   if (!guess.aiOk) throw new Error('The AI could not read this one. Try rewording your note, or fill it in by hand.');
   return {
     description: guess.description,
@@ -143,6 +144,18 @@ export async function dismissPendingTransaction(id: string): Promise<void> {
     .from('pending_transactions')
     .update({ status: 'dismissed', resolved_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('status', 'pending');
+  if (error) throw new Error(`Could not dismiss: ${error.message}`);
+  revalidatePath('/pending');
+}
+
+/** Dismisses several at once (the Inbox's "Dismiss all"). */
+export async function dismissPendingTransactions(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await getSupabase()
+    .from('pending_transactions')
+    .update({ status: 'dismissed', resolved_at: new Date().toISOString() })
+    .in('id', ids.slice(0, 500))
     .eq('status', 'pending');
   if (error) throw new Error(`Could not dismiss: ${error.message}`);
   revalidatePath('/pending');

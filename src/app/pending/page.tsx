@@ -1,4 +1,5 @@
 "use client";
+import { read } from '@/lib/read-client';
 
 import { deleteWithUndo } from '@/lib/undo-toast';
 import { useState, useEffect, useCallback } from 'react';
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useInvalidateFinance } from "@/hooks/use-finance-queries";
+import { useAdjustPendingCount } from "@/hooks/use-optimistic";
 import { cn } from "@/lib/utils";
 import { MessageSquareText, Loader2, Check, X, Sparkles } from "lucide-react";
 import { getCategories, getPaymentMethods } from "@/lib/actions/transactions";
@@ -17,6 +19,7 @@ import {
   getPendingTransactions,
   confirmPendingTransaction,
   dismissPendingTransaction,
+  dismissPendingTransactions,
   aiFillPendingTransaction,
   type PendingTransaction,
 } from "@/lib/actions/pending";
@@ -33,17 +36,17 @@ const EXPENSE_TYPES = [
 export default function PendingPage() {
   const { toast } = useToast();
   const invalidateFinance = useInvalidateFinance(); // inbox badge + dashboard totals
+  const adjustBadge = useAdjustPendingCount();
   const [items, setItems] = useState<PendingTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
-      const [pending, cats, pms] = await Promise.all([getPendingTransactions(), getCategories('expense'), getPaymentMethods()]);
+      const [pending, cats, pms] = await Promise.all([read('getPendingTransactions'), read('getCategories', 'expense'), read('getPaymentMethods')]);
       setItems(pending);
       setCategories(cats);
       setPaymentMethods(pms);
@@ -64,7 +67,11 @@ export default function PendingPage() {
       toast({ title: "Fill in all fields", description: "Category, payment method and need/want are required.", variant: "destructive" });
       return;
     }
-    setBusyId(item.id);
+    // Optimistic: the card goes and the badge drops now; both come back if saving fails.
+    const index = items.findIndex(i => i.id === item.id);
+    setItems(list => list.filter(i => i.id !== item.id));
+    adjustBadge(-1);
+    toast({ title: "Logged", description: `₹${item.amount.toLocaleString('en-IN')} added to transactions.` });
     try {
       await confirmPendingTransaction(item.id, {
         date: item.date,
@@ -74,13 +81,11 @@ export default function PendingPage() {
         paymentMethodId: item.paymentMethodId,
         expenseType: item.expenseType,
       });
-      setItems(list => list.filter(i => i.id !== item.id));
       invalidateFinance();
-      toast({ title: "Logged", description: `₹${item.amount.toLocaleString('en-IN')} added to transactions.` });
     } catch (e: any) {
+      setItems(list => (list.some(i => i.id === item.id) ? list : [...list.slice(0, index), item, ...list.slice(index)]));
+      adjustBadge(+1);
       toast({ title: "Could not log it", description: e.message, variant: "destructive" });
-    } finally {
-      setBusyId(null);
     }
   };
 
@@ -106,9 +111,20 @@ export default function PendingPage() {
     const index = items.findIndex(i => i.id === item.id);
     deleteWithUndo({
       title: 'Dismissed',
-      hide: () => setItems(list => list.filter(i => i.id !== item.id)),
-      restore: () => setItems(list => (list.some(i => i.id === item.id) ? list : [...list.slice(0, index), item, ...list.slice(index)])),
+      hide: () => { setItems(list => list.filter(i => i.id !== item.id)); adjustBadge(-1); },
+      restore: () => { setItems(list => (list.some(i => i.id === item.id) ? list : [...list.slice(0, index), item, ...list.slice(index)])); adjustBadge(+1); },
       commit: () => dismissPendingTransaction(item.id),
+      onCommitted: invalidateFinance,
+    });
+  };
+
+  const dismissAll = () => {
+    const all = items;
+    deleteWithUndo({
+      title: `Dismissed ${all.length} SMS`,
+      hide: () => { setItems([]); adjustBadge(-all.length); },
+      restore: () => { setItems(all); adjustBadge(+all.length); },
+      commit: () => dismissPendingTransactions(all.map(i => i.id)),
       onCommitted: invalidateFinance,
     });
   };
@@ -126,6 +142,15 @@ export default function PendingPage() {
           </CardDescription>
         </CardHeader>
       </Card>
+
+      {!isLoading && items.length > 1 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-sm text-muted-foreground">{items.length} waiting for review</p>
+          <Button variant="outline" size="sm" onClick={dismissAll}>
+            <X className="mr-1.5 h-4 w-4" /> Dismiss all
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -147,7 +172,7 @@ export default function PendingPage() {
                     value={notes[item.id] ?? ''}
                     onChange={e => setNotes(n => ({ ...n, [item.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); aiFill(item); } }} />
-                  <Button type="button" variant="secondary" onClick={() => aiFill(item)} disabled={aiBusyId === item.id || busyId === item.id}>
+                  <Button type="button" variant="secondary" onClick={() => aiFill(item)} disabled={aiBusyId === item.id}>
                     {aiBusyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     AI
                   </Button>
@@ -193,11 +218,11 @@ export default function PendingPage() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => dismiss(item)} disabled={busyId === item.id}>
+                <Button variant="outline" onClick={() => dismiss(item)}>
                   <X className="mr-2 h-4 w-4" /> Dismiss
                 </Button>
-                <Button onClick={() => confirm(item)} disabled={busyId === item.id}>
-                  {busyId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                <Button onClick={() => confirm(item)}>
+                  <Check className="mr-2 h-4 w-4" />
                   Log it
                 </Button>
               </div>

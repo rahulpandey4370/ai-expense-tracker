@@ -20,6 +20,9 @@ interface RankedBarChartProps {
   emptyMessage?: string;
   footer?: React.ReactNode;
   className?: string;
+  /** Value formatting; defaults to rupees. */
+  format?: (n: number) => string;
+  formatCompact?: (n: number) => string;
 }
 
 /**
@@ -39,6 +42,8 @@ export function RankedBarChart({
   emptyMessage = "No data for this period.",
   footer,
   className,
+  format = formatCurrency,
+  formatCompact = formatCurrencyCompact,
 }: RankedBarChartProps) {
   const sorted = [...data].filter(d => d.value > 0).sort((a, b) => b.value - a.value);
 
@@ -103,7 +108,7 @@ export function RankedBarChart({
                 <ChartTooltipContent
                   hideLabel
                   formatter={(value, name) => [
-                    `${formatCurrency(Number(value))}${total > 0 ? ` · ${((Number(value) / total) * 100).toFixed(1)}%` : ''}`,
+                    `${format(Number(value))}${total > 0 ? ` · ${((Number(value) / total) * 100).toFixed(1)}%` : ''}`,
                     name,
                   ]}
                 />
@@ -118,7 +123,7 @@ export function RankedBarChart({
                 offset={6}
                 className="fill-foreground"
                 style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
-                formatter={(v: number) => formatCurrencyCompact(v)}
+                formatter={(v: number) => formatCompact(v)}
               />
             </Bar>
           </BarChart>

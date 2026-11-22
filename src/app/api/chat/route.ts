@@ -2,6 +2,7 @@
 // {"t":"text","d":"…"} as the reply is written, then {"t":"done","result":…}
 // (or {"t":"error","message":…}). The chat screen reads it in financial-chatbot.tsx.
 import { revalidatePath } from 'next/cache';
+import { withAiFeature } from '@/lib/usage';
 import { z } from 'zod';
 import { runChatTurn } from '@/ai/adk/chat';
 import { runMonthlyReview } from '@/ai/adk/monthly-review';
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     const ist = new Date(Date.now() + 5.5 * 3600_000);
     const m = ist.getUTCMonth() - (review === 'last' ? 1 : 0);
     try {
-      const r = await runMonthlyReview({ year: ist.getUTCFullYear() + (m < 0 ? -1 : 0), month: (m + 12) % 12, modelKey: options.modelKey });
+      const r = await withAiFeature('review', () => runMonthlyReview({ year: ist.getUTCFullYear() + (m < 0 ? -1 : 0), month: (m + 12) % 12, modelKey: options.modelKey }));
       return Response.json({ sessionId: r.sessionId });
     } catch (e: any) {
       console.error('[chat] /review failed:', e);
@@ -56,9 +57,9 @@ export async function POST(req: Request) {
       const send = (o: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(o)}\n`));
       try {
         const onText = (d: string) => { if (d) send({ t: 'text', d }); };
-        const result = confirmation
-          ? await runChatTurn({ sessionId, confirmation, options, onText })
-          : await runChatTurn({ sessionId, text: text || `Read ${attachments.map(a => a.name).join(', ')}`, attachments, options, onText });
+        const result = await withAiFeature('chat', () => confirmation
+          ? runChatTurn({ sessionId, confirmation, options, onText })
+          : runChatTurn({ sessionId, text: text || `Read ${attachments.map(a => a.name).join(', ')}`, attachments, options, onText }));
         if (confirmation?.confirmed) revalidatePath('/', 'layout');
         send({ t: 'done', result });
       } catch (e: any) {

@@ -70,14 +70,15 @@ export class SupabaseSessionService extends BaseSessionService {
     const saved = await super.appendEvent({ session, event });
     if (saved.partial) return saved;
     const db = getSupabase();
-    const { error } = await db.from('chat_events').upsert({
-      id: saved.id, session_id: session.id, ts: saved.timestamp, data: JSON.parse(JSON.stringify(saved)),
-    });
-    if (error) throw new Error(`Could not save chat message: ${error.message}`);
     const hasState = saved.actions?.stateDelta && Object.keys(saved.actions.stateDelta).length > 0;
-    await db.from('chat_sessions')
-      .update({ updated_at: new Date().toISOString(), ...(hasState ? { state: session.state } : {}) })
-      .eq('id', session.id);
+    // Both writes at once: each is a round trip to the database.
+    const [{ error }] = await Promise.all([
+      db.from('chat_events').upsert({ id: saved.id, session_id: session.id, ts: saved.timestamp, data: JSON.parse(JSON.stringify(saved)) }),
+      db.from('chat_sessions')
+        .update({ updated_at: new Date().toISOString(), ...(hasState ? { state: session.state } : {}) })
+        .eq('id', session.id),
+    ]);
+    if (error) throw new Error(`Could not save chat message: ${error.message}`);
     session.lastUpdateTime = saved.timestamp;
     return saved;
   }

@@ -1,3 +1,4 @@
+import { read } from '@/lib/read-client';
 
 
 import { useState, type FormEvent, type ChangeEvent, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -141,8 +142,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     setIsFetchingDropdowns(true);
     try {
       const [fetchedAllCategories, fetchedPaymentMethods] = await Promise.all([
-        getCategories(),
-        getPaymentMethods()
+        read('getCategories'),
+        read('getPaymentMethods')
       ]);
 
       setAllCategories(fetchedAllCategories);

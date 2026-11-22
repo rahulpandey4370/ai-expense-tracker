@@ -20,7 +20,7 @@ import { usePendingCount } from "@/hooks/use-finance-queries";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank, LineChart, MessageSquareText } from "lucide-react";
+import { LayoutDashboard, FlaskConical, ArrowRightLeft, BarChart3, Settings, HelpCircle, TableProperties, Users, Home, Bot, Repeat, PiggyBank, LineChart, MessageSquareText , Gauge } from "lucide-react";
 
 /**
  * Grouped instead of an 11-item flat list. The old order interleaved daily
@@ -60,6 +60,7 @@ export const navGroups: { label: string | null; items: { href: string; label: st
     items: [
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
       { href: "/ai-playground", label: "AI Playground", icon: FlaskConical },
+      { href: "/usage", label: "AI Usage & Cost", icon: Gauge },
     ],
   },
   {
