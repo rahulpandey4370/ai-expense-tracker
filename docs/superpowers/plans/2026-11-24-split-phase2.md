@@ -24,3 +24,7 @@ standard-emoji sidekicks. Luna = `openai::gpt-5.6-luna` (same as `SMS_MODEL`).
 
 ## Ledger
 (append `Task N: complete …` / `Ruling:` lines here)
+Task 1: complete (b2ed1bc) checks math/access/bridge/splitwise/voice/receipt ok; Ruling: SPLIT_MODEL follows SMS_MODEL (gpt-6-luna) — user switched SMS to gpt-6-luna and asked for one Luna across flows — cost: override via SPLIT_AI_MODEL
+Task 6 (partial): Luna live-verified — split scan, voice x2, parse-receipt flow, chat read_attachment all correct on generated GST receipt; fixed JSON-mode prompt bug (59ac711)
+Tasks 2-4: complete (6368575); guest page screenshots grape/coral + receipt view OK; Ruling: Home/You tabs not screenshotted (behind Google login) — user to check at localhost
+Task 5: complete (321aad1); Luna parse picked groupName 'Goa trip' + participants live; Ruling: editing an existing transaction keeps the old split editor (legacy Quick splits) — only new entries go through groups — cost: can't move an old transaction into a group from the form
