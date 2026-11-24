@@ -122,6 +122,12 @@ function ledgerOf(groupId: string, l: Loaded) {
 const personKey = (m: MemberRow) => (m.email ? m.email.toLowerCase() : `name:${m.name.trim().toLowerCase()}`);
 
 export async function getHome(user: SessionUser): Promise<HomeData> {
+  // Seats created by the SQL import or the bridge have no owner yet; claim them here as well as at
+  // sign-in, so Quick splits shows up even if the SQL ran after the owner last signed in.
+  if (user.isOwner) {
+    await db().from('split_members').update({ user_id: user.id, email: user.email.toLowerCase() })
+      .eq('is_owner', true).is('user_id', null).is('email', null);
+  }
   const loaded = await loadGroups(await myGroupIds(user));
   const groups: GroupSummary[] = [];
   const people = new Map<string, PersonBalance>();
@@ -191,7 +197,8 @@ export async function getGroup(access: Access, groupId: string, asMember?: strin
   const { members, expenses, settlements, balances, transfers } = ledgerOf(groupId, o.loaded);
   return {
     group: toInfo(o.group),
-    members: members.map(toMember),
+    // Link guests see names, not other people's email addresses.
+    members: members.map(toMember).map(m => (o.canManage ? m : { ...m, email: null })),
     expenses, settlements, balances, transfers,
     meMemberId: o.me?.id ?? null,
     canManage: o.canManage,
@@ -235,6 +242,7 @@ export async function updateGroup(access: Access, groupId: string, patch: { name
 }
 
 export async function deleteGroup(access: Access, groupId: string) {
+  if (groupId === 'legacy') throw new SplitError(400, 'Quick splits mirrors your transactions and can\'t be deleted. Archive it instead.');
   await manage(access, groupId);
   await must(db().from('split_groups').delete().eq('id', groupId));
   return { ok: true };
@@ -444,7 +452,10 @@ export async function settleWithPerson(user: SessionUser, key: string, transacti
     if (transactionId) {
       const e = loaded.expenses.find(x => x.group_id === g.id && x.transaction_id === transactionId);
       const share = e ? sharesOf(e)[person.id] ?? 0 : 0;
-      pay = e && e.paid_by === me.id && share > 0 ? [{ from: person.id, to: me.id, amount: share }] : [];
+      // Never more than they still owe me here, so a retry or a second call doesn't overpay.
+      const stillOwed = transfers.find(t => t.from === person.id && t.to === me.id)?.amount ?? 0;
+      const amount = Math.min(share, stillOwed);
+      pay = e && e.paid_by === me.id && amount > 0 ? [{ from: person.id, to: me.id, amount }] : [];
     }
     for (const t of pay) {
       await must(db().from('split_settlements').insert({

@@ -30,7 +30,8 @@ export function safeNext(next: string | null): string {
   try {
     const base = 'http://local.invalid';
     const u = new URL(next, base);
-    return u.origin === base ? u.pathname + u.search + u.hash : '/';
+    // Dot segments can normalise to "//host" (e.g. "/.//evil.com"), which browsers treat as another site.
+    return u.origin === base && !u.pathname.startsWith('//') ? u.pathname + u.search + u.hash : '/';
   } catch {
     return '/';
   }

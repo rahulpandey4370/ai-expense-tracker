@@ -172,10 +172,8 @@ function TransactionDetails({ transaction: t, onClose }: { transaction: AppTrans
             <DetailRow label="Paid by">{t.paidBy?.name ?? 'You'}</DetailRow>
             {(t.splits ?? []).map(s => (
               <DetailRow key={s.userId} label={s.userName}>
+                {/* Settling now happens per person in the Split tab, not per share here. */}
                 {formatCurrency(s.shareAmount)}
-                <Badge variant="outline" className={cn("ml-2 text-[11px] font-normal", s.isSettled ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>
-                  {s.isSettled ? 'Settled' : 'Pending'}
-                </Badge>
               </DetailRow>
             ))}
           </>

@@ -14,3 +14,10 @@ alter default privileges in schema public revoke execute on functions from publi
 -- The server's role keeps calling the RPCs (create_transaction_with_splits, split_save_expense, ...).
 grant execute on all functions in schema public to service_role;
 alter default privileges in schema public grant execute on functions to service_role;
+
+-- RLS doesn't apply to views (transactions_expanded runs as its owner), so take table/view/sequence
+-- privileges away from the public roles outright. service_role keeps its own grants.
+revoke all on all tables in schema public from anon, authenticated;
+revoke all on all sequences in schema public from anon, authenticated;
+alter default privileges in schema public revoke all on tables from anon, authenticated;
+alter default privileges in schema public revoke all on sequences from anon, authenticated;

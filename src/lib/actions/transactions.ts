@@ -374,6 +374,15 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
   }
   const existingItem = toRawTransaction(existingRows[0]);
 
+  // Mirrored from a group expense (the owner's share)? The split lives in the group, so drop the
+  // form's split fields — its empty split editor would otherwise clear my_share and inflate KPIs.
+  const { data: linked } = await supabase.from('split_expenses').select('id')
+    .eq('transaction_id', id).not('id', 'like', 'legacy\\_%').limit(1);
+  if (linked?.length) {
+    const { splits: _s, myShare: _m, paidById: _p, splitMethod: _sm, ...rest } = data;
+    data = rest;
+  }
+
   // `splits` is the sentinel for "this call fully specifies the split state".
   // The transaction form always sends it (populated, or `[]` to clear a
   // split) on every save. Callers that never touch splitting at all —

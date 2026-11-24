@@ -77,7 +77,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
         <YouTab name={user?.name ?? ''} email={user?.email ?? ''} onLogout={logout} />
       ) : home.isLoading ? (
         <Spinner />
-      ) : home.error || !home.data ? (
+      ) : !home.data ? (
         <EmptyState title={<>Couldn&apos;t <em>load</em></>} body={(home.error as Error)?.message ?? 'Please try again.'}>
           <button type="button" className="s-pill" onClick={() => home.refetch()}>Retry</button>
         </EmptyState>

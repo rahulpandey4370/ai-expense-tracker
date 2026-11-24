@@ -40,7 +40,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
   }, [q.data]);
 
   if (q.isLoading) return <div className="flex justify-center py-20"><Loader2 className="s-muted h-6 w-6 animate-spin" /></div>;
-  if (q.error || !q.data) {
+  if (!q.data) { // a failed background poll keeps the last data on screen
     return <EmptyState title={<>This link <em>doesn&apos;t work</em></>} body={(q.error as Error)?.message ?? 'The group may have been deleted or the link turned off.'} />;
   }
 

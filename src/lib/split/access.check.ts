@@ -44,7 +44,7 @@ assert.equal(canEditMember(stranger, members, 'm3'), false, 'non-member');
 
 // login redirect target stays on this site
 assert.equal(safeNext('/groups?x=1'), '/groups?x=1');
-for (const bad of ['//evil.com', '/\\evil.com', '/\t/evil.com', 'https://evil.com', '/\n/evil.com', null]) {
+for (const bad of ['/.//evil.com', '/..//evil.com', '/groups/..//evil.com', '//evil.com', '/\\evil.com', '/\t/evil.com', 'https://evil.com', '/\n/evil.com', null]) {
   assert.equal(safeNext(bad as string | null), '/', String(bad));
 }
 

@@ -31,9 +31,11 @@ export async function middleware(req: NextRequest) {
   // Keep any refreshed session cookies on early responses too.
   const keep = (r: NextResponse) => { res.cookies.getAll().forEach(c => r.cookies.set(c)); return r; };
 
-  // Every server action in this app reads or writes the owner's finances.
-  // Friends and share-link guests only ever call /api/split.
-  if (req.headers.has('next-action') && !user?.isOwner) {
+  // Every server action in this app reads or writes the owner's finances, and Next runs actions
+  // from any POST to a page (with or without a Next-Action header). Pages never take other POSTs,
+  // so only owners may POST outside /api (which authorises itself) and /auth.
+  const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if ((req.headers.has('next-action') || (isWrite && !isApi && !path.startsWith('/auth/'))) && !user?.isOwner) {
     return keep(new NextResponse('Forbidden', { status: 403 }));
   }
 
@@ -55,5 +57,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-.*|.*\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
+  // Skip only real static files: Next's own assets and top-level files in /public. A nested
+  // "/portfolio/a.png" is a dynamic page and must still pass through the gate.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-[^/]*$|[^/]+\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
 };
