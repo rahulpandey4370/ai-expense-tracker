@@ -24,6 +24,11 @@ export async function GET(req: NextRequest) {
     .eq('email', user.email.toLowerCase()) // emails are stored lowercased
     .is('user_id', null)
     .then(() => {}, () => {}); // table may not exist yet; never block sign-in on it
+  // The owner's own seats in imported/legacy groups have no email yet.
+  if (user.isOwner) {
+    await getSupabase().from('split_members').update({ user_id: user.id, email: user.email.toLowerCase() })
+      .eq('is_owner', true).is('user_id', null).is('email', null).then(() => {}, () => {});
+  }
 
   const dest = user.isOwner ? next : next.startsWith('/groups') || next.startsWith('/s/') ? next : '/groups';
   return NextResponse.redirect(new URL(dest, req.url));

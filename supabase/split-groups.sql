@@ -7,7 +7,7 @@ create table if not exists split_groups (
   emoji text,
   kind text not null default 'other' check (kind in ('trip', 'home', 'couple', 'other', 'direct')),
   currency text not null default 'INR',
-  share_token_hash text unique,        -- sha256 hex of the private link token; null = no link
+  share_token text unique,             -- private link secret; null = no link. Kept (not hashed) so it can be copied again; the DB is service-role only.
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   archived_at timestamptz

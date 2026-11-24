@@ -24,7 +24,14 @@ export function userFromClaims(claims: Record<string, any> | null | undefined): 
   };
 }
 
-/** Only same-site relative paths, so a login link can't bounce users to another domain. */
+/** Only same-origin paths, so a login link can't bounce users to another site. */
 export function safeNext(next: string | null): string {
-  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/';
+  if (!next || /[\u0000-\u001F\u007F\\]/.test(next)) return '/';
+  try {
+    const base = 'http://local.invalid';
+    const u = new URL(next, base);
+    return u.origin === base ? u.pathname + u.search + u.hash : '/';
+  } catch {
+    return '/';
+  }
 }
