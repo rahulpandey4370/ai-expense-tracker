@@ -71,8 +71,10 @@ export function MembersSheet({ open, onOpenChange, detail, token, onDeleted }: P
         <section className="s-card space-y-2 p-3">
           <p className="text-sm font-semibold">Add someone</p>
           <input className="s-input" placeholder="Name" aria-label="Name" value={form.name} maxLength={60} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          <input className="s-input" type="email" placeholder="Google email (optional — lets them sign in and see this group)" aria-label="Email"
-            value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          {detail.canManage && (
+            <input className="s-input" type="email" placeholder="Google email (optional — lets them sign in and see this group)" aria-label="Email"
+              value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          )}
           <button type="button" className="s-pill w-full" onClick={add} disabled={action.isPending || !form.name.trim()}>
             <UserPlus className="h-4 w-4" /> Add to group
           </button>

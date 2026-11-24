@@ -239,6 +239,9 @@ export async function deleteGroup(access: Access, groupId: string) {
 
 export async function addMember(access: Access, groupId: string, input: { name: string; email?: string; upiId?: string }) {
   const o = await openGroup(access, groupId);
+  // An email lets that Google account into the group, and a UPI ID decides where money goes —
+  // so link guests may add people by name only.
+  if (!o.canManage && (input.email || input.upiId)) throw new SplitError(403, 'Sign in to invite people by email or set UPI IDs.');
   const email = input.email?.trim().toLowerCase() || null;
   if (email && active(o.members).some(m => m.email === email)) throw new SplitError(400, 'That email is already in this group.');
   const id = cuid();
