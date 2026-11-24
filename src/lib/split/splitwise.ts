@@ -120,4 +120,13 @@ export function splitwiseToLedger(p: ParsedSplitwise) {
   return { expenses, settlements, skipped, balances, balanceMismatch };
 }
 
+/** split_members rows for an import. Every row carries the same keys: in a bulk insert PostgREST sends NULL for a
+ *  key some rows lack (not the column default), and is_owner is NOT NULL. */
+export function importMemberRows(members: string[], meIndex: number, user: { id: string; email: string; name: string; isOwner: boolean },
+  groupId: string, ids: string[], emailOf: Map<number, string>, now: string) {
+  return members.map((name, i) => i === meIndex
+    ? { id: ids[i], group_id: groupId, name: user.name, email: user.email.toLowerCase(), user_id: user.id as string | null, is_owner: user.isOwner, created_at: now }
+    : { id: ids[i], group_id: groupId, name: name.slice(0, 60) || `Person ${i + 1}`, email: emailOf.get(i) || null, user_id: null, is_owner: false, created_at: now });
+}
+
 const sortKeys = (o: Record<number, number>) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => Number(a) - Number(b)));

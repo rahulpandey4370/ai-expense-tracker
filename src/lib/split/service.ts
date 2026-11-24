@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase';
 import { isOwnerEmail, type SessionUser } from '@/lib/auth/roles';
 import { resolveShares, computeBalances, simplifyDebts, ownerSpending, type SplitMethod, type SplitItem } from './math';
 import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
-import { parseSplitwise, splitwiseToLedger } from './splitwise';
+import { importMemberRows, parseSplitwise, splitwiseToLedger } from './splitwise';
 import { parseVoiceDraft } from './voice';
 import { decodeDataUri, removeGroupReceipts, removeReceipt, scanReceiptDraft, signedReceiptUrl, storeReceipt } from './receipt';
 import { emojiFor } from './emoji';
@@ -525,9 +525,7 @@ export async function importSplitwise(user: SessionUser, input: { csv: string; g
   const me = memberIds[input.meIndex];
   try {
     await must(db().from('split_groups').insert({ id: groupId, name: input.groupName, emoji: '🧳', kind: 'other', created_at: now, updated_at: now }));
-    await must(db().from('split_members').insert(parsed.members.map((name, i) => i === input.meIndex
-      ? { id: me, group_id: groupId, name: user.name, email: user.email.toLowerCase(), user_id: user.id, is_owner: user.isOwner, created_at: now }
-      : { id: memberIds[i], group_id: groupId, name: name.slice(0, 60) || `Person ${i + 1}`, email: emailOf.get(i) || null, created_at: now })));
+    await must(db().from('split_members').insert(importMemberRows(parsed.members, input.meIndex, user, groupId, memberIds, emailOf, now)));
 
     const expenseRows = ledger.expenses.map(e => {
       const shares = Object.fromEntries(Object.entries(e.shares).map(([i, v]) => [memberIds[Number(i)], v]));

@@ -1,6 +1,6 @@
 // Run: npx tsx src/lib/split/splitwise.check.ts
 import assert from 'node:assert/strict';
-import { parseCsv, parseSplitwise, splitwiseToLedger } from './splitwise';
+import { parseCsv, parseSplitwise, splitwiseToLedger, importMemberRows } from './splitwise';
 import { computeBalances } from './math';
 
 const CSV = '﻿Date,Description,Category,Cost,Currency,Rahul Pandey,Asha,Ben\r\n'
@@ -48,6 +48,11 @@ const bal = computeBalances(['0', '1', '2'],
   l.settlements.map(s => ({ from: String(s.from), to: String(s.to), amount: s.amount })));
 assert.deepEqual(bal, { 0: 0, 1: 800, 2: -800 });
 assert.equal(l.balanceMismatch, false);
+
+// member rows for the bulk insert share one key set: PostgREST nulls missing keys (is_owner is NOT NULL)
+const mrows = importMemberRows(['Asha', 'Rahul', 'Bo'], 1, { id: 'u1', email: 'R@x.com', name: 'Rahul P', isOwner: true }, 'g', ['a', 'b', 'c'], new Map([[0, 'asha@x.com']]), 'now');
+assert.ok(mrows.every(r => Object.keys(r).sort().join() === Object.keys(mrows[0]).sort().join()));
+assert.deepEqual(mrows.map(r => [r.name, r.email, r.user_id, r.is_owner]), [['Asha', 'asha@x.com', null, false], ['Rahul P', 'r@x.com', 'u1', true], ['Bo', null, null, false]]);
 
 // not a Splitwise export
 assert.throws(() => parseSplitwise('foo,bar\n1,2'), /Splitwise/);
