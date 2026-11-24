@@ -18,15 +18,17 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
   const router = useRouter();
 
   const isDemoRoute = pathname.startsWith('/demo');
+  // Standalone screens without the finance app shell: login, the friend split app, share links.
+  const isBare = pathname === '/login' || pathname.startsWith('/groups') || pathname.startsWith('/s/');
 
   useEffect(() => {
     // If it's a demo route, we don't check for auth
-    if (isDemoRoute) return;
+    if (isDemoRoute || isBare) return;
 
     if (!isLoadingAuth && !isAuthenticated && pathname !== '/login') {
       router.push('/login');
     }
-  }, [isAuthenticated, isLoadingAuth, pathname, router, isDemoRoute]);
+  }, [isAuthenticated, isLoadingAuth, pathname, router, isDemoRoute, isBare]);
 
   if (isLoadingAuth && !isDemoRoute) {
     return (
@@ -55,12 +57,12 @@ export default function ProtectedLayoutWrapper({ children }: { children: React.R
     );
   }
 
-  if (!isAuthenticated && pathname !== '/login') {
-    return null; // Or a specific "redirecting..." message
+  if (isBare) {
+    return <MotionConfig reducedMotion="user">{children}</MotionConfig>;
   }
 
-  if (pathname === '/login') {
-    return <>{children}</>; // Render only login page content, no sidebar/header
+  if (!isAuthenticated) {
+    return null; // middleware redirects; this only covers the instant before it does
   }
 
   // If authenticated and not on the login page, render the main app layout

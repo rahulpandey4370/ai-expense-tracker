@@ -10,6 +10,7 @@ import ProtectedLayoutWrapper from '@/components/layout/protected-layout-wrapper
 import { AIModelProvider } from '@/contexts/AIModelContext';
 import { getPublicModels } from '@/lib/model-registry';
 import { QueryProvider } from '@/components/providers/query-provider';
+import { getSessionUser } from '@/lib/auth/supabase-server';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -56,12 +57,13 @@ export default async function RootLayout({
 }>) {
   // Credential-stripped: this array is serialized into the client payload.
   const availableModels = getPublicModels();
+  const user = await getSessionUser();
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${patrickHand.variable} ${caveat.variable} antialiased`}>
         <QueryProvider>
-          <AuthProvider>
+          <AuthProvider initialUser={user}>
             <ThemeProvider
               attribute="class"
               defaultTheme="light"
