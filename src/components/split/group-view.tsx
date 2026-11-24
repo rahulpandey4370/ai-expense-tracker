@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, HandCoins, Loader2, Plus, Users } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Mic, Plus, Users } from 'lucide-react';
+import type { VoiceDraft } from '@/lib/split/voice';
+import { VoiceSheet } from './voice-sheet';
 import type { Expense, GroupDetail, Settlement } from '@/lib/split/types';
 import { Avatar, AvatarStack, EmptyState, KIND_EMOJI, KIND_LABEL, inr, monthLabel, prettyDate } from './bits';
 import { ExpenseSheet } from './expense-sheet';
@@ -20,7 +22,8 @@ type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { ki
 export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members'>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice'>(null);
+  const [draft, setDraft] = useState<VoiceDraft | null>(null);
 
   const feed = useMemo(() => {
     if (!q.data) return [] as [string, FeedItem[]][];
@@ -69,7 +72,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
     );
   }
 
-  const openExpense = (e: Expense | null) => { setEditing(e); setSheet('expense'); };
+  const openExpense = (e: Expense | null) => { setEditing(e); setDraft(null); setSheet('expense'); };
+  const review = (v: VoiceDraft) => { setEditing(null); setDraft(v); setSheet('expense'); };
 
   return (
     <div className="space-y-4 pb-24">
@@ -100,7 +104,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
           </p>
         ))}
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="s-pill s-pill-primary" onClick={() => openExpense(null)}><Plus className="h-4 w-4" /> Add expense</button>
+          <button type="button" className="s-pill s-pill-primary" onClick={() => setSheet('voice')}><Mic className="h-4 w-4" /> Say it</button>
+          <button type="button" className="s-pill" onClick={() => openExpense(null)}><Plus className="h-4 w-4" /> Add</button>
           <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
           <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
         </div>
@@ -129,14 +134,15 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
         </section>
       ))}
 
-      <button
-        type="button" onClick={() => openExpense(null)} aria-label="Add expense"
-        className="s-pill-primary fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full shadow-lg md:bottom-8"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-5 z-30 flex flex-col items-center gap-3 md:bottom-8">
+        <button type="button" onClick={() => openExpense(null)} aria-label="Add expense by typing"
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-[var(--s-ink)] shadow-md"><Plus className="h-6 w-6" /></button>
+        <button type="button" onClick={() => setSheet('voice')} aria-label="Say an expense"
+          className="s-pill-primary flex h-16 w-16 items-center justify-center rounded-full shadow-lg"><Mic className="h-7 w-7" /></button>
+      </div>
 
-      <ExpenseSheet open={sheet === 'expense'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} expense={editing} />
+      <ExpenseSheet open={sheet === 'expense'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} expense={editing} draft={draft} />
+      <VoiceSheet open={sheet === 'voice'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} onReview={review} />
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />
       <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} onDeleted={onBack} />
     </div>

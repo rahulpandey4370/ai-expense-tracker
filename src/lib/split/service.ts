@@ -6,6 +6,9 @@ import { getSupabase } from '@/lib/supabase';
 import { isOwnerEmail, type SessionUser } from '@/lib/auth/roles';
 import { resolveShares, computeBalances, simplifyDebts, ownerSpending, type SplitMethod, type SplitItem } from './math';
 import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
+import { parseSplitwise, splitwiseToLedger } from './splitwise';
+import { parseVoiceDraft } from './voice';
+import { emojiFor } from './emoji';
 import type {
   ActivityItem, Expense, GroupDetail, GroupInfo, GroupKind, GroupSummary, HomeData, Member, PersonBalance, Settlement,
 } from './types';
@@ -156,7 +159,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
         id: e.id, groupId: g.id, groupName: g.name, kind: 'expense', title: e.description, who: name(e.paidBy),
         amount: e.amount, myImpact: e.paidBy === me.id ? r2(e.amount - mine) : -mine, at: e.createdAt,
       });
-      if (user.isOwner && mine > 0 && !e.inMySpending) {
+      if (user.isOwner && mine > 0 && !e.inMySpending && !e.meta?.imported) {
         unlinked.push({ groupId: g.id, groupName: g.name, expenseId: e.id, description: e.description, myShare: mine, date: e.date });
       }
     }
@@ -452,4 +455,66 @@ export async function settleWithPerson(user: SessionUser, key: string, transacti
     }
   }
   return { successCount };
+}
+
+// ---------- voice & import ----------
+
+/** "Say it": parse a sentence into a draft for this group (not saved — the client saves or reviews it). */
+export async function parseVoice(access: Access, input: { groupId: string; text: string; asMember?: string | null; today: string }) {
+  const o = await openGroup(access, input.groupId, input.asMember);
+  if (!o.me) throw new SplitError(400, 'Pick who you are first.');
+  const members = active(o.members).map(m => ({ id: m.id, name: m.name }));
+  try {
+    return await parseVoiceDraft(input.text, members, { id: o.me.id, name: o.me.name }, input.today);
+  } catch (e) {
+    throw new SplitError(502, (e as Error).message.includes('resting') ? (e as Error).message : "Couldn't understand that. Try again or type it.");
+  }
+}
+
+/** Creates a group from a Splitwise group export. `meIndex` is the caller's column. */
+export async function importSplitwise(user: SessionUser, input: { csv: string; groupName: string; meIndex: number; emails?: { index: number; email: string }[] }) {
+  let parsed;
+  try { parsed = parseSplitwise(input.csv); } catch (e) { throw new SplitError(400, (e as Error).message); }
+  if (input.meIndex < 0 || input.meIndex >= parsed.members.length) throw new SplitError(400, 'Pick which column is you.');
+  const ledger = splitwiseToLedger(parsed);
+  if (ledger.expenses.length + ledger.settlements.length === 0) throw new SplitError(400, 'No expenses found in that file.');
+
+  const groupId = cuid();
+  const now = nowIso();
+  const emailOf = new Map((input.emails ?? []).map(e => [e.index, e.email.trim().toLowerCase()]));
+  const memberIds = parsed.members.map(() => cuid());
+  const me = memberIds[input.meIndex];
+  try {
+    await must(db().from('split_groups').insert({ id: groupId, name: input.groupName, emoji: '🧳', kind: 'other', created_at: now, updated_at: now }));
+    await must(db().from('split_members').insert(parsed.members.map((name, i) => i === input.meIndex
+      ? { id: me, group_id: groupId, name: user.name, email: user.email.toLowerCase(), user_id: user.id, is_owner: user.isOwner, created_at: now }
+      : { id: memberIds[i], group_id: groupId, name: name.slice(0, 60) || `Person ${i + 1}`, email: emailOf.get(i) || null, created_at: now })));
+
+    const expenseRows = ledger.expenses.map(e => {
+      const shares = Object.fromEntries(Object.entries(e.shares).map(([i, v]) => [memberIds[Number(i)], v]));
+      return {
+        row: {
+          id: cuid(), group_id: groupId, description: e.description.slice(0, 120), amount: e.amount, date: e.date,
+          emoji: emojiFor(`${e.description} ${e.category}`), method: 'exact', paid_by: memberIds[e.paidBy], created_by: me,
+          meta: { imported: 'splitwise', participants: Object.keys(shares), values: shares }, created_at: now, updated_at: now,
+        },
+        shares,
+      };
+    });
+    for (let i = 0; i < expenseRows.length; i += 500) {
+      const chunk = expenseRows.slice(i, i + 500);
+      await must(db().from('split_expenses').insert(chunk.map(c => c.row)));
+      await must(db().from('split_expense_shares').insert(chunk.flatMap(c => Object.entries(c.shares).map(([member_id, amount]) => ({ expense_id: c.row.id, member_id, amount })))));
+    }
+    for (let i = 0; i < ledger.settlements.length; i += 500) {
+      await must(db().from('split_settlements').insert(ledger.settlements.slice(i, i + 500).map(s => ({
+        id: cuid(), group_id: groupId, from_member: memberIds[s.from], to_member: memberIds[s.to], amount: s.amount,
+        date: s.date, note: s.note.slice(0, 200), created_by: me, created_at: now,
+      }))));
+    }
+  } catch (e) {
+    await db().from('split_groups').delete().eq('id', groupId); // no half-imported groups
+    throw e;
+  }
+  return { groupId, expenses: ledger.expenses.length, settlements: ledger.settlements.length, skipped: ledger.skipped, balanceMismatch: ledger.balanceMismatch, currency: parsed.currency };
 }

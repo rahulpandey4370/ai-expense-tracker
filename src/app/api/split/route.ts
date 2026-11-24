@@ -39,6 +39,9 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('settle'), groupId: id, from: id, to: id, amount: money, date, note: z.string().max(200).optional(), asMember }),
   z.object({ op: z.literal('deleteSettlement'), groupId: id, settlementId: id }),
   z.object({ op: z.literal('shareLink'), groupId: id, action: z.enum(['create', 'revoke']) }),
+  z.object({ op: z.literal('parseVoice'), groupId: id, text: z.string().trim().min(2).max(600), today: date, asMember }),
+  z.object({ op: z.literal('importSplitwise'), csv: z.string().min(10).max(4_000_000), groupName: name, meIndex: z.number().int().min(0).max(200),
+    emails: z.array(z.object({ index: z.number().int().min(0).max(200), email })).max(200).optional() }),
 ]);
 
 export async function POST(req: Request) {
@@ -67,6 +70,8 @@ export async function POST(req: Request) {
         case 'settle': return svc.settle(access, body);
         case 'deleteSettlement': return svc.deleteSettlement(access, body.groupId, body.settlementId);
         case 'shareLink': return svc.shareLink(access, body.groupId, body.action);
+        case 'parseVoice': return svc.parseVoice(access, body);
+        case 'importSplitwise': return svc.importSplitwise(needUser(), body);
       }
     })();
     return NextResponse.json(data);

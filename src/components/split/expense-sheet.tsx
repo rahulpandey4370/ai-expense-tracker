@@ -26,9 +26,11 @@ interface Props {
   token?: string;
   asMember?: string | null;
   expense?: Expense | null;
+  /** Prefill from "Say it" for review (a new expense, not an edit). */
+  draft?: { description: string; amount: number | null; date: string | null; paidBy: string; method: SplitMethod; meta: Expense['meta'] } | null;
 }
 
-export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense }: Props) {
+export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense, draft }: Props) {
   const { toast } = useToast();
   const action = useSplitAction(token);
   const people = detail.members.filter(m => !m.removed);
@@ -52,22 +54,23 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   useEffect(() => {
     if (!open) return;
     const all = people.map(m => m.id);
-    setAmount(expense ? String(expense.amount) : '');
-    setDescription(expense?.description ?? '');
-    setDate(expense?.date ?? todayYmd());
-    setPaidBy(expense?.paidBy ?? me ?? all[0] ?? '');
-    setMethod(expense?.method ?? 'equal');
-    setParticipants(expense?.meta.participants?.length ? expense.meta.participants : all);
-    setValues(Object.fromEntries(Object.entries(expense?.meta.values ?? {}).map(([k, v]) => [k, String(v)])));
-    setItems((expense?.meta.items ?? []).map(i => ({ name: i.name, amount: String(i.amount), memberIds: i.memberIds })));
-    setCoveredBy(expense?.meta.coveredBy ?? '');
+    const src = expense ?? draft;
+    setAmount(src?.amount ? String(src.amount) : '');
+    setDescription(src?.description ?? '');
+    setDate(src?.date ?? todayYmd());
+    setPaidBy(src?.paidBy ?? me ?? all[0] ?? '');
+    setMethod(src?.method ?? 'equal');
+    setParticipants(src?.meta.participants?.length ? src.meta.participants : all);
+    setValues(Object.fromEntries(Object.entries(src?.meta.values ?? {}).map(([k, v]) => [k, String(v)])));
+    setItems((src?.meta.items ?? []).map(i => ({ name: i.name, amount: String(i.amount), memberIds: i.memberIds })));
+    setCoveredBy(src?.meta.coveredBy ?? '');
     setInSpending(!expense || expense.inMySpending);
     try {
       const saved = JSON.parse(localStorage.getItem(SPENDING_KEY) ?? 'null');
       if (saved) setSpending(saved);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, expense?.id]);
+  }, [open, expense?.id, draft]);
 
   // Quick-split rows mirror a transaction; the server rejects edits, so say where to make them.
   const bridged = !!expense?.id.startsWith('legacy_');

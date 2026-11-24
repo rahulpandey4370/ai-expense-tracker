@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { formatCurrency } from '@/lib/format';
 import type { GroupKind } from '@/lib/split/types';
+export { emojiFor } from '@/lib/split/emoji';
 
 export const splitSerif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-split-serif' });
 
@@ -43,24 +44,6 @@ export function BalanceText({ value, className, owedLabel = 'you get back', oweL
 
 export const KIND_LABEL: Record<GroupKind, string> = { trip: 'Trip', home: 'Home', couple: 'Couple', other: 'Other', direct: '1-on-1' };
 export const KIND_EMOJI: Record<GroupKind, string> = { trip: '✈️', home: '🏠', couple: '💞', other: '👥', direct: '🤝' };
-
-const EMOJI_HINTS: [RegExp, string][] = [
-  [/dinner|lunch|breakfast|food|restaurant|biryani|pizza|burger|swiggy|zomato/i, '🍽️'],
-  [/coffee|cafe|chai|tea|starbucks/i, '☕'],
-  [/drink|beer|wine|bar|pub/i, '🍻'],
-  [/cab|uber|ola|taxi|auto|metro|bus|train|fuel|petrol|diesel/i, '🚕'],
-  [/flight|air|plane/i, '✈️'],
-  [/hotel|stay|airbnb|room|hostel/i, '🏨'],
-  [/rent|house|flat/i, '🏠'],
-  [/grocer|blinkit|zepto|bigbasket|vegetable|milk/i, '🛒'],
-  [/movie|cinema|netflix|show|concert|ticket/i, '🎬'],
-  [/electric|power|wifi|internet|bill|gas|water/i, '💡'],
-  [/gift|birthday|party/i, '🎁'],
-  [/shop|cloth|amazon|flipkart|myntra/i, '🛍️'],
-];
-export function emojiFor(description: string): string {
-  return EMOJI_HINTS.find(([re]) => re.test(description))?.[1] ?? '🧾';
-}
 
 export const todayYmd = () => {
   const d = new Date();

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronRight, Loader2, Plus, X } from 'lucide-react';
+import { ChevronRight, FileUp, Loader2, Plus, X } from 'lucide-react';
+import { ImportSheet } from './import-sheet';
 import type { GroupKind, HomeData } from '@/lib/split/types';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, prettyDate } from './bits';
@@ -8,6 +9,7 @@ import { useSplitAction } from './use-split';
 /** Home: the headline balance, then groups by recent activity. */
 export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (id: string) => void }) {
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const net = data.totals.owed - data.totals.owe;
   const active = data.groups.filter(g => !g.archived);
   const archived = data.groups.filter(g => g.archived);
@@ -29,7 +31,10 @@ export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (i
             <span className="s-owed font-semibold">{inr(data.totals.owed)}</span> coming back · <span className="s-owe font-semibold">{inr(data.totals.owe)}</span> to pay
           </p>
         )}
-        <button type="button" className="s-pill s-pill-primary mt-4" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
+          <button type="button" className="s-pill" onClick={() => setImporting(true)}><FileUp className="h-4 w-4" /> Import from Splitwise</button>
+        </div>
       </section>
 
       {data.unlinked.length > 0 && (
@@ -69,6 +74,7 @@ export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (i
 
       {archived.length > 0 && <p className="s-muted text-center text-xs">{archived.length} archived group(s)</p>}
       <CreateGroupSheet open={creating} onOpenChange={setCreating} onCreated={onOpenGroup} />
+      <ImportSheet open={importing} onOpenChange={setImporting} onImported={onOpenGroup} myName={data.me.name} />
     </div>
   );
 }

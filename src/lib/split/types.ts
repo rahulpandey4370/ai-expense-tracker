@@ -19,6 +19,7 @@ export interface ExpenseMeta {
   values?: Record<string, number>;
   items?: SplitItem[];
   coveredBy?: string;
+  imported?: string | boolean;
 }
 
 export interface Expense {
