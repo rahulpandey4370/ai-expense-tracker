@@ -90,7 +90,8 @@ begin
   update split_groups set updated_at = now() where id = p_expense->>'group_id';
 end $$;
 
--- One-time import of the old per-transaction splits into an "Earlier splits" group.
+-- One-time import of the old per-transaction splits into a "Quick splits" group (the transaction
+-- form and AI entry keep adding to it via src/lib/split/bridge.ts).
 -- Shares the old model didn't record (when someone else paid) are given to the payer,
 -- so every expense's shares sum to its amount. Settled shares become settlements.
 do $$
@@ -98,7 +99,7 @@ begin
   if exists (select 1 from split_groups where id = 'legacy') then return; end if;
   if not exists (select 1 from split_users) then return; end if;
 
-  insert into split_groups (id, name, emoji, kind) values ('legacy', 'Earlier splits', '🗂️', 'other');
+  insert into split_groups (id, name, emoji, kind) values ('legacy', 'Quick splits', '⚡', 'other');
   insert into split_members (id, group_id, name, is_owner) values ('legacy_me', 'legacy', 'You', true);
   insert into split_members (id, group_id, name)
     select 'legacy_' || id, 'legacy', name from split_users;
@@ -142,6 +143,16 @@ begin
     from transactions t
     where t.paid_by_id is not null and t.my_share_settled and coalesce(t.my_share, 0) > 0;
 end $$;
+
+-- Deleting a transaction anywhere (form, bulk, AI tools) removes its Quick-splits copy.
+create or replace function split_drop_bridged_expense() returns trigger language plpgsql as $$
+begin
+  delete from split_expenses where id = 'legacy_' || old.id;
+  return old;
+end $$;
+drop trigger if exists split_drop_bridged_expense on transactions;
+create trigger split_drop_bridged_expense after delete on transactions
+  for each row execute function split_drop_bridged_expense();
 
 -- Only the server (service role, which bypasses RLS) touches these tables.
 -- RLS with no policies denies the anon/authenticated roles entirely.

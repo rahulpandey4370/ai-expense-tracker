@@ -30,7 +30,8 @@ import { OpportunityCostAnalyzer } from '@/components/opportunity-cost-analyzer'
 import { MerchantSpendSection } from '@/components/merchant-spend-section';
 import { DashboardSkeleton } from '@/components/dashboard-skeleton';
 import { formatCurrencyWhole, formatCurrencyCompact, formatPercent, formatDelta, percentChange } from '@/lib/format';
-import { netAmount, othersShare, openReceivable } from '@/lib/split-utils';
+import { netAmount, othersShare } from '@/lib/split-utils';
+import { useSplitHome } from '@/components/split/use-split';
 import { CollapsibleKpiGroup } from '@/components/dashboard/collapsible-kpi-group';
 import { DailySpendSection } from '@/components/dashboard/daily-spend-section';
 import { Store, CreditCard, HeartHandshake } from 'lucide-react';
@@ -314,14 +315,10 @@ export default function DashboardPage() {
     const spentByOthersThisMonth = currentMonthTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + othersShare(t), 0);
-    const openThisMonth = currentMonthTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + openReceivable(t), 0);
-    const openAllTime = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + openReceivable(t), 0);
-    return { spentByOthersThisMonth, openThisMonth, openAllTime };
-  }, [currentMonthTransactions, transactions]);
+    return { spentByOthersThisMonth };
+  }, [currentMonthTransactions]);
+  // Open balances live in the split groups ledger now (settlements are recorded there).
+  const splitHome = useSplitHome();
 
 
   const budgetData = useMemo(() => {
@@ -622,7 +619,7 @@ export default function DashboardPage() {
                       {kpisVisible ? formatCurrencyWhole(reimbursements.spentByOthersThisMonth) : '•••••'}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                      {kpisVisible ? `${formatCurrencyWhole(reimbursements.openThisMonth)} still unsettled` : ' '}
+                      {kpisVisible ? 'This month · tap to see who owes what' : ' '}
                     </span>
                   </button>
                   <button
@@ -633,9 +630,11 @@ export default function DashboardPage() {
                     <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500" />
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Total open receivables</span>
                     <span className="text-lg font-semibold tabular-nums text-foreground">
-                      {kpisVisible ? formatCurrencyWhole(reimbursements.openAllTime) : '•••••'}
+                      {kpisVisible ? formatCurrencyWhole(splitHome.data?.totals.owed ?? 0) : '•••••'}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">Across all unsettled splits</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {kpisVisible && (splitHome.data?.totals.owe ?? 0) > 0 ? `You owe ${formatCurrencyWhole(splitHome.data!.totals.owe)}` : 'Across all your split groups'}
+                    </span>
                   </button>
                 </div>
               ),

@@ -115,6 +115,9 @@ function ledgerOf(groupId: string, l: Loaded) {
 
 // ---------- reads ----------
 
+/** Identifies one person across groups: their email, else their name. */
+const personKey = (m: MemberRow) => (m.email ? m.email.toLowerCase() : `name:${m.name.trim().toLowerCase()}`);
+
 export async function getHome(user: SessionUser): Promise<HomeData> {
   const loaded = await loadGroups(await myGroupIds(user));
   const groups: GroupSummary[] = [];
@@ -138,7 +141,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     for (const t of transfers) {
       if (t.from !== me.id && t.to !== me.id) continue;
       const other = members.find(m => m.id === (t.from === me.id ? t.to : t.from))!;
-      const key = other.email ? other.email.toLowerCase() : `name:${other.name.trim().toLowerCase()}`;
+      const key = personKey(other);
       const net = t.to === me.id ? t.amount : -t.amount;
       const p = people.get(key) ?? { key, name: other.name, net: 0, groups: [] };
       p.net = r2(p.net + net);
@@ -280,6 +283,11 @@ export async function groupIdForToken(token: string | null): Promise<string | un
 
 // ---------- expenses ----------
 
+/** Quick-split rows mirror a transaction (see bridge.ts); they're edited from Transactions only. */
+function assertNotBridged(expenseId?: string) {
+  if (expenseId?.startsWith('legacy_')) throw new SplitError(400, 'This came from a transaction. Edit it on the Transactions page.');
+}
+
 export interface SpendingInput { categoryId: string; paymentMethodId: string; expenseType: 'need' | 'want' | 'investment' | 'investment_expense' }
 
 export interface SaveExpenseInput {
@@ -300,6 +308,7 @@ export interface SaveExpenseInput {
 }
 
 export async function saveExpense(access: Access, input: SaveExpenseInput) {
+  assertNotBridged(input.id);
   const o = await openGroup(access, input.groupId, input.asMember);
   if (!o.me) throw new SplitError(400, 'Pick who you are first.');
   requireActive(o.members, [input.paidBy], 'The payer');
@@ -329,16 +338,18 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
   await syncSpending({
     id, description: input.description, amount: input.amount, date: input.date, paidBy: input.paidBy, shares,
     transactionId: existing?.transaction_id ?? null,
-  }, o.members, access.user?.isOwner ? input.spending : undefined);
+  }, o.members, !!access.user?.isOwner, access.user?.isOwner ? input.spending : undefined);
   return { id };
 }
 
 export async function deleteExpense(access: Access, groupId: string, expenseId: string) {
+  assertNotBridged(expenseId);
   const o = await openGroup(access, groupId);
   const e = o.loaded.expenses.find(x => x.id === expenseId);
   if (!e) throw new SplitError(404, 'Expense not found.');
   await must(db().from('split_expenses').delete().eq('id', expenseId).eq('group_id', groupId));
-  if (e.transaction_id) await must(db().from('transactions').delete().eq('id', e.transaction_id));
+  // Only the owner removes their own personal transaction; for anyone else the FK just unlinks it.
+  if (e.transaction_id && access.user?.isOwner) await must(db().from('transactions').delete().eq('id', e.transaction_id));
   return { ok: true };
 }
 
@@ -349,18 +360,20 @@ export async function linkToSpending(access: Access, groupId: string, expenseId:
   const e = o.loaded.expenses.find(x => x.id === expenseId);
   if (!e) throw new SplitError(404, 'Expense not found.');
   const x = toExpense(e);
-  await syncSpending({ id: x.id, description: x.description, amount: x.amount, date: x.date, paidBy: x.paidBy, shares: x.shares, transactionId: e.transaction_id }, o.members, spending);
+  await syncSpending({ id: x.id, description: x.description, amount: x.amount, date: x.date, paidBy: x.paidBy, shares: x.shares, transactionId: e.transaction_id }, o.members, true, spending);
   return { ok: true };
 }
 
 /**
  * Keeps the owner's personal `transactions` row in step with a group expense.
  * my_share is the owner's share, so KPIs/budgets only ever count what's really theirs.
- * Creates a row only when `spending` (category etc.) is given; updates or removes an existing one always.
+ * Creates a row only when `spending` (category etc.) is given; updates an existing one always, and deletes
+ * it (when the owner drops out of the expense) only if the owner made the edit.
  */
 async function syncSpending(
   e: { id: string; description: string; amount: number; date: string; paidBy: string; shares: Record<string, number>; transactionId: string | null },
   members: MemberRow[],
+  byOwner: boolean,
   spending?: SpendingInput,
 ) {
   // The owner's seat: flagged when the owner made the group, or matched by email when a friend added them.
@@ -373,7 +386,8 @@ async function syncSpending(
   if (e.transactionId) {
     if (!involved) {
       await must(db().from('split_expenses').update({ transaction_id: null }).eq('id', e.id));
-      await must(db().from('transactions').delete().eq('id', e.transactionId));
+      // A friend's edit never deletes the owner's personal data; the owner can remove it on Transactions.
+      if (byOwner) await must(db().from('transactions').delete().eq('id', e.transactionId));
     } else {
       await must(db().from('transactions').update({ ...money, ...extra }).eq('id', e.transactionId));
     }
@@ -406,4 +420,33 @@ export async function deleteSettlement(access: Access, groupId: string, settleme
   if (!o.loaded.settlements.some(s => s.id === settlementId)) throw new SplitError(404, 'Payment not found.');
   await must(db().from('split_settlements').delete().eq('id', settlementId).eq('group_id', groupId));
   return { ok: true };
+}
+
+/**
+ * Owner/AI shortcut: record payments that clear what's open between me and one person (by personKey)
+ * in every group we share — or, with transactionId, just their share of that one expense.
+ */
+export async function settleWithPerson(user: SessionUser, key: string, transactionId?: string) {
+  const loaded = await loadGroups(await myGroupIds(user));
+  let successCount = 0;
+  for (const g of loaded.groups) {
+    const { members, transfers } = ledgerOf(g.id, loaded);
+    const me = pickMe({ user }, members);
+    const person = active(members).find(m => personKey(m) === key);
+    if (!me || !person) continue;
+    let pay = transfers.filter(t => (t.from === me.id && t.to === person.id) || (t.from === person.id && t.to === me.id));
+    if (transactionId) {
+      const e = loaded.expenses.find(x => x.group_id === g.id && x.transaction_id === transactionId);
+      const share = e ? sharesOf(e)[person.id] ?? 0 : 0;
+      pay = e && e.paid_by === me.id && share > 0 ? [{ from: person.id, to: me.id, amount: share }] : [];
+    }
+    for (const t of pay) {
+      await must(db().from('split_settlements').insert({
+        id: cuid(), group_id: g.id, from_member: t.from, to_member: t.to, amount: r2(t.amount),
+        date: nowIso().slice(0, 10), note: 'Settled from chat', created_by: me.id, created_at: nowIso(),
+      }));
+      successCount++;
+    }
+  }
+  return { successCount };
 }

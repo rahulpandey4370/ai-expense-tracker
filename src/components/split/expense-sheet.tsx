@@ -69,6 +69,8 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense?.id]);
 
+  // Quick-split rows mirror a transaction; the server rejects edits, so say where to make them.
+  const bridged = !!expense?.id.startsWith('legacy_');
   const total = parseFloat(amount) || 0;
   const num = (r: Record<string, string>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, parseFloat(v) || 0]));
   const parsedItems: SplitItem[] = items.map(i => ({ name: i.name, amount: parseFloat(i.amount) || 0, memberIds: i.memberIds }));
@@ -271,7 +273,10 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
           </section>
         )}
 
-        <div className="flex gap-2">
+        {bridged && (
+          <p className="s-card s-muted p-3 text-sm">This came from a transaction. Edit or delete it on the <a className="s-owed font-semibold underline" href="/transactions">Transactions</a> page; settle it here.</p>
+        )}
+        <div className={bridged ? 'hidden' : 'flex gap-2'}>
           {expense && (
             <button type="button" className="s-pill" onClick={remove} disabled={action.isPending} aria-label="Delete expense"><Trash2 className="h-4 w-4" /></button>
           )}

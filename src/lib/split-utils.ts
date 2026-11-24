@@ -6,10 +6,6 @@ export const netAmount = (t: AppTransaction): number => t.myShare ?? t.amount;
 /** The portion of this transaction that belongs to other people. */
 export const othersShare = (t: AppTransaction): number => t.amount - netAmount(t);
 
-/** Sum of other people's shares on this transaction that haven't been settled yet. */
-export const openReceivable = (t: AppTransaction): number =>
-  (t.splits ?? []).filter(s => !s.isSettled).reduce((sum, s) => sum + s.shareAmount, 0);
-
 /** True if a transaction has any split rows (equivalent to the server-derived isSplit flag). */
 export const hasSplit = (t: AppTransaction): boolean => !!t.isSplit && (t.splits?.length ?? 0) > 0;
 

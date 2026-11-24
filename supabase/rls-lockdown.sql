@@ -11,3 +11,6 @@ end $$;
 
 revoke execute on all functions in schema public from public, anon, authenticated;
 alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
+-- The server's role keeps calling the RPCs (create_transaction_with_splits, split_save_expense, ...).
+grant execute on all functions in schema public to service_role;
+alter default privileges in schema public grant execute on functions to service_role;

@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { checkBudgetAlerts } from '@/lib/notifications';
 import cuid from 'cuid';
+import { syncQuickSplit } from '@/lib/split/bridge';
 
 // --- Category and Payment Method Functions ---
 export async function getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
@@ -304,6 +305,8 @@ async function writeTransactionWithSplits(
     p_splits: splits.map(s => ({ userId: s.userId, shareAmount: s.shareAmount })),
   });
   if (error) throw new Error(`Could not save transaction. Original error: ${error.message}`);
+  // Keep the Split tab's "Quick splits" group in step (form, AI entry and chat tools all land here).
+  await syncQuickSplit(row as Parameters<typeof syncQuickSplit>[0], splits);
   return (data as any[])[0];
 }
 

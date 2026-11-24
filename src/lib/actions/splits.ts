@@ -6,6 +6,8 @@ import { SplitUserInputSchema } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import cuid from 'cuid';
 import { queryTransactions, type TransactionQueryOptions } from './transactions';
+import { getSessionUser } from '@/lib/auth/supabase-server';
+import { getHome, settleWithPerson } from '@/lib/split/service';
 
 const SPLIT_EXPENSES_PAGE_PATH = '/split-expenses';
 
@@ -65,20 +67,18 @@ export async function deleteSplitUser(id: string): Promise<{ success: boolean }>
   return { success: true };
 }
 
-// --- Balances ---
+// --- Balances (from the group ledger; kept under the old names for the AI tools and reads) ---
+/** One row per person I have an open balance with, across all my groups. userId is the person key. */
 export async function getSplitBalances(): Promise<UserBalance[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase.rpc('open_split_balances');
-  if (error) {
-    console.error('Supabase Error (getSplitBalances):', error.message);
-    throw new Error(`Could not compute split balances. Original error: ${error.message}`);
-  }
-  return (data as any[]).map(row => ({
-    userId: row.user_id,
-    userName: row.user_name,
-    theyOweMe: row.they_owe_me,
-    iOweThem: row.i_owe_them,
-    net: row.net,
+  const user = await getSessionUser();
+  if (!user) return [];
+  const home = await getHome(user);
+  return home.people.map(p => ({
+    userId: p.key,
+    userName: p.name,
+    theyOweMe: Math.max(p.net, 0),
+    iOweThem: Math.max(-p.net, 0),
+    net: p.net,
   }));
 }
 
@@ -95,68 +95,18 @@ export async function getSplitTransactions(options?: { limit?: number }): Promis
   return queryTransactions(opts);
 }
 
-/** Marks one participant's share on a transaction I paid as settled (they
- *  paid me back). Never creates an income transaction — money coming back is
- *  a balance-sheet event, not income, so it must not inflate the income KPI. */
+/** Records that this person paid back their share of one expense (userId = person key from getSplitBalances). */
 export async function settleSplitShare(transactionId: string, userId: string): Promise<{ success: boolean }> {
-  const supabase = getSupabase();
-  const { error, count } = await supabase
-    .from('transaction_splits')
-    .update({ is_settled: true, settled_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('transaction_id', transactionId)
-    .eq('user_id', userId);
-  if (error) throw new Error(`Could not settle split share. Original error: ${error.message}`);
-  if (!count) throw new Error('Split share not found.');
-
-  revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
-  revalidatePath('/');
-  revalidatePath('/transactions');
+  const user = await getSessionUser();
+  if (!user?.isOwner) throw new Error('Only the owner can settle from here.');
+  const { successCount } = await settleWithPerson(user, userId, transactionId);
+  if (!successCount) throw new Error('No open share for that person on this expense.');
   return { success: true };
 }
 
-/** Marks my own share on a transaction someone else paid as settled (I paid
- *  them back). This is the opposite direction from settleSplitShare — the
- *  debtor here is me, not a split_users row, so it lives on the transaction
- *  itself (transactions.my_share_settled) rather than in transaction_splits. */
-export async function settleMyShare(transactionId: string): Promise<{ success: boolean }> {
-  const supabase = getSupabase();
-  const { error, count } = await supabase
-    .from('transactions')
-    .update({ my_share_settled: true, updated_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('id', transactionId)
-    .not('paid_by_id', 'is', null);
-  if (error) throw new Error(`Could not settle your share. Original error: ${error.message}`);
-  if (!count) throw new Error('Transaction not found or was not paid by someone else.');
-
-  revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
-  revalidatePath('/');
-  revalidatePath('/transactions');
-  return { success: true };
-}
-
-/** Settles every open balance for one person: shares they owe me (as a
- *  payer's split rows) and, if that person is also recorded as the payer on
- *  transactions where I owe my own share, those too. */
+/** Records payments clearing everything open with one person (userId = person key from getSplitBalances). */
 export async function settleAllForUser(userId: string): Promise<{ successCount: number }> {
-  const supabase = getSupabase();
-  const now = new Date().toISOString();
-
-  const { error: splitsError, count: splitsCount } = await supabase
-    .from('transaction_splits')
-    .update({ is_settled: true, settled_at: now, updated_at: now }, { count: 'exact' })
-    .eq('user_id', userId)
-    .eq('is_settled', false);
-  if (splitsError) throw new Error(`Could not settle balances. Original error: ${splitsError.message}`);
-
-  const { error: myShareError, count: myShareCount } = await supabase
-    .from('transactions')
-    .update({ my_share_settled: true, updated_at: now }, { count: 'exact' })
-    .eq('paid_by_id', userId)
-    .eq('my_share_settled', false);
-  if (myShareError) throw new Error(`Could not settle balances. Original error: ${myShareError.message}`);
-
-  revalidatePath(SPLIT_EXPENSES_PAGE_PATH);
-  revalidatePath('/');
-  revalidatePath('/transactions');
-  return { successCount: (splitsCount ?? 0) + (myShareCount ?? 0) };
+  const user = await getSessionUser();
+  if (!user?.isOwner) throw new Error('Only the owner can settle from here.');
+  return settleWithPerson(user, userId);
 }

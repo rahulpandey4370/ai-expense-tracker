@@ -120,9 +120,10 @@ with an italic accent word, pill buttons. One `SplitApp` component tree used in 
 1. Google Cloud → OAuth client (Web), redirect `https://<project>.supabase.co/auth/v1/callback`.
 2. Supabase → Auth → Providers → Google: paste client id/secret. Auth → URL config: Site URL =
    Vercel domain; redirect URLs = `https://<domain>/auth/callback`, `http://localhost:9002/auth/callback`.
-3. Env (Vercel + `.env.local`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-   `OWNER_EMAILS` (comma-separated).
-4. Run `supabase/split-groups.sql` in the Supabase SQL editor (after a backup).
+3. Env (Vercel + `.env`): `SUPABASE_ANON_KEY` (server-only — never `NEXT_PUBLIC_`), `OWNER_EMAILS`
+   (comma-separated Google emails). `SUPABASE_PROJECT_URL` / `SUPABASE_SERVICE_ROLE_KEY` already exist.
+4. Deploy, then straight away run in the Supabase SQL editor (after a backup): `supabase/rls-lockdown.sql`,
+   then `supabase/split-groups.sql` (its one-time import picks up every split written so far).
 
 ## Calls made by Claude (correct any)
 - Friends/guests talk to one `/api/split` endpoint, not server actions — lets middleware block all
