@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, FileText, HandCoins, Loader2, MoreHorizontal, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, HandCoins, Loader2, MoreHorizontal, Plus, Trash2, Users } from 'lucide-react';
+import { pageOf } from '@/lib/split/feed';
 import { ReportSheet } from './report-sheet';
 import { VoiceSheet } from './voice-sheet';
 import { ReceiptView } from './receipt-view';
-import { EXAMPLE_LINES, Hero } from './hero';
+import { Hero } from './hero';
+import { groupLines } from '@/lib/split/hero-lines';
 import type { Expense, GroupDetail, Settlement } from '@/lib/split/types';
 import { Avatar, AvatarStack, EmptyState, KIND_EMOJI, KIND_LABEL, inr, monthLabel, prettyDate } from './bits';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
@@ -29,12 +31,15 @@ type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { ki
 export function GroupView({ groupId, token, asMember, onPickMember, onBack, openExpenseId }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt' | 'report' | 'group'>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'say' | 'receipt' | 'report' | 'group'>(null);
   const action = useSplitAction(token);
   const { toast } = useToast();
   const [draft, setDraft] = useState<ExpenseDraft | null>(null);
   const [viewing, setViewing] = useState<Expense | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
+  const [month, setMonth] = useState<string | null>(null); // null = newest month with activity
+  const [page, setPage] = useState(0);
+  useEffect(() => { setMonth(null); setPage(0); }, [groupId]);
 
   // Deep link from the home feed: show that expense's receipt once the group loads.
   useEffect(() => {
@@ -122,13 +127,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
 
       <Hero
         net={myBalance}
-        lines={[
-          `${d.expenses.length} ${d.expenses.length === 1 ? 'expense' : 'expenses'} in ${d.group.name}`,
-          ...d.transfers.filter(t => t.from === me || t.to === me).slice(0, 2)
-            .map(t => (t.from === me ? `You owe ${label(t.to)} ${Math.round(t.amount)}` : `${label(t.from)} owes you ${Math.round(t.amount)}`)),
-          ...EXAMPLE_LINES.slice(0, 2),
-        ]}
-        onScan={() => setSheet('scan')} onType={() => openExpense(null)} onVoice={() => setSheet('voice')}
+        lines={groupLines(d)}
+        onScan={() => setSheet('scan')} onType={() => openExpense(null)} onVoice={() => setSheet('voice')} onSay={() => setSheet('say')}
       >
         <div className="mb-4 flex flex-wrap gap-2">
           <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
@@ -141,11 +141,22 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
         <EmptyState title={<>Nothing <em>logged</em> yet</>} body="Add the first expense — dinner, a cab, the rent — and everyone's share is worked out.">
           <button type="button" className="s-pill s-pill-primary" onClick={() => openExpense(null)}><Plus className="h-4 w-4" /> Add expense</button>
         </EmptyState>
-      ) : feed.map(([month, items]) => (
-        <section key={month}>
-          <p className="s-muted mb-2 px-1 text-xs font-semibold uppercase tracking-wide">{monthLabel(month)}</p>
+      ) : (() => {
+        const cur = feed.find(([m]) => m === month) ?? feed[0];
+        const pg = pageOf(cur[1], page);
+        return (
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <label className="s-chip relative inline-flex items-center gap-1" data-on="true">
+              <span>{monthLabel(cur[0])}</span><ChevronDown className="h-3 w-3 opacity-70" aria-hidden />
+              <select aria-label="Month" className="absolute inset-0 cursor-pointer opacity-0" value={cur[0]} onChange={e => { setMonth(e.target.value); setPage(0); }}>
+                {feed.map(([m, its]) => <option key={m} value={m}>{monthLabel(m)} · {its.length}</option>)}
+              </select>
+            </label>
+            <span className="s-muted text-xs">{cur[1].length} {cur[1].length === 1 ? 'entry' : 'entries'}</span>
+          </div>
           <ul className="s-card overflow-hidden">
-            {items.map(it => it.kind === 'expense' ? (
+            {pg.items.map(it => it.kind === 'expense' ? (
               <li key={it.e.id}>
                 <ExpenseRow e={it.e} me={me} label={label} isOwner={d.isOwnerViewer} onClick={() => view(it.e)} />
               </li>
@@ -159,11 +170,19 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
               </li>
             ))}
           </ul>
+          {pg.pages > 1 && (
+            <div className="mt-2 flex items-center justify-between px-1 text-sm">
+              <button type="button" className="s-chip" disabled={pg.page === 0} onClick={() => { setPage(pg.page - 1); window.scrollTo({ top: 0 }); }}>← Newer</button>
+              <span className="s-muted text-xs">Page {pg.page + 1} of {pg.pages}</span>
+              <button type="button" className="s-chip" disabled={pg.page === pg.pages - 1} onClick={() => { setPage(pg.page + 1); window.scrollTo({ top: 0 }); }}>Older →</button>
+            </div>
+          )}
         </section>
-      ))}
+        );
+      })()}
 
       <ExpenseSheet open={sheet === 'expense'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} expense={editing} draft={draft} />
-      <VoiceSheet open={sheet === 'voice' || sheet === 'scan'} startWithPhoto={sheet === 'scan'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} onReview={review} />
+      <VoiceSheet open={sheet === 'voice' || sheet === 'scan' || sheet === 'say'} startWithPhoto={sheet === 'scan'} startTyping={sheet === 'say'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} onReview={review} />
       <ReceiptView open={sheet === 'receipt'} onOpenChange={o => !o && setSheet(null)} expense={viewing ? d.expenses.find(x => x.id === viewing.id) ?? viewing : null} detail={d} token={token}
         onEdit={() => { if (viewing) openExpense(d.expenses.find(x => x.id === viewing.id) ?? viewing); }} />
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />

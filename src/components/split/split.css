@@ -71,6 +71,7 @@
   border-radius: 999px; padding: .35rem .8rem; font-size: .8rem; font-weight: 600;
   border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-sec);
 }
+.s-chip:disabled { opacity: .4; pointer-events: none; }
 .s-chip[data-on="true"] { background: var(--s-deep); border-color: var(--s-deep); color: #fff; }
 .dark .s-chip[data-on="true"] { color: #04201f; }
 

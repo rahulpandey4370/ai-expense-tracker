@@ -25,8 +25,10 @@ function useTyped(lines: string[]) {
 }
 
 /** The big Settl-style card: balance on top, a typed line in the middle, capture buttons at the bottom. */
-export function Hero({ net, lines, onScan, onType, onVoice, children }: {
-  net: number; lines: string[]; onScan: () => void; onType: () => void; onVoice: () => void; children?: React.ReactNode;
+export function Hero({ net, lines, onScan, onType, onVoice, onSay, children }: {
+  net: number; lines: string[]; onScan: () => void; onType: () => void; onVoice: () => void;
+  /** Tapping the typed line: open the type-it box (AI parses it). */
+  onSay: () => void; children?: React.ReactNode;
 }) {
   const { text, done } = useTyped(lines);
   return (
@@ -35,13 +37,13 @@ export function Hero({ net, lines, onScan, onType, onVoice, children }: {
         <p className="split-display text-xl">{Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
         <p className={`text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</p>
       </div>
-      <div className="flex flex-1 items-center py-6">
+      <button type="button" onClick={onSay} aria-label="Type what happened and let AI log it" className="flex flex-1 items-center py-6 text-left">
         <p className="split-display min-h-[2.2em] text-[2.5rem] leading-[1.08] text-[color-mix(in_srgb,var(--s-ink)_70%,transparent)]" aria-hidden>
           <Accent text={text} />
           <span className={`ml-0.5 inline-block h-[0.9em] w-[2px] translate-y-[0.1em] bg-[var(--s-deep)] ${done ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
         </p>
         <span className="sr-only">{lines[0]}</span>
-      </div>
+      </button>
       {children}
       <div className="flex items-end justify-between">
         <button type="button" className="s-icon-btn h-14 w-14 rounded-[18px]" aria-label="Scan a receipt" onClick={onScan}><ScanLine className="h-5 w-5" /></button>
@@ -54,17 +56,10 @@ export function Hero({ net, lines, onScan, onType, onVoice, children }: {
   );
 }
 
-/** Example lines — our own wording, in rupees. */
-export const EXAMPLE_LINES = [
-  'Dinner was 960, split three ways',
-  'Cab 450, I paid, half with Asha',
-  'Snap the bill, then say who had what',
-];
-
 /** The feed sits on a sheet that tucks under the hero, with a little handle. */
-export function FeedSheet({ children }: { children: React.ReactNode }) {
+export function FeedSheet({ children, tuck = true }: { children: React.ReactNode; tuck?: boolean }) {
   return (
-    <div className="s-card -mt-3 overflow-hidden rounded-t-[26px] pt-2 shadow-[0_-6px_24px_rgba(0,0,0,0.04)]">
+    <div className={`s-card overflow-hidden rounded-t-[26px] pt-2 shadow-[0_-6px_24px_rgba(0,0,0,0.04)] ${tuck ? '-mt-3' : ''}`}>
       <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-[var(--s-line)]" aria-hidden />
       {children}
     </div>

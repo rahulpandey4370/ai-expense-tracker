@@ -1,6 +1,6 @@
 // npx tsx src/lib/split/feed.check.ts
 import assert from 'node:assert/strict';
-import { feedMonths, feedNet, filterActivity, monthRange } from './feed';
+import { feedMonths, feedNet, filterActivity, monthRange, pageOf } from './feed';
 import type { ActivityItem } from './types';
 
 const a = (id: string, groupId: string, date: string, people: string[]): ActivityItem => ({
@@ -34,5 +34,13 @@ const back = { ...a('back', 'flat', '2026-03-02', ['name:bo']), kind: 'settlemen
 assert.equal(feedNet([meal, back]), 0);
 assert.equal(feedNet([{ ...meal, myImpact: -50 }, { ...back, myImpact: -50 }]), 0); // I owed 50, then I paid it back
 assert.equal(feedNet([meal]), 50);
+
+// month pages: 50 a page, page clamped into range
+const many = Array.from({ length: 120 }, (_, i) => i);
+assert.deepEqual(pageOf(many, 0).items, many.slice(0, 50));
+assert.deepEqual([pageOf(many, 2).items.length, pageOf(many, 2).pages, pageOf(many, 2).page], [20, 3, 2]);
+assert.equal(pageOf(many, 9).page, 2); // past the end (e.g. after deletes) → last page
+assert.equal(pageOf(many, -1).page, 0);
+assert.deepEqual(pageOf([], 0), { items: [], page: 0, pages: 1 });
 
 console.log('ok');

@@ -9,7 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, monthLabel, prettyDate, todayYmd } from './bits';
 import { useSplitAction, useSplitGroup } from './use-split';
 import { feedMonths, feedNet, filterActivity, monthRange, type FeedFilter } from '@/lib/split/feed';
-import { EXAMPLE_LINES, FeedSheet, Hero } from './hero';
+import { FeedSheet, Hero } from './hero';
+import { homeLines } from '@/lib/split/hero-lines';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -38,10 +39,9 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
   const groups = data.groups.filter(g => !g.archived && (!q || g.name.toLowerCase().includes(q)));
   const [filter, setFilter] = useState<FeedFilter>({});
   const [time, setTime] = useState(''); // '' any · 'YYYY-MM' · 'custom'
-  const [limit, setLimit] = useState(40);
   const filtering = !!(filter.groupId || filter.person || filter.from || filter.to);
   const feed = filterActivity(data.activity, filter).filter(a => !q || `${a.title} ${a.groupName} ${a.who}`.toLowerCase().includes(q));
-  const shown = filtering || q ? feed : feed.slice(0, limit);
+  const shown = filtering || q ? feed : feed.slice(0, 20); // recent = last 20; a filter or search shows every match
   const months = feedMonths(data.activity);
   const thisMonth = todayYmd().slice(0, 7);
   const shownNet = feedNet(feed);
@@ -55,11 +55,38 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
     <div className="space-y-5">
       <Hero
         net={net}
-        lines={[data.weekCount > 0 ? `${data.weekCount} ${data.weekCount === 1 ? 'expense' : 'expenses'} logged this week` : 'Nothing logged this week yet', ...EXAMPLE_LINES]}
-        onScan={() => setCapture('scan')} onType={() => setCapture('type')} onVoice={() => setCapture('voice')}
+        lines={homeLines(data, todayYmd())}
+        onScan={() => setCapture('scan')} onType={() => setCapture('type')} onVoice={() => setCapture('voice')} onSay={() => setCapture('say')}
       />
 
-      <FeedSheet>
+      <section>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="s-muted text-xs font-semibold uppercase tracking-wide">Groups</p>
+          <div className="flex gap-1">
+            <button type="button" className="s-chip" onClick={() => setImporting(true)}><FileUp className="mr-1 inline h-3 w-3" />Splitwise</button>
+            <button type="button" className="s-chip" onClick={() => setCreating(true)}><Plus className="mr-1 inline h-3 w-3" />New</button>
+          </div>
+        </div>
+        {groups.length === 0 ? (
+          <EmptyState title={<>Start a <em>group</em></>} body="A trip, your flat, a couple, or one dinner — add people and start logging who paid.">
+            <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
+          </EmptyState>
+        ) : (
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
+            {groups.map(g => (
+              <button key={g.id} type="button" onClick={() => onOpenGroup(g.id)} className="s-card w-40 shrink-0 snap-start p-3 text-left">
+                <span className="text-2xl" aria-hidden>{g.emoji ?? KIND_EMOJI[g.kind]}</span>
+                <span className="mt-1 block truncate font-semibold">{g.name}</span>
+                <BalanceText value={g.myBalance} className="block truncate text-xs" />
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <p className="s-muted mb-2 px-1 text-xs font-semibold uppercase tracking-wide">Recent activity</p>
+      <FeedSheet tuck={false}>
         <div className="flex gap-2 overflow-x-auto px-4 pb-1 pt-2" role="group" aria-label="Filter activity">
           <FilterChip label="Group" value={filter.groupId ?? ''} onChange={v => setFilter(f => ({ ...f, groupId: v || undefined }))}
             options={[['', 'All groups'], ...data.groups.map(g => [g.id, g.name] as [string, string])]} />
@@ -113,10 +140,8 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
             ))}
           </ul>
         )}
-        {shown.length < feed.length && (
-          <button type="button" className="s-muted w-full py-3 text-sm font-semibold" onClick={() => setLimit(l => l + 100)}>Show more</button>
-        )}
       </FeedSheet>
+      </section>
 
       {data.unlinked.length > 0 && (
         <section className="s-card p-4">
@@ -131,30 +156,6 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
         </section>
       )}
 
-      <section>
-        <div className="mb-2 flex items-center justify-between px-1">
-          <p className="s-muted text-xs font-semibold uppercase tracking-wide">Groups</p>
-          <div className="flex gap-1">
-            <button type="button" className="s-chip" onClick={() => setImporting(true)}><FileUp className="mr-1 inline h-3 w-3" />Splitwise</button>
-            <button type="button" className="s-chip" onClick={() => setCreating(true)}><Plus className="mr-1 inline h-3 w-3" />New</button>
-          </div>
-        </div>
-        {groups.length === 0 ? (
-          <EmptyState title={<>Start a <em>group</em></>} body="A trip, your flat, a couple, or one dinner — add people and start logging who paid.">
-            <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
-          </EmptyState>
-        ) : (
-          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
-            {groups.map(g => (
-              <button key={g.id} type="button" onClick={() => onOpenGroup(g.id)} className="s-card w-40 shrink-0 snap-start p-3 text-left">
-                <span className="text-2xl" aria-hidden>{g.emoji ?? KIND_EMOJI[g.kind]}</span>
-                <span className="mt-1 block truncate font-semibold">{g.name}</span>
-                <BalanceText value={g.myBalance} className="block truncate text-xs" />
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
 
       <CreateGroupSheet open={creating} onOpenChange={setCreating} onCreated={onOpenGroup} />
       <ImportSheet open={importing} onOpenChange={setImporting} onImported={onOpenGroup} myName={data.me.name} />
@@ -163,7 +164,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
   );
 }
 
-type CaptureMode = null | 'voice' | 'scan' | 'type';
+type CaptureMode = null | 'voice' | 'scan' | 'type' | 'say';
 const LAST_GROUP = 'split-last-group';
 
 /** Capture from Home: into the last-used group, with chips to switch. */
@@ -201,7 +202,7 @@ function HomeCapture({ mode, onClose, groups, onNeedGroup }: { mode: CaptureMode
   if (!d) return null;
   return (
     <>
-      <VoiceSheet open={mode === 'voice' || mode === 'scan'} startWithPhoto={mode === 'scan'} onOpenChange={o => !o && onClose()} detail={d}
+      <VoiceSheet open={mode === 'voice' || mode === 'scan' || mode === 'say'} startWithPhoto={mode === 'scan'} startTyping={mode === 'say'} onOpenChange={o => !o && onClose()} detail={d}
         header={switcher} onReview={v => { setDraft(v); onClose(); setReviewing(true); }} />
       <ExpenseSheet open={mode === 'type' || reviewing} onOpenChange={o => { if (!o) { onClose(); setReviewing(false); setDraft(null); } }}
         detail={d} draft={draft} header={switcher} />

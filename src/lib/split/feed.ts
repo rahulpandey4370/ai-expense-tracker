@@ -23,3 +23,10 @@ export function monthRange(ym: string): { from: string; to: string } {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { from: `${ym}-01`, to: `${ym}-${String(last).padStart(2, '0')}` };
 }
+
+/** One page of a list (default 50); an out-of-range page snaps to the nearest real one. */
+export function pageOf<T>(items: T[], page: number, size = 50): { items: T[]; page: number; pages: number } {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const p = Math.min(Math.max(0, page), pages - 1);
+  return { items: items.slice(p * size, (p + 1) * size), page: p, pages };
+}

@@ -22,11 +22,13 @@ interface Props {
   onReview: (draft: ExpenseDraft) => void;
   /** Open straight into "snap a receipt". */
   startWithPhoto?: boolean;
+  /** Open with the keyboard on the text box and the mic off. */
+  startTyping?: boolean;
   header?: React.ReactNode;
 }
 
 /** Say it, type it, or snap the receipt (and say who had what). */
-export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onReview, startWithPhoto, header }: Props) {
+export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onReview, startWithPhoto, startTyping, header }: Props) {
   const { toast } = useToast();
   const action = useSplitAction(token);
   const [text, setText] = useState('');
@@ -37,6 +39,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
   const [photo, setPhoto] = useState<string | null>(null);
   const recRef = useRef<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const supported = !!SR();
   const all = detail.members.filter(m => !m.removed).map(m => m.id);
 
@@ -44,6 +47,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
     if (open) {
       setText(''); setInterim(''); setQuestion(null); setPhoto(null);
       if (startWithPhoto) setTimeout(() => fileRef.current?.click(), 50);
+      else if (startTyping) setTimeout(() => textRef.current?.focus(), 120);
       else if (supported) start();
     } else stop();
     return () => recRef.current?.abort?.();
@@ -162,6 +166,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
         <p className="s-muted text-center text-xs">{supported ? (listening ? 'Listening… tap to stop' : 'Tap to talk') : 'Voice isn’t available in this browser — type it instead.'}</p>
 
         <textarea
+          ref={textRef}
           className="s-input min-h-[88px] resize-none" aria-label="What happened"
           placeholder={photo ? 'e.g. Maya had the wine, rest shared' : 'Or type it here'} value={interim ? `${text} ${interim}`.trim() : text}
           onChange={e => { setText(e.target.value); setInterim(''); }} maxLength={600}
