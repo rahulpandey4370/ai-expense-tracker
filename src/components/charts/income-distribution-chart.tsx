@@ -22,6 +22,7 @@ import {
 import type { AppTransaction } from "@/lib/types"
 import { netAmount } from "@/lib/split-utils"
 import { cn } from "@/lib/utils"
+import { investmentCategoryNames } from '@/lib/finance-constants';
 
 interface IncomeDistributionChartProps {
   transactions: AppTransaction[];
@@ -40,7 +41,6 @@ const CHART_COLORS_INCOME_DIST = {
 const glowClass = "shadow-[var(--chart-glow-accent)]";
 
 export function IncomeDistributionChart({ transactions, selectedMonthName, selectedYear, chartHeightClass = "max-h-[300px]" }: IncomeDistributionChartProps) {
-  const investmentCategoryNames = ["Stocks", "Mutual Funds", "Recurring Deposit"];
   
   const totalIncome = transactions
     .filter(t => t.type === 'income')

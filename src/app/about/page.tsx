@@ -134,6 +134,9 @@ export default function AboutPage() {
                   </Button>
                 </motion.div>
               </motion.section>
+              <p className="mt-8 text-center text-xs text-muted-foreground">
+                Emoji in PDF reports: <a className="underline" href="https://github.com/jdecked/twemoji" target="_blank" rel="noopener noreferrer">Twemoji</a>, CC-BY 4.0. Fonts: Noto Sans and Newsreader, SIL Open Font License.
+              </p>
             </CardContent>
           </Card>
         </motion.div>

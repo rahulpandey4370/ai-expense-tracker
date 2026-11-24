@@ -7,6 +7,7 @@ import { addTransaction } from '@/lib/actions/transactions';
 import { sendPush } from '@/lib/push';
 import { guessFromSms } from '@/lib/sms-ai';
 import { revalidatePath } from 'next/cache';
+import { requireOwner } from '@/lib/auth/supabase-server';
 
 export interface PendingTransaction {
   id: string;
@@ -165,6 +166,7 @@ export async function savePushSubscription(sub: {
   endpoint?: string;
   keys?: { p256dh?: string; auth?: string };
 }, userAgent?: string, replacesEndpoint?: string): Promise<void> {
+  await requireOwner(); // reachable on every page, including not-found
   if (!sub.endpoint?.startsWith('https://') || !sub.keys?.p256dh || !sub.keys?.auth) {
     throw new Error('Invalid push subscription.');
   }
@@ -182,6 +184,7 @@ export async function savePushSubscription(sub: {
 }
 
 export async function sendTestPush(): Promise<number> {
+  await requireOwner(); // reachable on every page, including not-found
   return sendPush({
     title: '✅ FinWise notifications are on',
     body: "You'll get budget alerts, SMS review prompts and a 9 PM daily summary.",
@@ -192,12 +195,14 @@ export async function sendTestPush(): Promise<number> {
 
 /** Settings → Alerts: turning this device off. */
 export async function removePushSubscription(endpoint: string): Promise<void> {
+  await requireOwner(); // reachable on every page, including not-found
   const { error } = await getSupabase().from('push_subscriptions').delete().eq('endpoint', endpoint);
   if (error) throw new Error(`Could not turn off notifications: ${error.message}`);
 }
 
 /** Whether the server still sends to this device's subscription. */
 export async function isPushSubscriptionSaved(endpoint: string): Promise<boolean> {
+  await requireOwner(); // reachable on every page, including not-found
   const { count } = await getSupabase().from('push_subscriptions').select('endpoint', { count: 'exact', head: true }).eq('endpoint', endpoint);
   return (count ?? 0) > 0;
 }

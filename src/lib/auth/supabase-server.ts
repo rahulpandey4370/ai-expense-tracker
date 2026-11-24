@@ -36,3 +36,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null;
   }
 }
+
+/** For server actions: throws unless the caller is an owner. Next can run an action from a POST to paths the
+ *  middleware never sees (e.g. a missing /_next/static file), so actions on every page must check for themselves. */
+export async function requireOwner(): Promise<SessionUser> {
+  const user = await getSessionUser();
+  if (!user?.isOwner) throw new Error('Forbidden');
+  return user;
+}

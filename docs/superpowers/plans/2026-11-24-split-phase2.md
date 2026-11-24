@@ -48,7 +48,8 @@ Verified: group/person/finance PDFs rendered in Node (rasterised) and group PDF 
 - Final: fixed I5 seatless link guest got "Your share ₹0 / Settled" — "your" tiles and column dropped when there's no seat. (verified by render)
 - Final: fixed (re-graded Minor→Important) empty custom date produced "Invalid Date" / all-history PDF — "Pick both dates" guard.
 - Final: Ruling: I7 iframe viewer on phones — "View PDF" is hidden when navigator.pdfViewerEnabled === false (Chrome Android); iOS Safari keeps the inline viewer plus the Open link — not device-tested; cost if wrong: View shows only page 1 or a blank frame on some phones, Download/Share still work
-- Final: Ruling: C1 fixed at the middleware (single choke point) rather than adding owner checks inside each server action — every action routes through it — cost if wrong: a future matcher exemption reopens the hole; gate.sh covers the known paths
+- Final: fixed C1 (second half, pre-existing on master) /_next/static still skips the middleware, and Next really runs root-layout actions there: a POST with isPushSubscriptionSaved's id to /_next/static/zzz returned a real DB answer. requireOwner() added to the four root-layout push actions in pending.ts. gate.sh "root-layout action refuses via _next/static" RED (fix stashed) → GREEN, gate 14/14
+- Final: Ruling: owner checks only in the four actions bundled into the root layout / not-found page (the only ones reachable via /_next/static); page-level actions stay behind the middleware — cost if wrong: an action later imported into the root layout is reachable unauthenticated unless it calls requireOwner()
 - Final: Ruling: finance PDF "Saved" subtracts untyped expenses too (the screen's Cash Savings ignores them) — untyped spending is still money spent — cost if wrong: PDF Saved is lower than the screen's chart when untyped expenses exist
 - Final: minor (deferred): Reports page no longer offers "share as image"; dead image branches remain in share-file-dialog
 - Final: minor (deferred): dismissing the report sheet mid-generation still pops the share dialog
@@ -61,3 +62,12 @@ Verified: group/person/finance PDFs rendered in Node (rasterised) and group PDF 
 - Final: minor (deferred): removed member with only a settlement in the period is missing from the people table
 - Final: minor (deferred): two no-email members with the same name merge into one person across groups (name-key design)
 - Final: minor (deferred): Reports screen Cash Savings ignores untyped expenses (screen bug, see ruling above)
+- Final: Reports chart now uses the shared investmentCategoryNames (8 names) like the PDF, dashboard and AI report; yearly-overview and demo pages still list 3 (minor, deferred)
+- Final: Ruling: share-as-image removed from Reports with the screenshot export — the user asked for real PDFs, image needed html2canvas — cost if wrong: no Instagram-friendly image; asked the user
+- Final: Ruling: non-Latin glyphs — checked: Devanagari ("किराना दुकान") renders correctly with the bundled Noto Sans — cost if wrong: none seen
+- Final: Ruling: service-worker caching of /fonts for offline PDFs not added — making a PDF also fetches emoji online; offline PDFs were never asked for — cost if wrong: no PDFs offline
+- Final: Ruling: @react-pdf internals stay pinned to the August set — newer releases are broken (missing hyphenate package, std-fonts) — cost if wrong: no upstream fixes until the pins are lifted
+- Final: Ruling: Twemoji CC-BY 4.0 credit (plus font licences) added to the About page — cost if wrong: none
+- Final: Ruling: real-device behaviour of navigator.share and the download-then-WhatsApp fallback not tested — needs a phone; user asked to try — cost if wrong: share button falls back to download
+- Final: Ruling: PDF layout checked by rendering single-page reports this pass; multi-page header repeat relies on react-pdf `fixed`, not re-rendered now — cost if wrong: long reports lose the table header on page 2+
+- Final: minor (deferred, pre-existing): pickMe may pick a removed own seat; settleWithPerson settles merged name-keyed people together
