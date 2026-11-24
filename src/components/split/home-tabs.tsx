@@ -71,11 +71,11 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
         </div>
         {time === 'custom' && (
           <div className="flex items-center gap-2 px-4 pb-1 pt-1 text-xs">
-            <input type="date" className="s-input w-auto py-1.5 text-xs" aria-label="From date" value={filter.from ?? ''} max={filter.to}
-              onChange={e => setFilter(f => ({ ...f, from: e.target.value || undefined }))} />
+            <span className="w-36 shrink-0"><input type="date" className="s-input py-1.5 text-xs" aria-label="From date" value={filter.from ?? ''} max={filter.to}
+              onChange={e => setFilter(f => ({ ...f, from: e.target.value || undefined }))} /></span>
             <span className="s-muted">to</span>
-            <input type="date" className="s-input w-auto py-1.5 text-xs" aria-label="To date" value={filter.to ?? ''} min={filter.from}
-              onChange={e => setFilter(f => ({ ...f, to: e.target.value || undefined }))} />
+            <span className="w-36 shrink-0"><input type="date" className="s-input py-1.5 text-xs" aria-label="To date" value={filter.to ?? ''} min={filter.from}
+              onChange={e => setFilter(f => ({ ...f, to: e.target.value || undefined }))} /></span>
           </div>
         )}
         {filtering && feed.length > 0 && (

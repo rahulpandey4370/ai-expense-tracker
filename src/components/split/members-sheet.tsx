@@ -10,10 +10,9 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   detail: GroupDetail;
   token?: string;
-  onDeleted?: () => void;
 }
 
-export function MembersSheet({ open, onOpenChange, detail, token, onDeleted }: Props) {
+export function MembersSheet({ open, onOpenChange, detail, token }: Props) {
   const { toast } = useToast();
   const action = useSplitAction(token);
   const me = detail.meMemberId;
@@ -116,16 +115,6 @@ export function MembersSheet({ open, onOpenChange, detail, token, onDeleted }: P
           </section>
         )}
 
-        {detail.canManage && (
-          <button type="button" className="s-owe w-full py-2 text-sm font-semibold"
-            onClick={async () => {
-              if (!confirm(`Delete "${detail.group.name}" and all its expenses? This can't be undone.`)) return;
-              const ok = await run({ op: 'deleteGroup' }, 'Group deleted');
-              if (ok) { onOpenChange(false); onDeleted?.(); }
-            }}>
-            Delete group
-          </button>
-        )}
       </div>
     </SplitSheet>
   );

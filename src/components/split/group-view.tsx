@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, FileText, HandCoins, Loader2, Plus, Users } from 'lucide-react';
+import { ArrowLeft, FileText, HandCoins, Loader2, MoreHorizontal, Plus, Trash2, Users } from 'lucide-react';
 import { ReportSheet } from './report-sheet';
 import { VoiceSheet } from './voice-sheet';
 import { ReceiptView } from './receipt-view';
@@ -10,7 +10,9 @@ import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
 import { useEffect } from 'react';
 import { SettleSheet } from './settle-sheet';
 import { MembersSheet } from './members-sheet';
-import { useSplitGroup } from './use-split';
+import { useSplitAction, useSplitGroup } from './use-split';
+import { GroupSheet } from './group-sheet';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   groupId: string | null;
@@ -27,7 +29,9 @@ type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { ki
 export function GroupView({ groupId, token, asMember, onPickMember, onBack, openExpenseId }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt' | 'report'>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt' | 'report' | 'group'>(null);
+  const action = useSplitAction(token);
+  const { toast } = useToast();
   const [draft, setDraft] = useState<ExpenseDraft | null>(null);
   const [viewing, setViewing] = useState<Expense | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -90,19 +94,30 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
   const openExpense = (e: Expense | null) => { setEditing(e); setDraft(null); setSheet('expense'); };
   const review = (v: ExpenseDraft) => { setEditing(null); setDraft(v); setSheet('expense'); };
   const view = (e: Expense) => { setViewing(e); setSheet('receipt'); };
+  const removePayment = async (s: Settlement) => {
+    if (!confirm(`Delete the payment ${label(s.from)} → ${label(s.to)} ${inr(s.amount)}?`)) return;
+    try {
+      await action.mutateAsync({ op: 'deleteSettlement', groupId: d.group.id, settlementId: s.id });
+      toast({ title: 'Payment deleted' });
+    } catch (e: any) {
+      toast({ title: e.message, variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="space-y-4 pb-8">
       <header className="flex items-center gap-3">
         {onBack && (
-          <button type="button" onClick={onBack} aria-label="Back to groups" className="s-pill h-10 w-10 p-0"><ArrowLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={onBack} aria-label="Back to home" title="Back" className="s-icon-btn" data-back><ArrowLeft className="h-5 w-5" strokeWidth={2.5} /></button>
         )}
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--s-tint)] text-2xl" aria-hidden>{d.group.emoji ?? KIND_EMOJI[d.group.kind]}</span>
         <div className="min-w-0 flex-1">
           <h1 className="split-display truncate text-3xl">{d.group.name}</h1>
-          <p className="s-muted text-xs">{KIND_LABEL[d.group.kind]} · {active.length} people · {inr(total)} spent</p>
+          <p className="s-muted truncate text-xs"><span aria-hidden>{d.group.emoji ?? KIND_EMOJI[d.group.kind]} </span>{KIND_LABEL[d.group.kind]} · {active.length} people · {inr(total)} spent</p>
         </div>
-        <button type="button" onClick={() => setSheet('members')} aria-label="People and share link"><AvatarStack names={active.map(m => m.name)} max={3} /></button>
+        <button type="button" className="shrink-0" onClick={() => setSheet('members')} aria-label="People and share link"><AvatarStack names={active.map(m => m.name)} max={3} /></button>
+        {d.canManage && (
+          <button type="button" onClick={() => setSheet('group')} aria-label="Edit or delete group" title="Group settings" className="s-icon-btn"><MoreHorizontal className="h-5 w-5" strokeWidth={2.5} /></button>
+        )}
       </header>
 
       <Hero
@@ -139,6 +154,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--s-tint)]" aria-hidden>💸</span>
                 <span className="flex-1">{label(it.s.from)} paid {label(it.s.to)}<span className="s-muted block text-xs">{prettyDate(it.s.date)}{it.s.note ? ` · ${it.s.note}` : ''}</span></span>
                 <span className="font-semibold tabular-nums">{inr(it.s.amount)}</span>
+                <button type="button" className="s-muted -mr-1 p-2 hover:text-[var(--s-coral)]" aria-label={`Delete payment ${label(it.s.from)} to ${label(it.s.to)}`}
+                  onClick={() => removePayment(it.s)} disabled={action.isPending}><Trash2 className="h-4 w-4" /></button>
               </li>
             ))}
           </ul>
@@ -151,7 +168,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
         onEdit={() => { if (viewing) openExpense(d.expenses.find(x => x.id === viewing.id) ?? viewing); }} />
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />
       <ReportSheet open={sheet === 'report'} onOpenChange={o => !o && setSheet(null)} group={d} />
-      <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} onDeleted={onBack} />
+      <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} />
+      {d.canManage && <GroupSheet open={sheet === 'group'} onOpenChange={o => !o && setSheet(null)} detail={d} onDeleted={onBack} />}
     </div>
   );
 }
