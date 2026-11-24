@@ -48,17 +48,29 @@ Return JSON exactly in this shape (ids are the member ids above):
 
 Sentence: """{{{text}}}"""`;
 
-const DAILY_LIMIT = Number(process.env.SPLIT_VOICE_DAILY_LIMIT ?? 150);
+const rawLimit = Number(process.env.SPLIT_VOICE_DAILY_LIMIT ?? 150);
+const DAILY_LIMIT = Number.isFinite(rawLimit) && rawLimit >= 0 ? rawLimit : 150;
 
 /** Split voice + receipt scan use the same Luna model as the SMS flow (override with SPLIT_AI_MODEL). */
 export const SPLIT_MODEL = process.env.SPLIT_AI_MODEL || SMS_MODEL;
 
 // ponytail: one app-wide daily cap (friends and link guests spend the owner's AI credits); per-person caps if it gets abused.
+// Reserve first, then count: parallel calls each see the others' reservations, so a burst can't slip past.
+// Fails closed if the count can't be read.
 export async function assertAiBudget() {
+  const db = getSupabase();
+  const unavailable = () => new Error('Voice and scan are unavailable right now. Type the expense instead.');
+  const { data: slot, error: insErr } = await db.from('ai_usage')
+    .insert({ feature: 'split_ai_quota', model_key: SPLIT_MODEL, provider: 'quota', operation: 'structured', ok: true })
+    .select('id').single();
+  if (insErr || !slot) throw unavailable();
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { count } = await getSupabase().from('ai_usage').select('id', { count: 'exact', head: true })
-    .in('feature', ['split_voice', 'split_scan']).gte('created_at', since);
-  if ((count ?? 0) >= DAILY_LIMIT) throw new Error('Voice and scan are resting for today. Type the expense instead.');
+  const { count, error } = await db.from('ai_usage').select('id', { count: 'exact', head: true })
+    .eq('feature', 'split_ai_quota').gte('created_at', since);
+  if (error || count == null || count > DAILY_LIMIT) {
+    await db.from('ai_usage').delete().eq('id', slot.id);
+    throw error || count == null ? unavailable() : new Error('Voice and scan are resting for today. Type the expense instead.');
+  }
 }
 
 export interface VoiceDraft {

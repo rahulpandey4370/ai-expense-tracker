@@ -7,8 +7,8 @@ import { SPLIT_MODEL, assertAiBudget } from './voice';
 import type { SplitItem } from './math';
 
 export const RECEIPT_BUCKET = 'split-receipts';
-const MAX_BYTES = 5 * 1024 * 1024;
-const MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
+const MAX_BYTES = 3 * 1024 * 1024; // under Vercel's 4.5 MB request cap once base64'd
+const MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']; // the browser converts HEIC to JPEG first
 
 export function decodeDataUri(uri: string): { mime: string; bytes: Buffer } | null {
   const m = /^data:([\w/+.-]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(uri ?? '');
@@ -103,6 +103,13 @@ export async function storeReceipt(groupId: string, expenseId: string, file: { m
 export async function signedReceiptUrl(path: string): Promise<string | null> {
   const { data } = await getSupabase().storage.from(RECEIPT_BUCKET).createSignedUrl(path, 3600);
   return data?.signedUrl ?? null;
+}
+
+/** Everything stored for a group (on group delete). */
+export async function removeGroupReceipts(groupId: string) {
+  const bucket = getSupabase().storage.from(RECEIPT_BUCKET);
+  const { data } = await bucket.list(groupId, { limit: 1000 });
+  if (data?.length) await bucket.remove(data.map(f => `${groupId}/${f.name}`)).catch(() => {});
 }
 
 export async function removeReceipt(path: string) {

@@ -31,6 +31,7 @@ export function useSplitGroup(groupId: string | null, token?: string, asMember?:
     queryKey: splitKeys.group(groupId ?? `link:${token}`, asMember),
     queryFn: () => splitApi<GroupDetail>('group', { groupId: groupId ?? undefined, asMember }, token),
     enabled: !!groupId || !!token,
+    placeholderData: prev => prev, // keep the old group on screen while switching
     retry: (n, e) => n < 2 && !/not found|valid group link/i.test((e as Error).message),
     refetchInterval: 15_000,
   });

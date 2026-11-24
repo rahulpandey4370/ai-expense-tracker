@@ -714,6 +714,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setAiReviewTransactions([]);
       setAiUnmatchedSplitNames([]);
       setAiSplitSeeds([]);
+      setAiSplitDone({});
+      setAiSplitSeeds([]);
     }
   }, [parsedAITransactions, expenseCategories, incomeCategories, paymentMethods, splitUsers]);
 
@@ -725,7 +727,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     const transactionsToSubmit: TransactionInput[] = [];
     for(const [index, reviewItem] of aiReviewTransactions.entries()) {
-        if (isOwner && aiSplitSeeds[index]) continue; // logged via the group split form instead
+        if (isOwner && aiSplitSeeds[index]) {
+          if (aiSplitDone[index]) continue; // already logged via the group split form
+          // Never drop a row silently: a split row is saved through its split form (or marked "Not a split").
+          toast({ title: 'Open the split first', description: `"${reviewItem.description}" is marked as a split. Tap "Open split", or "Not a split" to log it as your own expense.`, variant: 'destructive' });
+          setIsLoading(false);
+          return;
+        }
         const validation = TransactionInputSchema.safeParse(reviewItem);
         if (validation.success) {
             transactionsToSubmit.push(validation.data);
@@ -787,6 +795,8 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       setParsedAITransactions([]);
       setAiReviewTransactions([]);
       setAiUnmatchedSplitNames([]);
+      setAiSplitSeeds([]);
+      setAiSplitDone({});
       setAiProcessingError(null);
     }
     setIsLoading(false);
@@ -1292,6 +1302,10 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                               <Button type="button" size="sm" className="h-7 px-2 text-xs"
                                 onClick={() => setComposer({ seed: { ...aiSplitSeeds[index]!, amount: tx.amount, description: tx.description, date: format(tx.date, 'yyyy-MM-dd') }, row: index })}>
                                 Open split
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                                onClick={() => setAiSplitSeeds(xs => xs.map((x, i) => (i === index ? null : x)))}>
+                                Not a split
                               </Button>
                             </>
                           )}

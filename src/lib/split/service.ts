@@ -8,7 +8,7 @@ import { resolveShares, computeBalances, simplifyDebts, ownerSpending, type Spli
 import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
 import { parseSplitwise, splitwiseToLedger } from './splitwise';
 import { parseVoiceDraft } from './voice';
-import { decodeDataUri, removeReceipt, scanReceiptDraft, signedReceiptUrl, storeReceipt } from './receipt';
+import { decodeDataUri, removeGroupReceipts, removeReceipt, scanReceiptDraft, signedReceiptUrl, storeReceipt } from './receipt';
 import { emojiFor } from './emoji';
 import type {
   ActivityItem, Expense, GroupDetail, GroupInfo, GroupKind, GroupSummary, HomeData, Member, PersonBalance, Settlement,
@@ -253,6 +253,7 @@ export async function deleteGroup(access: Access, groupId: string) {
   if (groupId === 'legacy') throw new SplitError(400, 'Quick splits mirrors your transactions and can\'t be deleted. Archive it instead.');
   await manage(access, groupId);
   await must(db().from('split_groups').delete().eq('id', groupId));
+  await removeGroupReceipts(groupId); // private photos go with the group
   return { ok: true };
 }
 
@@ -348,6 +349,10 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
   const existing = input.id ? o.loaded.expenses.find(e => e.id === input.id) : undefined;
   if (input.id && !existing) throw new SplitError(404, 'Expense not found.');
   const id = existing?.id ?? cuid();
+  // Re-read the receipt right before writing: a photo attached since the group loaded must survive this save.
+  const freshReceipt = existing
+    ? (await must<any[]>(db().from('split_expenses').select('meta').eq('id', existing.id).limit(1)))[0]?.meta?.receipt
+    : undefined;
 
   await must(db().rpc('split_save_expense', {
     p_expense: {
@@ -356,7 +361,7 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
       created_by: existing?.created_by ?? o.me.id, transaction_id: existing?.transaction_id ?? null,
       meta: {
         // keep what edits don't touch: the receipt photo, the original words, the import marker
-        receipt: existing?.meta?.receipt, imported: existing?.meta?.imported,
+        receipt: freshReceipt, imported: existing?.meta?.imported,
         said: input.said ?? existing?.meta?.said,
         participants: input.participants, values: input.values, items: input.items, coveredBy: input.coveredBy,
       },
@@ -556,11 +561,23 @@ export async function attachReceipt(access: Access, input: { groupId: string; ex
   const e = o.loaded.expenses.find(x => x.id === input.expenseId);
   if (!e) throw new SplitError(404, 'Expense not found.');
   const file = decodeDataUri(input.dataUri);
-  if (!file) throw new SplitError(400, 'Use a JPG, PNG, WEBP, HEIC or PDF under 5 MB.');
+  if (!file) throw new SplitError(400, 'Use a JPG, PNG, WEBP or PDF under 3 MB.');
   const path = await storeReceipt(input.groupId, input.expenseId, file);
-  await must(db().from('split_expenses').update({ meta: { ...(e.meta ?? {}), receipt: path }, updated_at: nowIso() }).eq('id', e.id));
-  if (e.meta?.receipt) await removeReceipt(e.meta.receipt);
-  return { ok: true };
+  // Compare-and-set on updated_at so an edit saved during the upload isn't overwritten by a stale meta.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cur = (await must<any[]>(db().from('split_expenses').select('meta, updated_at').eq('id', e.id).limit(1)))[0];
+    if (!cur) { await removeReceipt(path); throw new SplitError(404, 'Expense not found.'); }
+    const { data, error } = await db().from('split_expenses')
+      .update({ meta: { ...(cur.meta ?? {}), receipt: path }, updated_at: nowIso() })
+      .eq('id', e.id).eq('updated_at', cur.updated_at).select('id');
+    if (error) { await removeReceipt(path); throw new Error(error.message); }
+    if (data?.length) {
+      if (cur.meta?.receipt && cur.meta.receipt !== path) await removeReceipt(cur.meta.receipt);
+      return { ok: true };
+    }
+  }
+  await removeReceipt(path);
+  throw new SplitError(409, 'The expense changed while the photo uploaded. Try again.');
 }
 
 /** Short-lived link to view an expense's receipt; only for people who can see the group. */
@@ -577,7 +594,7 @@ export async function receiptUrl(access: Access, groupId: string, expenseId: str
 export async function scanReceipt(access: Access, input: { groupId: string; dataUri: string; text?: string; asMember?: string | null; today: string }) {
   const o = await openGroup(access, input.groupId, input.asMember);
   if (!o.me) throw new SplitError(400, 'Pick who you are first.');
-  if (!decodeDataUri(input.dataUri)) throw new SplitError(400, 'Use a JPG, PNG, WEBP, HEIC or PDF under 5 MB.');
+  if (!decodeDataUri(input.dataUri)) throw new SplitError(400, 'Use a JPG, PNG, WEBP or PDF under 3 MB.');
   try {
     return await scanReceiptDraft(input.dataUri, active(o.members).map(m => ({ id: m.id, name: m.name })), o.me.name, input.text ?? '', input.today);
   } catch (e) {

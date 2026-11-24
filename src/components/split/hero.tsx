@@ -36,9 +36,9 @@ export function Hero({ net, lines, onScan, onType, onVoice, children }: {
         <p className={`text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</p>
       </div>
       <div className="flex flex-1 items-center py-6">
-        <p className="split-display min-h-[2.2em] text-[2.5rem] leading-[1.08] text-[color-mix(in_srgb,var(--s-ink)_70%,transparent)]" aria-live="off">
+        <p className="split-display min-h-[2.2em] text-[2.5rem] leading-[1.08] text-[color-mix(in_srgb,var(--s-ink)_70%,transparent)]" aria-hidden>
           <Accent text={text} />
-          <span className={`ml-0.5 inline-block h-[0.9em] w-[2px] translate-y-[0.1em] bg-[var(--s-deep)] ${done ? 'animate-pulse' : ''}`} aria-hidden />
+          <span className={`ml-0.5 inline-block h-[0.9em] w-[2px] translate-y-[0.1em] bg-[var(--s-deep)] ${done ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
         </p>
         <span className="sr-only">{lines[0]}</span>
       </div>

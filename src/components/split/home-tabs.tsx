@@ -126,7 +126,12 @@ function HomeCapture({ mode, onClose, groups, onNeedGroup }: { mode: CaptureMode
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  const pick = (id: string) => { setGroupId(id); try { localStorage.setItem(LAST_GROUP, id); } catch {} };
+  const pick = (id: string) => {
+    if (id === groupId) return;
+    setGroupId(id);
+    setDraft(null); // a draft's member ids belong to the old group
+    try { localStorage.setItem(LAST_GROUP, id); } catch {}
+  };
   const switcher = (
     <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="radiogroup" aria-label="Group">
       {groups.map(g => (

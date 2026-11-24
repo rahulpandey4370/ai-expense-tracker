@@ -92,16 +92,22 @@ export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSa
     if (!open || !d) return;
     const fromSeed = draftFor(d, seed);
     if (!seed.instruction?.trim()) { setDraft(fromSeed); return; }
+    let cancelled = false; // switching group mid-parse must not drop group A's member ids onto group B
     setParsing(true);
     const text = `${seed.instruction}${seed.amount ? `. Total ${seed.amount} rupees` : ''}${seed.description ? ` for ${seed.description}` : ''}.`;
     splitApi<VoiceDraft>('parseVoice', { groupId: d.group.id, text, today: todayYmd() })
-      .then(v => setDraft({ ...fromSeed, method: v.method, paidBy: v.paidBy, meta: v.meta, amount: seed.amount ?? v.amount, description: seed.description || v.description }))
-      .catch(() => setDraft(fromSeed))
-      .finally(() => setParsing(false));
+      .then(v => { if (!cancelled) setDraft({ ...fromSeed, method: v.method, paidBy: v.paidBy, meta: v.meta, amount: seed.amount ?? v.amount, description: seed.description || v.description }); })
+      .catch(() => { if (!cancelled) setDraft(fromSeed); })
+      .finally(() => { if (!cancelled) setParsing(false); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, group.data?.group.id]);
 
-  const pick = (id: string) => { setDraft(null); setGroupId(id); try { localStorage.setItem(LAST_GROUP, id); } catch {} };
+  const pick = (id: string) => {
+    if (id === groupId) return;
+    setDraft(null); setGroupId(id);
+    try { localStorage.setItem(LAST_GROUP, id); } catch {}
+  };
   const switcher = (
     <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="radiogroup" aria-label="Group">
       {groups.map(g => (
@@ -118,6 +124,14 @@ export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSa
       <SplitSheet open onOpenChange={onOpenChange} title={<>Start a <em>group</em> first</>}>
         <p className="s-muted mb-4 text-sm">Splits live in groups — a trip, your flat, or just you and one friend.</p>
         <Link href="/split-expenses" className="s-pill s-pill-primary w-full">Open Split Expenses</Link>
+      </SplitSheet>
+    );
+  }
+  if (group.error) {
+    return (
+      <SplitSheet open onOpenChange={onOpenChange} title={<>Couldn&apos;t <em>open</em> the group</>}>
+        <p className="s-muted mb-3 text-sm">{(group.error as Error).message}</p>
+        {switcher}
       </SplitSheet>
     );
   }

@@ -53,6 +53,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
   function start() {
     const Rec = SR();
     if (!Rec) return;
+    recRef.current?.abort?.(); // never two recognisers at once
     const rec = new Rec();
     let lang = 'en-IN';
     try { lang = localStorage.getItem('finwise.dictationLang') || lang; } catch {}
@@ -132,7 +133,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
     <SplitSheet open={open} onOpenChange={onOpenChange} title={photo || startWithPhoto ? <>Snap the <em>receipt</em></> : <>Say <em>it</em></>}>
       <div className="space-y-4">
         {header}
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="sr-only" onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ''; }} />
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" className="sr-only" onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ''; }} />
 
         {photo ? (
           <div className="relative">
@@ -152,7 +153,7 @@ export function VoiceSheet({ open, onOpenChange, detail, token, asMember, onRevi
             <button
               type="button" onClick={listening ? stop : start} aria-pressed={listening}
               aria-label={listening ? 'Stop listening' : 'Start listening'}
-              className={`flex h-24 w-24 items-center justify-center rounded-full text-white shadow-lg transition ${listening ? 'scale-105 animate-pulse bg-[var(--s-coral)]' : 'bg-[var(--s-deep)]'}`}
+              className={`flex h-24 w-24 items-center justify-center rounded-full text-white shadow-lg transition ${listening ? 'motion-safe:scale-105 motion-safe:animate-pulse bg-[var(--s-coral)]' : 'bg-[var(--s-deep)]'}`}
             >
               {listening ? <Square className="h-8 w-8" /> : <Mic className="h-9 w-9" />}
             </button>

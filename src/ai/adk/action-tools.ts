@@ -202,19 +202,18 @@ const SplitArgs = z.object({
   categoryName: z.string().optional().describe('To also count the user\'s share in their spending (with paymentMethodName + expenseType)'),
   paymentMethodName: z.string().optional(),
   expenseType: z.enum(expenseTypes).optional(),
-  receiptFilename: z.string().optional().describe('An attached receipt photo to keep on the expense, e.g. attachment-1.jpeg'),
 });
 type SplitArgs = z.infer<typeof SplitArgs>;
 
 const norm = (x: string) => x.trim().toLowerCase();
 
 /** Names → ids in the user's groups; never creates people. Returns the save input or the problems. */
-async function resolveSplit(a: SplitArgs): Promise<{ problems: string[]; input?: SaveExpenseInput; groupName?: string; names?: Record<string, string> }> {
+async function resolveSplit(a: SplitArgs): Promise<{ problems: string[]; input?: SaveExpenseInput; groupName?: string; names?: Record<string, string>; me?: string }> {
   const user = await getSessionUser();
   if (!user?.isOwner) return { problems: ['only the owner can add split expenses from chat'] };
   const groups = (await getHome(user)).groups.filter(g => !g.archived);
   const want = norm(a.groupName);
-  const g = groups.find(x => norm(x.name) === want) ?? groups.find(x => norm(x.name).includes(want) || want.includes(norm(x.name)));
+  const g = want ? groups.find(x => norm(x.name) === want) ?? groups.find(x => norm(x.name).includes(want) || want.includes(norm(x.name))) : undefined;
   if (!g) return { problems: [`no split group named "${a.groupName}" (groups: ${groups.map(x => x.name).join(', ') || 'none'})`] };
   const d = await getGroup({ user }, g.id);
   const active = d.members.filter(m => !m.removed);
@@ -250,9 +249,9 @@ async function resolveSplit(a: SplitArgs): Promise<{ problems: string[]; input?:
   }
   const names = Object.fromEntries(active.map(m => [m.id, m.id === me ? 'You' : m.name]));
   return {
-    problems: [], groupName: g.name, names,
+    problems: [], groupName: g.name, names, me,
     input: {
-      groupId: g.id, description: a.description, amount: a.amount, date: a.date ?? new Date().toISOString().slice(0, 10),
+      groupId: g.id, description: a.description, amount: a.amount, date: a.date ?? new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10), // today in IST
       emoji: emojiFor(a.description), method: a.method, paidBy: paidBy!, participants: parts, values, coveredBy, spending,
     },
   };
@@ -263,24 +262,15 @@ export const addSplitExpenseTool = gated({
   description:
     'Log a shared expense in one of the user\'s split groups (everyone in the group sees it). The user sees a Confirm card first. ' +
     'Use when the user says to split something / add it to a group. Names are matched to group members; never invent people. ' +
-    'If a receipt photo is attached, pass receiptFilename so it is kept on the expense.',
+    'Receipt photos can\'t be carried over from chat: after adding, tell the user they can attach the photo by tapping the expense in FinWise Split.',
   parameters: SplitArgs,
   valid: async (a: SplitArgs) => (await resolveSplit(a)).problems.length === 0,
-  execute: async (a: SplitArgs, ctx?: any) => {
+  execute: async (a: SplitArgs) => {
     const r = await resolveSplit(a);
     if (r.problems.length) return { added: false, problems: r.problems };
     const user = (await getSessionUser())!;
     const { id } = await saveExpense({ user }, { ...r.input!, said: undefined });
-    let receipt = 'none';
-    if (a.receiptFilename && ctx?.loadArtifact) {
-      const part = await ctx.loadArtifact(a.receiptFilename).catch(() => null);
-      const data = part?.inlineData;
-      if (data?.data) {
-        receipt = await attachReceipt({ user }, { groupId: r.input!.groupId, expenseId: id, dataUri: `data:${data.mimeType};base64,${data.data}` })
-          .then(() => 'attached', (e: Error) => `not attached: ${e.message}`);
-      }
-    }
-    return { added: true, group: r.groupName, expenseId: id, inSpending: !!r.input!.spending, receipt };
+    return { added: true, group: r.groupName, expenseId: id, inSpending: !!r.input!.spending && (r.input!.paidBy === r.me || !!r.input!.participants.includes(r.me!)) };
   },
 });
 
@@ -331,8 +321,8 @@ export async function previewAction(name: string, args: any): Promise<ActionPrev
           { label: 'Description', value: i.description },
           { label: 'Paid by', value: who(i.paidBy) },
           { label: 'Split', value: how },
-          ...(i.spending ? [{ label: 'Your spending', value: 'Your share is added to transactions' }] : []),
-          ...(args.receiptFilename ? [{ label: 'Receipt', value: 'Attached photo is kept' }] : []),
+          { label: 'Date', value: day(i.date) },
+          ...(i.spending && (i.paidBy === r.me || i.participants.includes(r.me!)) ? [{ label: 'Your spending', value: 'Your share is added to transactions' }] : []),
         ],
       };
     }

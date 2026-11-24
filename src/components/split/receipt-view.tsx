@@ -22,10 +22,14 @@ export function ReceiptView({ open, onOpenChange, expense: e, detail, token, onE
 
   useEffect(() => {
     setPhoto(null);
+    setLoadingPhoto(false);
     if (!open || !e?.meta.receipt) return;
+    let cancelled = false; // switching expenses must not show the previous one's photo
     setLoadingPhoto(true);
     splitApi<{ url: string; isPdf: boolean }>('receiptUrl', { groupId: detail.group.id, expenseId: e.id }, token)
-      .then(setPhoto).catch(() => setPhoto(null)).finally(() => setLoadingPhoto(false));
+      .then(p => { if (!cancelled) setPhoto(p); }).catch(() => { if (!cancelled) setPhoto(null); })
+      .finally(() => { if (!cancelled) setLoadingPhoto(false); });
+    return () => { cancelled = true; };
   }, [open, e?.id, e?.meta.receipt, detail.group.id, token]);
 
   if (!e) return null;
