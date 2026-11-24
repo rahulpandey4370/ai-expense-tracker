@@ -2,7 +2,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { AppTransaction } from '@/lib/types';
 import { financeByMonth, financeNumbers } from './finance-numbers';
-import { C, Doc, Footer, Table, Tiles, inr, s, toFile } from './kit';
+import { C, Doc, Table, Tiles, inr, s, toFile } from './kit';
 
 interface AiSections {
   executiveSummary?: string; incomeVsExpenseAnalysis?: string; categoryDeepDive?: string;
@@ -31,7 +31,7 @@ export async function financeReportPdf(opts: { periodName: string; annual: boole
   ] : [];
 
   const doc = (
-    <Doc title={`FinWise report · ${opts.periodName}`}>
+    <Doc title={`FinWise report · ${opts.periodName}`} footer={`FinWise · ${opts.periodName} · amounts in ₹`}>
       <View style={[s.band, { backgroundColor: C.accent }]}>
         <Text style={s.brand}>finwise</Text>
         <Text style={s.title}>{opts.annual ? 'Annual report' : 'Monthly report'}</Text>
@@ -100,7 +100,6 @@ export async function financeReportPdf(opts: { periodName: string; annual: boole
           )}
         </View>
       )}
-      <Footer note={`FinWise · ${opts.periodName} · amounts in ₹`} />
     </Doc>
   );
   return toFile(doc, `FinWise_report_${opts.periodName.replace(/\s+/g, '_')}.pdf`);

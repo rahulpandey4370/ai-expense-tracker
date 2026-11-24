@@ -34,7 +34,7 @@ export const fmtDate = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDate
 export const monthName = (ym: string) => new Date(`${ym}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
 export const s = StyleSheet.create({
-  page: { fontFamily: 'Noto Sans', fontSize: 9.5, color: C.ink, paddingTop: 34, paddingBottom: 52, paddingHorizontal: 36, lineHeight: 1.35 },
+  page: { fontFamily: 'Noto Sans', fontSize: 9.5, color: C.ink, paddingTop: 34, paddingBottom: 52, paddingHorizontal: 36 }, // no lineHeight here: an inherited lineHeight makes react-pdf drop the fixed footer
   band: { backgroundColor: C.accent, color: '#fff', borderRadius: 10, padding: 16, marginBottom: 14 },
   brand: { fontFamily: 'Newsreader', fontSize: 11, opacity: 0.9 },
   title: { fontFamily: 'Newsreader', fontWeight: 500, fontSize: 24, lineHeight: 1.15, marginTop: 8 },
@@ -118,10 +118,13 @@ export function Footer({ note }: { note: string }) {
   );
 }
 
-export function Doc({ title, children }: { title: string; children: React.ReactNode }) {
+export function Doc({ title, footer, children }: { title: string; footer: string; children: React.ReactNode }) {
   return (
     <Document title={title} author="FinWise" creator="FinWise" producer="FinWise">
-      <Page size="A4" style={s.page}>{children}</Page>
+      <Page size="A4" style={s.page}>
+        {children}
+        <Footer note={footer} />
+      </Page>
     </Document>
   );
 }

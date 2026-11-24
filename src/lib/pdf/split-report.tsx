@@ -2,7 +2,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { GroupDetail } from '@/lib/split/types';
 import { groupReportData, personReportData, simplifiedDiffers, type PersonData } from '@/lib/split/report';
-import { C, Doc, Footer, Header, Table, Tiles, fmtDate, inr, monthName, s, signedInr, toFile } from './kit';
+import { C, Doc, Header, Table, Tiles, fmtDate, inr, monthName, s, signedInr, toFile } from './kit';
 
 const today = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const todayYmd = () => new Date().toLocaleDateString('en-CA');
@@ -29,7 +29,7 @@ export async function groupReportPdf(d: GroupDetail, from: string, to: string, l
   const past = to < todayYmd();
 
   const doc = (
-    <Doc title={`${d.group.name} · ${label}`}>
+    <Doc title={`${d.group.name} · ${label}`} footer={`FinWise Split · ${d.group.name} · amounts in ₹`}>
       <Header title={`${d.group.emoji ?? ''} ${d.group.name}`.trim()} subtitle={`${label} · ${fmtDate(from)} – ${fmtDate(to)}`} right={`Generated ${today()}`} />
       <Tiles items={[
         { label: 'Group spent', value: inr(r.totalSpent), note: `${r.expenses.length} expense${r.expenses.length === 1 ? '' : 's'}` },
@@ -80,7 +80,6 @@ export async function groupReportPdf(d: GroupDetail, from: string, to: string, l
           />
         </>
       )}
-      <Footer note={`FinWise Split · ${d.group.name} · amounts in ₹`} />
     </Doc>
   );
   return toFile(doc, `FinWise_${safe(d.group.name)}_${safe(label)}.pdf`);
@@ -91,7 +90,7 @@ export async function personReportPdf(p: PersonData, from: string, to: string, l
   const multi = spansMonths(from, to);
   const owesMe = p.net > 0;
   const doc = (
-    <Doc title={`${p.name} · ${label}`}>
+    <Doc title={`${p.name} · ${label}`} footer={`FinWise Split · You & ${p.name} · amounts in ₹`}>
       <Header title={`You & ${p.name}`} subtitle={`${label} · ${fmtDate(from)} – ${fmtDate(to)}`} right={`Generated ${today()}`} />
       <Tiles items={[
         { label: 'Shared spending', value: inr(r.sharedSpend), note: (n => `${n} expense${n === 1 ? '' : 's'} together`)(r.items.filter(i => i.kind === 'expense').length) },
@@ -122,7 +121,6 @@ export async function personReportPdf(p: PersonData, from: string, to: string, l
       )}
       <Text style={[s.muted, { fontSize: 7.5, marginTop: 4 }]}>Effect: + means {p.name} owes you more, − means you owe {p.name} more (a payment from {p.name} shows as −).</Text>
       {simplifiedDiffers(p) ? <Text style={[s.muted, { fontSize: 7.5, marginTop: 2 }]}>Balances follow each group&apos;s simplified settle-up (fewest payments), so they can differ from adding up the rows above.</Text> : null}
-      <Footer note={`FinWise Split · You & ${p.name} · amounts in ₹`} />
     </Doc>
   );
   return toFile(doc, `FinWise_${safe(p.name)}_${safe(label)}.pdf`);

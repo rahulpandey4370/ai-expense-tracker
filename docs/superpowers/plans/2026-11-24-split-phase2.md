@@ -69,5 +69,6 @@ Verified: group/person/finance PDFs rendered in Node (rasterised) and group PDF 
 - Final: Ruling: @react-pdf internals stay pinned to the August set — newer releases are broken (missing hyphenate package, std-fonts) — cost if wrong: no upstream fixes until the pins are lifted
 - Final: Ruling: Twemoji CC-BY 4.0 credit (plus font licences) added to the About page — cost if wrong: none
 - Final: Ruling: real-device behaviour of navigator.share and the download-then-WhatsApp fallback not tested — needs a phone; user asked to try — cost if wrong: share button falls back to download
-- Final: Ruling: PDF layout checked by rendering single-page reports this pass; multi-page header repeat relies on react-pdf `fixed`, not re-rendered now — cost if wrong: long reports lose the table header on page 2+
+- Final: fixed (found while checking multi-page layout, not in the review) the "Page x of y" footer never rendered in any PDF — an inherited page lineHeight makes the pinned react-pdf drop fixed views containing render-prop text. Page lineHeight removed (it barely changed spacing); Doc now draws the footer from a `footer` prop. Verified: pdftotext finds the footer on every page (group 3/3, person 1/1, finance 1/1); a 60-expense report repeats its table header on page 2
+- Final: minor (deferred): a table split across pages draws its left border past the last row on the earlier page
 - Final: minor (deferred, pre-existing): pickMe may pick a removed own seat; settleWithPerson settles merged name-keyed people together
