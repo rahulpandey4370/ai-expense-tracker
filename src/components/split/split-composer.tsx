@@ -123,7 +123,7 @@ export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSa
     return (
       <SplitSheet open onOpenChange={onOpenChange} title={<>Start a <em>group</em> first</>}>
         <p className="s-muted mb-4 text-sm">Splits live in groups — a trip, your flat, or just you and one friend.</p>
-        <Link href="/split-expenses" className="s-pill s-pill-primary w-full">Open Split Expenses</Link>
+        <Link href="/split-expenses" className="s-pill s-pill-primary w-full">Open FinWise Split</Link>
       </SplitSheet>
     );
   }

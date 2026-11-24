@@ -29,7 +29,7 @@ const features = [
   "AI Financial Chatbot: Ask questions about your transactions in natural language and get instant answers.",
   "Comprehensive Reports: Visualize expenses by category and payment method, with AI-powered comparative analysis.",
   "Yearly Overview: A dedicated page for a month-by-month summary of your financial year.",
-  "Split Expenses: Easily manage and track shared expenses with friends.",
+  "FinWise Split: Easily manage and track shared expenses with friends.",
   "Goal Planner: Define financial goals, get AI-powered feasibility forecasts, and track your progress.",
   "Modern & Responsive UI: Built with Next.js, ShadCN UI, and Tailwind CSS for a seamless experience on any device."
 ];

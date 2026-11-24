@@ -28,7 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/portfolio': 'Portfolio',
   '/reports': 'Reports',
   '/yearly-overview': 'Yearly Overview',
-  '/split-expenses': 'Split Expenses',
+  '/split-expenses': 'FinWise Split',
   '/settings': 'Settings',
   '/chatbot': 'AI Chatbot',
   '/ai-playground': 'AI Playground',

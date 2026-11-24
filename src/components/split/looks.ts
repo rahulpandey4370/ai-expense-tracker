@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 
-// Our own four looks. Sidekicks are standard emoji; taglines are ours.
+// Our own four looks; each has an original sidekick drawn in sidekick.tsx. Taglines are ours.
 export const LOOKS = [
-  { id: 'onyx', name: 'Onyx', sidekick: '🐈‍⬛', tagline: 'Quiet. Keeps every rupee in line.', bg: '#111111', fg: '#ffffff' },
-  { id: 'lagoon', name: 'Lagoon', sidekick: '🐢', tagline: 'Easy-going. Rolls with every plan.', bg: '#0b6f72', fg: '#ffffff' },
-  { id: 'coral', name: 'Coral', sidekick: '🦩', tagline: 'Bright. First to say “let’s split it”.', bg: '#c4334c', fg: '#ffffff' },
-  { id: 'grape', name: 'Grape', sidekick: '🦄', tagline: 'Never forgets who still owes.', bg: '#4f2aa6', fg: '#ffffff' },
+  { id: 'onyx', name: 'Onyx · Purse', tagline: 'Quiet. Keeps every rupee in line.', bg: '#111111', fg: '#ffffff' },
+  { id: 'lagoon', name: 'Lagoon · Coin', tagline: 'Easy-going. Rolls with every plan.', bg: '#0b6f72', fg: '#ffffff' },
+  { id: 'coral', name: 'Coral · Receipt', tagline: 'Bright. First to say “let’s split it”.', bg: '#c4334c', fg: '#ffffff' },
+  { id: 'grape', name: 'Grape · Piggy', tagline: 'Never forgets who still owes.', bg: '#4f2aa6', fg: '#ffffff' },
 ] as const;
 export type LookId = (typeof LOOKS)[number]['id'];
 
@@ -27,4 +27,3 @@ export function useLook(): [LookId, (l: LookId) => void] {
   return [look, setLook];
 }
 
-export const sidekickOf = (l: LookId) => LOOKS.find(x => x.id === l)!.sidekick;

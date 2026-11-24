@@ -7,7 +7,8 @@ import { BarChart3, Bell, Check, FileUp, Home, Loader2, LogIn, LogOut, Search, U
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, EmptyState, SplitSheet, splitSerif } from './bits';
-import { LOOKS, sidekickOf, useLook } from './looks';
+import { LOOKS, useLook } from './looks';
+import { Sidekick } from './sidekick';
 import { ImportSheet } from './import-sheet';
 import { GroupView } from './group-view';
 import { ActivityTab, HomeTab, InsightsTab, PeopleTab } from './home-tabs';
@@ -64,7 +65,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
     <div className={cn('mx-auto w-full max-w-2xl px-4 pt-4', mode === 'friend' ? 'pb-32' : 'pb-8')}>
       <header className="mb-4 flex items-center justify-between gap-3">
         <button type="button" onClick={() => go({ tab: 'home' })} className="flex items-center gap-2" aria-label="Split home">
-          <span className="text-2xl" aria-hidden>{sidekickOf(look)}</span>
+          <Sidekick look={look} size={34} wink />
           <span className="split-display text-[1.6rem]">finwise <em>split</em></span>
         </button>
         <div className="flex items-center gap-2">
@@ -156,7 +157,7 @@ function YouTab({ name, email, onLogout, onImported }: { name: string; email: st
               style={{ background: l.bg, color: l.fg }}>
               <span className="text-[11px] font-semibold opacity-80">{l.name}</span>
               <span className="split-display mt-1 text-lg leading-snug">{l.tagline}</span>
-              <span className="absolute -bottom-1 right-2 text-5xl drop-shadow" aria-hidden>{l.sidekick}</span>
+              <span className="absolute -bottom-3 -right-3 rounded-full bg-white/92 p-3 shadow-lg"><Sidekick look={l.id} size={64} wink={look === l.id} /></span>
               {look === l.id && <Check className="absolute right-3 top-3 h-4 w-4" />}
             </button>
           ))}
@@ -199,7 +200,7 @@ export function SplitGuest({ token }: { token: string }) {
     <div data-look={look} className={cn('split-ui min-h-dvh', splitSerif.variable)}>
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <header className="mb-4 flex items-center justify-between">
-          <p className="split-display text-2xl"><span className="mr-1" aria-hidden>{sidekickOf(look)}</span>finwise <em>split</em></p>
+          <p className="split-display text-2xl"><Sidekick look={look} size={30} wink className="mr-1 inline-block align-[-6px]" />finwise <em>split</em></p>
           {asMember ? (
             <button type="button" className="s-chip" onClick={() => pick(null)}>Not you?</button>
           ) : !isAuthenticated && (

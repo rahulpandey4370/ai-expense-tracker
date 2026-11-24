@@ -38,7 +38,7 @@ export const navGroups: { label: string | null; items: { href: string; label: st
       { href: "/transactions", label: "Transactions", icon: ArrowRightLeft },
       { href: "/pending", label: "SMS Inbox", icon: MessageSquareText },
       { href: "/recurring", label: "Recurring", icon: Repeat },
-      { href: "/split-expenses", label: "Split Expenses", icon: Users },
+      { href: "/split-expenses", label: "FinWise Split", icon: Users },
     ],
   },
   {
