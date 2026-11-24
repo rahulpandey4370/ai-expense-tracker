@@ -1,6 +1,7 @@
 // Server-only: the Usage page's numbers, from ai_usage. Times are bucketed in IST.
 import { getSupabase } from '@/lib/supabase';
 import { ANTHROPIC_CATALOG, OPENAI_CATALOG } from '@/lib/model-catalog';
+import { estimateCostUsd } from '@/lib/usage';
 
 export type UsageRange = '7d' | '30d' | '90d' | 'mtd' | 'last-month' | '12m';
 export type Granularity = 'day' | 'week' | 'month';
@@ -85,7 +86,10 @@ async function rowsBetween(from: number, to: number): Promise<Row[]> {
       .gte('created_at', new Date(from).toISOString()).lte('created_at', new Date(to).toISOString())
       .order('created_at', { ascending: false }).range(off, off + 999);
     if (error) throw new Error(`Could not read usage: ${error.message}`);
-    out.push(...((data ?? []) as Row[]));
+    // Rows saved before a model had a catalog price are priced now from their tokens.
+    out.push(...((data ?? []) as Row[]).map(r => r.ok && r.cost_usd == null
+      ? { ...r, cost_usd: estimateCostUsd(r.model_key, { input: r.input_tokens, cached: r.cached_tokens, output: r.output_tokens }) }
+      : r));
     if (!data || data.length < 1000) return out;
   }
 }

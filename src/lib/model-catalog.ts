@@ -25,6 +25,8 @@ export interface CatalogModel {
   tags: ModelTag[];
   /** USD per million input / output tokens, for the picker's cost hint. */
   inputPerMTok?: number;
+  /** USD per million cache-read input tokens; 10% of input when absent. */
+  cachedInputPerMTok?: number;
   outputPerMTok?: number;
   contextWindow?: number;
   notes?: string;
@@ -86,15 +88,15 @@ export const ANTHROPIC_CATALOG: CatalogModel[] = [
  */
 export const OPENAI_CATALOG: CatalogModel[] = [
   // --- GPT-6.x (Oct–Nov 2026) ----------------------------------------------
-  // Ids confirmed against GET /v1/models on 2026-11-20. Prices left blank:
-  // published figures disagree, so check OpenAI's pricing page before relying on them.
-  { id: 'gpt-6.2-astra', provider: 'openai', label: 'GPT-6.2 Astra', tags: ['flagship', 'reasoning'], notes: 'Newest flagship (Nov 2026).' },
-  { id: 'gpt-6.2-sol', provider: 'openai', label: 'GPT-6.2 Sol', tags: ['balanced'], notes: 'Newest general-purpose tier (Nov 2026).' },
-  { id: 'gpt-6.1-sol', provider: 'openai', label: 'GPT-6.1 Sol', tags: ['balanced'] },
-  { id: 'gpt-6.1-terra', provider: 'openai', label: 'GPT-6.1 Terra', tags: ['fast'], notes: 'Fast mid tier.' },
-  { id: 'gpt-6-astra', provider: 'openai', label: 'GPT-6 Astra', tags: ['reasoning'] },
-  { id: 'gpt-6-sol', provider: 'openai', label: 'GPT-6 Sol', tags: ['balanced'] },
-  { id: 'gpt-6-luna', provider: 'openai', label: 'GPT-6 Luna', tags: ['cheap', 'fast'], notes: 'Cheapest GPT-6 tier.' },
+  // Ids confirmed against GET /v1/models on 2026-11-20. Prices: Standard tier,
+  // short context (<=272K input), from developers.openai.com/api/docs/pricing on 2026-11-24.
+  { id: 'gpt-6.2-astra', provider: 'openai', label: 'GPT-6.2 Astra', tags: ['flagship', 'reasoning'], inputPerMTok: 8, cachedInputPerMTok: 0.4, outputPerMTok: 40, notes: 'Newest flagship (Nov 2026).' },
+  { id: 'gpt-6.2-sol', provider: 'openai', label: 'GPT-6.2 Sol', tags: ['balanced'], inputPerMTok: 2, cachedInputPerMTok: 0.1, outputPerMTok: 10, notes: 'Newest general-purpose tier (Nov 2026).' },
+  { id: 'gpt-6.1-sol', provider: 'openai', label: 'GPT-6.1 Sol', tags: ['balanced'], inputPerMTok: 2, cachedInputPerMTok: 0.1, outputPerMTok: 10 },
+  { id: 'gpt-6.1-terra', provider: 'openai', label: 'GPT-6.1 Terra', tags: ['fast'], inputPerMTok: 1, cachedInputPerMTok: 0.05, outputPerMTok: 5, notes: 'Fast mid tier.' },
+  { id: 'gpt-6-astra', provider: 'openai', label: 'GPT-6 Astra', tags: ['reasoning'], inputPerMTok: 10, cachedInputPerMTok: 1, outputPerMTok: 50 },
+  { id: 'gpt-6-sol', provider: 'openai', label: 'GPT-6 Sol', tags: ['balanced'], inputPerMTok: 2, cachedInputPerMTok: 0.2, outputPerMTok: 10 },
+  { id: 'gpt-6-luna', provider: 'openai', label: 'GPT-6 Luna', tags: ['cheap', 'fast'], inputPerMTok: 0.1, cachedInputPerMTok: 0.01, outputPerMTok: 0.5, notes: 'Cheapest GPT-6 tier.' },
 
   // --- GPT-5.6 (GA 2026-07-09) ---------------------------------------------
   // Three named tiers rather than the mini/nano suffix scheme. Prices are the

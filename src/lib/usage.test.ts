@@ -8,6 +8,14 @@ test('cost from catalog prices, cached input at 10%', () => {
   const c = estimateCostUsd('openai::gpt-5.6-luna', { input: 1_000_000, cached: 500_000, output: 100_000 })!;
   assert.ok(Math.abs(c - (0.5 * 0.2 + 0.5 * 0.2 * 0.1 + 0.1 * 1.2)) < 1e-9);
   assert.equal(estimateCostUsd('openai::no-such-model', { input: 10, output: 10 }), null);
+  // GPT-6.1 Terra: $1 in, $0.05 cached (5%), $5 out per million.
+  const t = estimateCostUsd('openai::gpt-6.1-terra', { input: 1_000_000, cached: 500_000, output: 100_000 })!;
+  assert.ok(Math.abs(t - (0.5 * 1 + 0.5 * 0.05 + 0.1 * 5)) < 1e-9);
+});
+
+test('cost the API reports wins', () => {
+  assert.equal(usageFrom.openaiChat({ prompt_tokens: 10, completion_tokens: 5, cost: 0.0042 })!.costUsd, 0.0042);
+  assert.equal(usageFrom.openaiChat({ prompt_tokens: 10, completion_tokens: 5 })!.costUsd, undefined);
 });
 
 test('provider usage shapes', () => {
