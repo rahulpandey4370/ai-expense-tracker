@@ -35,7 +35,9 @@ const Op = z.discriminatedUnion('op', [
     participants: z.array(id).max(50), values: z.record(id, z.number().min(0).max(100_000_000)).optional(),
     items: z.array(z.object({ name: z.string().trim().max(80), amount: z.number().min(0).max(100_000_000), memberIds: z.array(id).max(50) })).max(100).optional(),
     coveredBy: id.optional(), asMember, spending: spending.optional(),
-    paidWith: z.object({ id: id.optional(), name: z.string().trim().min(1).max(60) }).nullable().optional() }),
+    paidWith: z.object({ id: id.optional(), name: z.string().trim().min(1).max(60) }).nullable().optional(),
+    linkTransactionId: id.optional() }),
+  z.object({ op: z.literal('expenseForTransaction'), transactionId: id }),
   z.object({ op: z.literal('deleteExpense'), groupId: id, expenseId: id }),
   z.object({ op: z.literal('linkToSpending'), groupId: id, expenseId: id, spending }),
   z.object({ op: z.literal('settle'), groupId: id, from: id, to: id, amount: money, date, note: z.string().max(200).optional(), asMember }),
@@ -81,6 +83,7 @@ export async function POST(req: Request) {
         case 'receiptUrl': return svc.receiptUrl(access, body.groupId, body.expenseId);
         case 'scanReceipt': return svc.scanReceipt(access, body);
         case 'importSplitwise': return svc.importSplitwise(needUser(), body);
+        case 'expenseForTransaction': return svc.expenseForTransaction(needUser(), body.transactionId);
       }
     })();
     return NextResponse.json(data);

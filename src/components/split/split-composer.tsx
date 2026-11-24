@@ -71,10 +71,12 @@ function draftFor(d: GroupDetail, seed: SplitSeed): ExpenseDraft {
 }
 
 /** Opens the group split form from anywhere in the app, prefilled from what that screen knows. */
-export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSaved }: {
+export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSaved, linkTransactionId }: {
   open: boolean; onOpenChange: (o: boolean) => void; seed: SplitSeed;
   spendingDefaults?: Partial<{ categoryId: string; paymentMethodId: string; expenseType: 'need' | 'want' | 'investment' | 'investment_expense' }>;
   onSaved?: (expenseId: string, groupId: string) => void;
+  /** Editing a transaction: the group expense takes it over instead of creating a new one. */
+  linkTransactionId?: string;
 }) {
   const home = useSplitHome(open);
   const groups = useMemo(() => (home.data?.groups ?? []).filter(g => !g.archived), [home.data]);
@@ -145,7 +147,7 @@ export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSa
   return (
     <ExpenseSheet
       open onOpenChange={onOpenChange} detail={group.data} draft={draft} header={switcher}
-      spendingDefaults={spendingDefaults}
+      spendingDefaults={spendingDefaults} linkTransactionId={linkTransactionId}
       onSaved={id => { try { localStorage.setItem(LAST_GROUP, group.data!.group.id); } catch {} onSaved?.(id, group.data!.group.id); }}
     />
   );

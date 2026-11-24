@@ -38,7 +38,9 @@ import { useSplitUsers, useInvalidateFinance } from '@/hooks/use-finance-queries
 import { addSplitUser } from '@/lib/actions/splits';
 import { resolveParsedSplit } from '@/lib/split-utils';
 import { SplitComposer, type SplitSeed } from '@/components/split/split-composer';
-import { useSplitHome } from '@/components/split/use-split';
+import { splitApi, useSplitHome } from '@/components/split/use-split';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { toDataUri } from '@/lib/attachment';
 import { VoiceInputButton } from './ai/voice-input-button';
@@ -102,7 +104,17 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const { isOwner } = useAuth();
   // Group splits: the composer opens from the form ("Split this expense") or an AI-parsed row.
   const splitHome = useSplitHome(isOwner);
-  const [composer, setComposer] = useState<{ seed: SplitSeed; row?: number } | null>(null);
+  const [composer, setComposer] = useState<{ seed: SplitSeed; row?: number; link?: string } | null>(null);
+  const router = useRouter();
+  // Editing an expense: is it already a group expense? Then its split lives in FinWise Split.
+  const editingTxId = initialTransactionData?.type === 'expense' ? initialTransactionData.id : undefined;
+  const txLink = useQuery({
+    queryKey: ['split', 'txlink', editingTxId ?? ''],
+    queryFn: () => splitApi<{ groupId: string; expenseId: string } | null>('expenseForTransaction', { transactionId: editingTxId }),
+    enabled: isOwner && !!editingTxId,
+  });
+  const inGroup = txLink.data ?? null;
+  const quickSplit = !!(initialTransactionData?.isSplit || initialTransactionData?.paidById) && !inGroup;
   const [aiSplitSeeds, setAiSplitSeeds] = useState<(SplitSeed | null)[]>([]);
   const [aiSplitDone, setAiSplitDone] = useState<Record<number, string>>({});
   const handleAddSplitUser = useCallback(async (name: string) => {
@@ -279,6 +291,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   /** New expense from the form → the group split form, prefilled with what's typed so far. */
   const openFormComposer = (mode: 'equally' | 'not_mine') => setComposer({
     seed: { amount: parseFloat(amount) || undefined, description: description || undefined, date: date ? format(date, 'yyyy-MM-dd') : undefined, mode },
+    link: editingTxId, // editing: the group expense takes this transaction over
   });
 
   const handleSingleSubmit = async (e: FormEvent) => {
@@ -1057,12 +1070,18 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
       )}
        {type === 'expense' && (
           <div className="space-y-2 pt-2">
+            {isOwner && inGroup ? (
+              <Button type="button" variant="secondary" size="sm"
+                onClick={() => router.push(`/split-expenses?g=${encodeURIComponent(inGroup.groupId)}&e=${encodeURIComponent(inGroup.expenseId)}`)}>
+                <Users className="mr-1.5 h-3.5 w-3.5" /> Edit split in FinWise Split
+              </Button>
+            ) : (
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button" variant={showSplitEditor && !notMineShortcut ? "secondary" : "outline"} size="sm"
-                disabled={isFetchingDropdowns}
+                disabled={isFetchingDropdowns || (isOwner && !!editingTxId && txLink.isLoading)}
                 onClick={() => {
-                  if (isOwner && !initialTransactionData) { openFormComposer('equally'); return; }
+                  if (isOwner && !quickSplit) { openFormComposer('equally'); return; }
                   const next = showSplitEditor && !notMineShortcut ? false : true;
                   setShowSplitEditor(next);
                   setNotMineShortcut(false);
@@ -1074,9 +1093,9 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </Button>
               <Button
                 type="button" variant={notMineShortcut ? "secondary" : "outline"} size="sm"
-                disabled={isFetchingDropdowns}
+                disabled={isFetchingDropdowns || (isOwner && !!editingTxId && txLink.isLoading)}
                 onClick={() => {
-                  if (isOwner && !initialTransactionData) { openFormComposer('not_mine'); return; }
+                  if (isOwner && !quickSplit) { openFormComposer('not_mine'); return; }
                   const next = !notMineShortcut;
                   setNotMineShortcut(next);
                   setShowSplitEditor(next);
@@ -1086,8 +1105,14 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 <HandCoins className="mr-1.5 h-3.5 w-3.5" />
                 {notMineShortcut ? "Undo" : "Someone else's charge"}
               </Button>
+              {isOwner && quickSplit && (
+                <Button type="button" variant="outline" size="sm" disabled={isFetchingDropdowns} onClick={() => openFormComposer('equally')}>
+                  <Users className="mr-1.5 h-3.5 w-3.5" /> Move to a group
+                </Button>
+              )}
             </div>
-            {showSplitEditor && (
+            )}
+            {showSplitEditor && !(isOwner && inGroup) && (
               <SplitEditor
                 totalAmount={parseFloat(amount) || 0}
                 users={splitUsers}
@@ -1567,7 +1592,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         )}
         {composer && (
           <SplitComposer
-            open onOpenChange={o => !o && setComposer(null)} seed={composer.seed}
+            open onOpenChange={o => !o && setComposer(null)} seed={composer.seed} linkTransactionId={composer.link}
             spendingDefaults={composer.row !== undefined && composer.row >= 0
               ? { categoryId: aiReviewTransactions[composer.row]?.categoryId, paymentMethodId: aiReviewTransactions[composer.row]?.paymentMethodId, expenseType: aiReviewTransactions[composer.row]?.expenseType }
               : composer.row === -1

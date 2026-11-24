@@ -34,6 +34,8 @@ interface Props {
   /** Prefill the owner's spending fields (from the transaction form / SMS). */
   spendingDefaults?: Partial<{ categoryId: string; paymentMethodId: string; expenseType: ExpenseType }>;
   onSaved?: (expenseId: string) => void;
+  /** New expense only: link to this existing personal transaction instead of creating one. */
+  linkTransactionId?: string;
 }
 
 export interface ExpenseDraft {
@@ -44,7 +46,7 @@ export interface ExpenseDraft {
   receiptDataUri?: string;
 }
 
-export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense, draft, header, spendingDefaults, onSaved }: Props) {
+export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense, draft, header, spendingDefaults, onSaved, linkTransactionId }: Props) {
   const { toast } = useToast();
   const action = useSplitAction(token);
   const people = detail.members.filter(m => !m.removed);
@@ -152,6 +154,7 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
         emoji: emojiFor(description), method, paidBy, participants, values: num(values), items: parsedItems,
         coveredBy: coveredBy || undefined, asMember, spending: wantSpending ? spend : undefined, paidWith,
         said: !expense ? draft?.said : undefined,
+        linkTransactionId: !expense ? linkTransactionId : undefined,
       });
       const savedId: string = res.id;
       if (receipt) {

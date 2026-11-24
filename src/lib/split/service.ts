@@ -341,6 +341,8 @@ export interface SaveExpenseInput {
   spending?: SpendingInput;
   /** Omitted = keep the saved value; null = clear. */
   paidWith?: { id?: string; name: string } | null;
+  /** Owner, new expense only: make this existing personal transaction the expense's spending row (no new one). */
+  linkTransactionId?: string;
   /** What was said/typed to create it (voice, SMS note) — shown on the receipt view. */
   said?: string;
 }
@@ -362,6 +364,20 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
   const existing = input.id ? o.loaded.expenses.find(e => e.id === input.id) : undefined;
   if (input.id && !existing) throw new SplitError(404, 'Expense not found.');
   const isOwner = !!access.user?.isOwner;
+  const linkTx = input.linkTransactionId;
+  if (linkTx) {
+    if (!isOwner) throw new SplitError(403, 'Only the owner has personal transactions.');
+    if (existing) throw new SplitError(400, 'Only a new group expense can take over a transaction.');
+    const tx = (await must<any[]>(db().from('transactions').select('id, type').eq('id', linkTx).limit(1)))[0];
+    if (!tx) throw new SplitError(404, 'Transaction not found.');
+    if (tx.type !== 'expense') throw new SplitError(400, 'Only expenses can be split.');
+    const taken = (await must<any[]>(db().from('split_expenses').select('id').eq('transaction_id', linkTx))).filter(r => !String(r.id).startsWith('legacy_'));
+    if (taken.length) throw new SplitError(400, 'This transaction is already in a group. Edit it there.');
+    const owner = active(o.members).find(m => m.is_owner) ?? active(o.members).find(m => isOwnerEmail(m.email));
+    if (!ownerSpending(input.amount, input.paidBy, shares, owner?.id).involved) {
+      throw new SplitError(400, "You aren't in this split, so it can't stay in your transactions. Add yourself or mark that you paid.");
+    }
+  }
   const id = existing?.id ?? cuid();
   // Re-read the receipt right before writing: a photo attached since the group loaded must survive this save.
   const freshReceipt = existing
@@ -372,7 +388,7 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
     p_expense: {
       id, group_id: input.groupId, description: input.description, amount: input.amount, date: input.date,
       emoji: input.emoji ?? null, method: input.method, paid_by: input.paidBy,
-      created_by: existing?.created_by ?? o.me.id, transaction_id: existing?.transaction_id ?? null,
+      created_by: existing?.created_by ?? o.me.id, transaction_id: existing?.transaction_id ?? linkTx ?? null,
       meta: {
         // keep what edits don't touch: the receipt photo, the original words, the import marker
         receipt: freshReceipt, imported: existing?.meta?.imported,
@@ -385,9 +401,15 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
     p_shares: Object.entries(shares).map(([member_id, amount]) => ({ member_id, amount })),
   }));
 
+  if (linkTx) {
+    // The group expense is now this transaction's split: drop its old Quick-split people so nothing counts twice.
+    await must(db().from('split_expenses').delete().eq('id', `legacy_${linkTx}`));
+    await must(db().from('transaction_splits').delete().eq('transaction_id', linkTx));
+    await must(db().from('transactions').update({ paid_by_id: null }).eq('id', linkTx));
+  }
   await syncSpending({
     id, description: input.description, amount: input.amount, date: input.date, paidBy: input.paidBy, shares,
-    transactionId: existing?.transaction_id ?? null,
+    transactionId: existing?.transaction_id ?? linkTx ?? null,
   }, o.members, isOwner, isOwner ? input.spending : undefined);
   // Already in my spending: a new "Paid with" card follows onto the transaction.
   if (isOwner && input.paidWith?.id && existing?.transaction_id && !input.spending) {
@@ -406,6 +428,14 @@ export async function deleteExpense(access: Access, groupId: string, expenseId: 
   // Only the owner removes their own personal transaction; for anyone else the FK just unlinks it.
   if (e.transaction_id && access.user?.isOwner) await must(db().from('transactions').delete().eq('id', e.transaction_id));
   return { ok: true };
+}
+
+/** The real (non Quick-split) group expense a personal transaction belongs to, if any. Owner only. */
+export async function expenseForTransaction(user: SessionUser, transactionId: string) {
+  if (!user.isOwner) throw new SplitError(403, 'Only the owner has personal transactions.');
+  const row = (await must<any[]>(db().from('split_expenses').select('id, group_id').eq('transaction_id', transactionId)))
+    .find(r => !String(r.id).startsWith('legacy_'));
+  return row ? { groupId: row.group_id as string, expenseId: row.id as string } : null;
 }
 
 /** Owner one-tap: put my share of a friend-added expense into my personal spending. */
