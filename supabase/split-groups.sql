@@ -142,3 +142,12 @@ begin
     from transactions t
     where t.paid_by_id is not null and t.my_share_settled and coalesce(t.my_share, 0) > 0;
 end $$;
+
+-- Only the server (service role, which bypasses RLS) touches these tables.
+-- RLS with no policies denies the anon/authenticated roles entirely.
+alter table split_groups enable row level security;
+alter table split_members enable row level security;
+alter table split_expenses enable row level security;
+alter table split_expense_shares enable row level security;
+alter table split_settlements enable row level security;
+revoke execute on function split_save_expense(jsonb, jsonb) from public, anon, authenticated;
