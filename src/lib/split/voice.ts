@@ -7,18 +7,19 @@ import { getSupabase } from '@/lib/supabase';
 import { resolveShares, type SplitMethod } from './math';
 import type { ExpenseMeta } from './types';
 
+// Lenient on purpose: JSON mode has no schema, so a missing/odd field falls back instead of failing.
 const DraftSchema = z.object({
-  amount: z.number().nullable(),
-  description: z.string(),
-  date: z.string().nullable().describe('YYYY-MM-DD if a day was mentioned, else null'),
-  paidBy: z.string().nullable().describe('member id of who paid; null if not said'),
-  method: z.enum(['equal', 'exact', 'percent', 'shares', 'items', 'cover']),
-  participants: z.array(z.string()).describe('member ids sharing the cost (equal/exact/percent/shares)'),
-  values: z.array(z.object({ memberId: z.string(), value: z.number() })).describe('exact rupees, percent, or share weights per member; empty for equal'),
-  items: z.array(z.object({ name: z.string(), amount: z.number(), memberIds: z.array(z.string()) })).describe('only for item-by-item'),
-  coveredBy: z.string().nullable().describe('member id who covers everything (cover)'),
-  question: z.string().nullable().describe('one short question if something essential is missing or ambiguous, else null'),
-  confident: z.boolean().describe('true only if amount, payer and split are all clear'),
+  amount: z.coerce.number().nullable().catch(null),
+  description: z.string().catch(''),
+  date: z.string().nullable().catch(null),
+  paidBy: z.string().nullable().catch(null),
+  method: z.enum(['equal', 'exact', 'percent', 'shares', 'items', 'cover']).catch('equal'),
+  participants: z.array(z.string()).catch([]),
+  values: z.array(z.object({ memberId: z.string(), value: z.coerce.number() })).catch([]),
+  items: z.array(z.object({ name: z.string().catch('Item'), amount: z.coerce.number().catch(0), memberIds: z.array(z.string()).catch([]) })).catch([]),
+  coveredBy: z.string().nullable().catch(null),
+  question: z.string().nullable().catch(null),
+  confident: z.boolean().catch(false),
 });
 
 const PROMPT = `You turn one spoken sentence about a shared expense into a structured split.
@@ -37,6 +38,13 @@ Rules:
 - Match names loosely (nicknames, first names). Never invent members; use only the ids above.
 - description: 2-5 words, e.g. "Dinner at Ramiro".
 - If the amount is missing or you can't tell who is involved, set question to one short question and confident=false.
+
+Return JSON exactly in this shape (ids are the member ids above):
+{ "amount": number or null, "description": "2-5 words", "date": "YYYY-MM-DD" or null, "paidBy": "id" or null,
+  "method": "equal" | "exact" | "percent" | "shares" | "items" | "cover",
+  "participants": ["id", ...], "values": [{ "memberId": "id", "value": number }],
+  "items": [{ "name": "text", "amount": number, "memberIds": ["id", ...] }],
+  "coveredBy": "id" or null, "question": "one short question" or null, "confident": true | false }
 
 Sentence: """{{{text}}}"""`;
 

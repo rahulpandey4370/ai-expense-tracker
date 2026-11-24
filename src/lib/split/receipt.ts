@@ -19,15 +19,16 @@ export function decodeDataUri(uri: string): { mime: string; bytes: Buffer } | nu
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// Lenient on purpose: JSON mode has no schema, so a missing/odd field falls back instead of failing.
 const ReceiptSchema = z.object({
-  merchant: z.string().describe('shop/restaurant name, short'),
-  date: z.string().nullable().describe('YYYY-MM-DD if printed, else null'),
-  total: z.number().nullable().describe('grand total actually paid, incl. tax/service; null if unreadable'),
+  merchant: z.string().catch(''),
+  date: z.string().nullable().catch(null),
+  total: z.coerce.number().nullable().catch(null),
   items: z.array(z.object({
-    name: z.string().describe('line item, short'),
-    amount: z.number().describe('line total in rupees (qty × price)'),
-    memberIds: z.array(z.string()).describe('who had this item, only if the instruction says; else empty'),
-  })),
+    name: z.string().catch('Item'),
+    amount: z.coerce.number().catch(0),
+    memberIds: z.array(z.string()).catch([]),
+  })).catch([]),
 });
 type RawReceipt = z.infer<typeof ReceiptSchema>;
 
@@ -67,7 +68,10 @@ List every purchased line item with its line total. Skip subtotal/total/tax line
 total = the final amount paid. Today is {{{today}}}.
 Group members (id: name): {{{members}}}
 The person scanning is {{{speaker}}}. Their instruction about who had what (may be empty): """{{{text}}}"""
-Fill memberIds per item only from that instruction; otherwise leave it empty.`;
+Fill memberIds per item only from that instruction; otherwise leave it empty.
+Return JSON exactly in this shape:
+{ "merchant": "short shop/restaurant name", "date": "YYYY-MM-DD" or null, "total": number or null,
+  "items": [{ "name": "short item name", "amount": number (line total = qty × price), "memberIds": ["member id", ...] }] }`;
 
 export async function scanReceiptDraft(dataUri: string, members: { id: string; name: string }[], speaker: string, text: string, today: string): Promise<ReceiptDraft> {
   await assertAiBudget();
