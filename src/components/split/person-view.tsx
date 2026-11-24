@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, FileText, Loader2 } from 'lucide-react';
 import { Avatar, BalanceText, EmptyState, inr, monthLabel, prettyDate } from './bits';
 import { ReportSheet } from './report-sheet';
+import { simplifiedDiffers } from '@/lib/split/report';
 import { useSplitPerson } from './use-split';
 
 /** One person: balance, a chip per group, and everything you two shared — by month, newest first. */
@@ -42,6 +43,10 @@ export function PersonView({ personKey, onBack, onOpenGroup, onOpenExpense }: {
         ))}
       </div>
 
+      {simplifiedDiffers(p) && (
+        <p className="s-muted px-1 text-xs">The balance follows each group&apos;s simplified settle-up (fewest payments), so it can differ from adding up the rows below.</p>
+      )}
+
       {months.length === 0 ? (
         <EmptyState title={<>Nothing <em>shared</em> yet</>} body="Expenses you split with this person show up here, newest first." />
       ) : months.map(([m, items]) => (
@@ -62,7 +67,7 @@ export function PersonView({ personKey, onBack, onOpenGroup, onOpenExpense }: {
                   </span>
                   {Math.abs(i.impact) >= 0.01 && (
                     <span className="text-right">
-                      <span className={`block text-sm font-bold tabular-nums ${i.impact > 0 ? 's-owed' : 's-owe'}`}>{inr(i.impact)}</span>
+                      <span className={`block text-sm font-bold tabular-nums ${i.kind === 'settlement' ? '' : i.impact > 0 ? 's-owed' : 's-owe'}`}>{inr(i.impact)}</span>
                       <span className="s-muted text-[11px]">{i.kind === 'settlement' ? (i.impact < 0 ? 'paid you' : 'you paid') : i.impact > 0 ? 'they owe' : 'you owe'}</span>
                     </span>
                   )}

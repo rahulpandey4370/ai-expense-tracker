@@ -8,7 +8,12 @@ const PUBLIC = [/^\/login$/, /^\/auth\//, /^\/s\//, /^\/demo/, /^\/api\/sms/, /^
 // Pages a signed-in friend (non-owner) may open.
 const FRIEND = [/^\/groups/, /^\/s\//];
 
+// Files served from /public. Reads pass straight through; anything else still meets the action gate below,
+// because Next will run a server action from a POST to a missing file's not-found page.
+const STATIC = /^\/(?:favicon\.ico|manifest\.json|sw\.js|workbox-[^/]*|fonts\/[^/]+\.ttf|[^/]+\.(?:png|svg|jpg|jpeg|webp|ico))$/;
+
 export async function middleware(req: NextRequest) {
+  if ((req.method === 'GET' || req.method === 'HEAD') && STATIC.test(req.nextUrl.pathname)) return NextResponse.next();
   let res = NextResponse.next({ request: req });
   let user = null;
   const url = process.env.SUPABASE_PROJECT_URL, key = process.env.SUPABASE_ANON_KEY;
@@ -57,7 +62,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Skip only real static files: Next's own assets, /fonts/*.ttf (PDFs for link guests) and top-level files in /public. A nested
-  // "/portfolio/a.png" is a dynamic page and must still pass through the gate.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-[^/]*$|fonts/[^/]+\\.ttf$|[^/]+\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
+  // Only Next's own build assets skip the middleware; /public files are let through above (reads only).
+  matcher: ['/((?!_next/static|_next/image).*)'],
 };

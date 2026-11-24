@@ -36,3 +36,28 @@ Final: minor (deferred): gpt-6-luna has no catalog price (cost_usd null); SMS sp
 Ruling: Settl's mascot artwork not copied — original sidekicks (purse/coin/receipt/piggy SVGs) — cost: not identical to Settl
 Ruling: @react-pdf/renderer 4.7.0 with all internals pinned via overrides — 2026-11-24 sub-releases broken (unpublished hyphenate; font/render expect registerStdFonts) — cost: manual bumps later
 Verified: group/person/finance PDFs rendered in Node (rasterised) and group PDF generated + viewed in browser (1.3s); build ok; gate 9/9; checks math/access/bridge/splitwise/voice/receipt/report ok
+
+## Phase 3 review fixes (review of 7e53869..2531eb2, model fable)
+
+- Final: fixed C1 server actions reachable via middleware-exempt paths (/fonts/zzz.ttf, /zzz.png, /sw.js returned 404/405 instead of 403) — middleware now runs on everything except _next build assets and lets only GET/HEAD of /public files skip the gate. gate.sh "action via missing font path / top-level image / sw.js" RED→GREEN, gate 13/13
+- Final: fixed I6 finance PDF disagreed with the Reports screen and AI summary — new src/lib/pdf/finance-numbers.ts uses investmentCategoryNames, the AI report's precedence (investment > want > need > other), the screen's category fallback (source / Uncategorised), IST month bucketing, null-safe description; Saved shows a minus; "No type set" row. finance-numbers.check.ts RED→GREEN
+- Final: fixed I1 person balance (group-simplified) vs row effects (pairwise) contradicting — simplifiedDiffers() adds an explanation in the person view and PDF when they differ. report.check.ts RED→GREEN
+- Final: fixed I2 period tile labelled repayments "you owe more" in red — neutral "Change this period, + means X owes you more"; settlement rows neutral colour in the person view. (label only, verified by render)
+- Final: fixed I3 getPerson matched removed seats — uses active() like getHome/settleWithPerson. (needs DB; verified by reading — no unit test)
+- Final: fixed I4 past-period settle-up looked current — heading and balance tile say "as of <end date>", plus a note when the period ended before today. (verified by render)
+- Final: fixed I5 seatless link guest got "Your share ₹0 / Settled" — "your" tiles and column dropped when there's no seat. (verified by render)
+- Final: fixed (re-graded Minor→Important) empty custom date produced "Invalid Date" / all-history PDF — "Pick both dates" guard.
+- Final: Ruling: I7 iframe viewer on phones — "View PDF" is hidden when navigator.pdfViewerEnabled === false (Chrome Android); iOS Safari keeps the inline viewer plus the Open link — not device-tested; cost if wrong: View shows only page 1 or a blank frame on some phones, Download/Share still work
+- Final: Ruling: C1 fixed at the middleware (single choke point) rather than adding owner checks inside each server action — every action routes through it — cost if wrong: a future matcher exemption reopens the hole; gate.sh covers the known paths
+- Final: Ruling: finance PDF "Saved" subtracts untyped expenses too (the screen's Cash Savings ignores them) — untyped spending is still money spent — cost if wrong: PDF Saved is lower than the screen's chart when untyped expenses exist
+- Final: minor (deferred): Reports page no longer offers "share as image"; dead image branches remain in share-file-dialog
+- Final: minor (deferred): dismissing the report sheet mid-generation still pops the share dialog
+- Final: minor (deferred): report month default can be a future month; stale selected month after refetch; only 12 month chips
+- Final: minor (deferred): group report Net column includes settlements while only Paid/Share are shown
+- Final: minor (deferred): emoji CDN failures are cached for the session, no fetch timeout, third-party request per emoji (self-host Twemoji PNGs to fix all three)
+- Final: minor (deferred): blob "Open" tab breaks on reload after the dialog closes
+- Final: minor (deferred): person view error state has no Back button; renaming a no-email member breaks old ?p= links; ?p= carries the email
+- Final: minor (deferred): Home feed month headers group by createdAt, not expense date
+- Final: minor (deferred): removed member with only a settlement in the period is missing from the people table
+- Final: minor (deferred): two no-email members with the same name merge into one person across groups (name-key design)
+- Final: minor (deferred): Reports screen Cash Savings ignores untyped expenses (screen bug, see ruling above)

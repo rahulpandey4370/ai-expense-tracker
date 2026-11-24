@@ -1,7 +1,7 @@
 // Monthly / annual finance report as a real PDF (replaces the page screenshot). Browser-only.
 import { Text, View } from '@react-pdf/renderer';
 import type { AppTransaction } from '@/lib/types';
-import { netAmount } from '@/lib/split-utils';
+import { financeByMonth, financeNumbers } from './finance-numbers';
 import { C, Doc, Footer, Table, Tiles, inr, s, toFile } from './kit';
 
 interface AiSections {
@@ -9,27 +9,8 @@ interface AiSections {
   savingsAndInvestmentAnalysis?: string; actionableRecommendations?: string[];
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 const plain = (t: string) => t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '').trim();
-const isInvest = (t: AppTransaction) => t.expenseType === 'investment' || (t.expenseType as string) === 'investment_expense';
-
-export function financeNumbers(txs: AppTransaction[]) {
-  const income = r2(txs.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0));
-  const exp = txs.filter(t => t.type === 'expense');
-  const invested = r2(exp.filter(isInvest).reduce((a, t) => a + netAmount(t), 0));
-  const spend = exp.filter(t => !isInvest(t));
-  const spending = r2(spend.reduce((a, t) => a + netAmount(t), 0));
-  const needs = r2(spend.filter(t => t.expenseType === 'need').reduce((a, t) => a + netAmount(t), 0));
-  const wants = r2(spend.filter(t => t.expenseType === 'want').reduce((a, t) => a + netAmount(t), 0));
-  const byCat = new Map<string, number>();
-  for (const t of spend) byCat.set(t.category?.name ?? 'Other', (byCat.get(t.category?.name ?? 'Other') ?? 0) + netAmount(t));
-  const categories = [...byCat.entries()].map(([name, v]) => ({ name, value: r2(v) })).filter(c => c.value > 0).sort((a, b) => b.value - a.value);
-  const byPlace = new Map<string, number>();
-  for (const t of spend) { const k = t.description.split(':')[0].trim(); byPlace.set(k, (byPlace.get(k) ?? 0) + netAmount(t)); }
-  const places = [...byPlace.entries()].map(([name, v]) => ({ name, value: r2(v) })).sort((a, b) => b.value - a.value).slice(0, 8);
-  const saved = r2(income - spending - invested);
-  return { income, spending, invested, saved, needs, wants, categories, places, rate: income > 0 ? Math.round((saved / income) * 1000) / 10 : null };
-}
+const money = (n: number) => `${n < 0 ? '−' : ''}${inr(n)}`;
 
 function Bar({ pct }: { pct: number }) {
   return (
@@ -41,13 +22,7 @@ function Bar({ pct }: { pct: number }) {
 
 export async function financeReportPdf(opts: { periodName: string; annual: boolean; transactions: AppTransaction[]; ai?: AiSections | null }): Promise<File> {
   const n = financeNumbers(opts.transactions);
-  const months = opts.annual
-    ? Array.from({ length: 12 }, (_, m) => {
-        const txs = opts.transactions.filter(t => new Date(t.date).getMonth() === m);
-        const k = financeNumbers(txs);
-        return { m, ...k, count: txs.length };
-      }).filter(x => x.count > 0)
-    : [];
+  const months = opts.annual ? financeByMonth(opts.transactions) : [];
   const maxCat = n.categories[0]?.value ?? 1;
   const ai = opts.ai;
   const sections: [string, string | undefined][] = ai ? [
@@ -66,13 +41,13 @@ export async function financeReportPdf(opts: { periodName: string; annual: boole
         { label: 'Income', value: inr(n.income), tone: 'pos' },
         { label: 'Spending', value: inr(n.spending), note: 'your share of splits', tone: 'neg' },
         { label: 'Invested', value: inr(n.invested) },
-        { label: 'Saved', value: inr(n.saved), note: n.rate == null ? undefined : `${n.rate}% of income`, tone: n.saved >= 0 ? 'pos' : 'neg' },
+        { label: 'Saved', value: money(n.saved), note: n.rate == null ? undefined : `${n.rate}% of income`, tone: n.saved >= 0 ? 'pos' : 'neg' },
       ]} />
 
       <Text style={s.h2}>Needs, wants & investments</Text>
       <Table
         cols={[{ label: 'Type', width: '40%' }, { label: 'Amount', width: '30%', align: 'right' }, { label: 'Of spending + investing', width: '30%', align: 'right' }]}
-        rows={[['🏠 Needs', n.needs], ['🎉 Wants', n.wants], ['📈 Investments', n.invested]].map(([label, v]) => {
+        rows={[['🏠 Needs', n.needs], ['🎉 Wants', n.wants], ['📈 Investments', n.invested], ...(n.other > 0 ? [['❔ No type set', n.other]] : [])].map(([label, v]) => {
           const base = n.spending + n.invested;
           return { cells: [label as string, inr(v as number), base > 0 ? `${Math.round(((v as number) / base) * 100)}%` : '—'] };
         })}
@@ -101,7 +76,7 @@ export async function financeReportPdf(opts: { periodName: string; annual: boole
           <Table
             cols={[{ label: 'Month', width: '28%' }, { label: 'Income', width: '18%', align: 'right' }, { label: 'Spending', width: '18%', align: 'right' }, { label: 'Invested', width: '18%', align: 'right' }, { label: 'Saved', width: '18%', align: 'right' }]}
             rows={months.map(x => ({
-              cells: [new Date(2000, x.m, 1).toLocaleDateString('en-IN', { month: 'long' }), inr(x.income), inr(x.spending), inr(x.invested), `${x.saved < 0 ? '−' : ''}${inr(x.saved)}`],
+              cells: [new Date(2000, x.m, 1).toLocaleDateString('en-IN', { month: 'long' }), inr(x.income), inr(x.spending), inr(x.invested), money(x.saved)],
               tone: [undefined, undefined, undefined, undefined, x.saved >= 0 ? 'pos' : 'neg'],
             }))}
           />

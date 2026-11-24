@@ -44,6 +44,8 @@ export function ShareFileDialog({ files, onClose }: { files: ShareFiles | null; 
   };
   const pdfShareable = !!files && canShare(files.pdf);
   const imageShareable = !!files?.image && canShare(files.image);
+  // Chrome on Android (and some others) can't show a PDF inside the page; there, Download/Share open it in the phone's viewer.
+  const canView = typeof navigator === 'undefined' || (navigator as any).pdfViewerEnabled !== false;
 
   if (viewing && files && url) {
     return (
@@ -79,7 +81,7 @@ export function ShareFileDialog({ files, onClose }: { files: ShareFiles | null; 
         </DialogHeader>
         {files && (
           <div className="grid gap-2">
-            <Button variant="secondary" onClick={() => setViewing(true)}><Eye className="mr-2 h-4 w-4" />View PDF</Button>
+            {canView && <Button variant="secondary" onClick={() => setViewing(true)}><Eye className="mr-2 h-4 w-4" />View PDF</Button>}
             {pdfShareable && (
               <Button onClick={() => share(files.pdf)}><Share2 className="mr-2 h-4 w-4" />Share PDF</Button>
             )}

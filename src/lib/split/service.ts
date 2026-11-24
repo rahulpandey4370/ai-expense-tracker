@@ -638,7 +638,7 @@ export async function getPerson(user: SessionUser, key: string) {
   for (const g of loaded.groups) {
     const { members, expenses, settlements, transfers } = ledgerOf(g.id, loaded);
     const me = pickMe({ user }, members);
-    const them = members.find(m => personKey(m) === key);
+    const them = active(members).find(m => personKey(m) === key); // same seats as the People tab
     if (!me || !them || me.id === them.id) continue;
     name = them.name;
     const net = r2(transfers.reduce((a, t) => a + (t.from === them.id && t.to === me.id ? t.amount : t.from === me.id && t.to === them.id ? -t.amount : 0), 0));

@@ -53,3 +53,7 @@ export function personReportData(p: PersonData, from: string, to: string) {
     sharedSpend: r2(items.filter(i => i.kind === 'expense').reduce((a, i) => a + i.amount, 0)),
   };
 }
+
+/** True when the balance (from each group's simplified settle-up) isn't the plain total of the rows between the two of you. */
+export const simplifiedDiffers = (p: Pick<PersonData, 'net' | 'items'>) =>
+  Math.abs(p.items.reduce((a, i) => a + i.impact, 0) - p.net) >= 0.01;

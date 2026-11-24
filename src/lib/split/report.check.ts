@@ -1,6 +1,6 @@
 // Run: npx tsx src/lib/split/report.check.ts
 import assert from 'node:assert/strict';
-import { groupReportData, personReportData, monthRange } from './report';
+import { groupReportData, personReportData, monthRange, simplifiedDiffers } from './report';
 
 const members = [
   { id: 'me', name: 'Rahul', email: null, upiId: null, isOwner: true, hasAccount: true, removed: false },
@@ -41,5 +41,9 @@ const pr = personReportData(person, '2026-11-01', '2026-11-30');
 assert.deepEqual(pr.items.map((i: any) => i.id), ['s1', 'nov-food']);
 assert.equal(pr.periodNet, -700, 'Nov: I owed 300 more, and they paid me 400 (which lowers what they owe)');
 assert.equal(pr.sharedSpend, 600);
+
+// Balance follows the group's simplified settle-up; flag when it doesn't equal the rows' total (50 − 400 − 300 = −650 ≠ 350).
+assert.equal(simplifiedDiffers(person), true);
+assert.equal(simplifiedDiffers({ ...person, net: -650 }), false);
 
 console.log('ok');

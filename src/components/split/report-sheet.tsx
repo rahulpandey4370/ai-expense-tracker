@@ -27,6 +27,7 @@ export function ReportSheet({ open, onOpenChange, group, person }: {
 
   const generate = async () => {
     const range = mode === 'month' ? monthRange(month ?? months[0]) : { from, to };
+    if (!range.from || !range.to) return toast({ title: 'Pick both dates', variant: 'destructive' });
     if (range.from > range.to) return toast({ title: 'The start date is after the end date', variant: 'destructive' });
     const label = mode === 'month' ? monthLabel(month ?? months[0]) : `${range.from} to ${range.to}`;
     setBusy(true);
