@@ -107,14 +107,16 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [composer, setComposer] = useState<{ seed: SplitSeed; row?: number; link?: string } | null>(null);
   const router = useRouter();
   // Editing an expense: is it already a group expense? Then its split lives in FinWise Split.
-  const editingTxId = initialTransactionData?.type === 'expense' ? initialTransactionData.id : undefined;
+  const editingTxId = initialTransactionData?.id; // the server refuses non-expenses with a clear message
   const txLink = useQuery({
     queryKey: ['split', 'txlink', editingTxId ?? ''],
     queryFn: () => splitApi<{ groupId: string; expenseId: string } | null>('expenseForTransaction', { transactionId: editingTxId }),
     enabled: isOwner && !!editingTxId,
   });
   const inGroup = txLink.data ?? null;
-  const quickSplit = !!(initialTransactionData?.isSplit || initialTransactionData?.paidById) && !inGroup;
+  const ownerEdit = isOwner && !!editingTxId;
+  const linkPending = ownerEdit && txLink.isLoading; // don't show (or let mount) the old editor until we know
+  const quickSplit = !!(initialTransactionData?.isSplit || initialTransactionData?.paidById) && !inGroup && !linkPending;
   const [aiSplitSeeds, setAiSplitSeeds] = useState<(SplitSeed | null)[]>([]);
   const [aiSplitDone, setAiSplitDone] = useState<Record<number, string>>({});
   const handleAddSplitUser = useCallback(async (name: string) => {
@@ -293,11 +295,24 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     seed: { amount: parseFloat(amount) || undefined, description: description || undefined, date: date ? format(date, 'yyyy-MM-dd') : undefined, mode },
     link: editingTxId, // editing: the group expense takes this transaction over
   });
+  // An old Quick split moves into a group with its payer, people and shares intact.
+  const moveQuickSplit = () => {
+    const tx = initialTransactionData;
+    if (!tx) return;
+    const nameOf = (id?: string | null) => (id ? splitUsers.find(u => u.id === id)?.name : undefined);
+    const base = { amount: parseFloat(amount) || tx.amount, description: description || tx.description || undefined, date: date ? format(date, 'yyyy-MM-dd') : undefined };
+    const splits = tx.splits ?? [];
+    const seed: SplitSeed = tx.splitMethod === 'not_mine'
+      ? { ...base, mode: 'not_mine', participantNames: [nameOf(splits[0]?.userId)].filter((n): n is string => !!n) }
+      : { ...base, mode: 'custom', paidByName: nameOf(tx.paidById), myShare: tx.myShare ?? undefined,
+          amountsByName: Object.fromEntries(splits.map(sp => [nameOf(sp.userId) ?? sp.userId, sp.shareAmount])) };
+    setComposer({ seed, link: tx.id });
+  };
 
   const handleSingleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (type === 'expense' && showSplitEditor && !splitValue) {
+    if (type === 'expense' && showSplitEditor && !splitValue && !(ownerEdit && (inGroup || linkPending))) {
       toast({ title: "Split incomplete", description: "Choose who this is split with before saving.", variant: "destructive" });
       return;
     }
@@ -1079,7 +1094,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button" variant={showSplitEditor && !notMineShortcut ? "secondary" : "outline"} size="sm"
-                disabled={isFetchingDropdowns || (isOwner && !!editingTxId && txLink.isLoading)}
+                disabled={isFetchingDropdowns || linkPending}
                 onClick={() => {
                   if (isOwner && !quickSplit) { openFormComposer('equally'); return; }
                   const next = showSplitEditor && !notMineShortcut ? false : true;
@@ -1093,7 +1108,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
               </Button>
               <Button
                 type="button" variant={notMineShortcut ? "secondary" : "outline"} size="sm"
-                disabled={isFetchingDropdowns || (isOwner && !!editingTxId && txLink.isLoading)}
+                disabled={isFetchingDropdowns || linkPending}
                 onClick={() => {
                   if (isOwner && !quickSplit) { openFormComposer('not_mine'); return; }
                   const next = !notMineShortcut;
@@ -1106,13 +1121,13 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 {notMineShortcut ? "Undo" : "Someone else's charge"}
               </Button>
               {isOwner && quickSplit && (
-                <Button type="button" variant="outline" size="sm" disabled={isFetchingDropdowns} onClick={() => openFormComposer('equally')}>
+                <Button type="button" variant="outline" size="sm" disabled={isFetchingDropdowns} onClick={moveQuickSplit}>
                   <Users className="mr-1.5 h-3.5 w-3.5" /> Move to a group
                 </Button>
               )}
             </div>
             )}
-            {showSplitEditor && !(isOwner && inGroup) && (
+            {showSplitEditor && !(ownerEdit && (inGroup || linkPending)) && (
               <SplitEditor
                 totalAmount={parseFloat(amount) || 0}
                 users={splitUsers}

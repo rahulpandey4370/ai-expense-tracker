@@ -4,40 +4,17 @@ import './split.css';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
-import type { GroupDetail, GroupSummary } from '@/lib/split/types';
+import type { GroupSummary } from '@/lib/split/types';
+import { draftFor, type SplitSeed } from '@/lib/split/seed';
 import type { VoiceDraft } from '@/lib/split/voice';
 import { KIND_EMOJI, SplitSheet, splitSerif, todayYmd } from './bits';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
 import { splitApi, useSplitGroup, useSplitHome } from './use-split';
 
-/** What the main app knows when someone asks to split: from the form, AI entry, SMS or chat. */
-export interface SplitSeed {
-  amount?: number;
-  description?: string;
-  date?: string;
-  groupHint?: string;
-  participantNames?: string[];
-  /** custom amounts by name */
-  amountsByName?: Record<string, number>;
-  paidByName?: string;
-  mode?: 'equally' | 'custom' | 'not_mine' | 'shares';
-  /** Free text to parse against the chosen group (an SMS note like "split with Asha in Goa trip"). */
-  instruction?: string;
-  receiptDataUri?: string;
-}
+export type { SplitSeed } from '@/lib/split/seed';
 
 const LAST_GROUP = 'split-last-group';
 const norm = (s: string) => s.trim().toLowerCase();
-
-/** Loose name match: full name, first name, or startsWith either way. */
-function findMember(d: GroupDetail, name?: string) {
-  if (!name) return undefined;
-  const n = norm(name);
-  const active = d.members.filter(m => !m.removed);
-  return active.find(m => norm(m.name) === n)
-    ?? active.find(m => norm(m.name).split(' ')[0] === n.split(' ')[0])
-    ?? active.find(m => norm(m.name).startsWith(n) || n.startsWith(norm(m.name)));
-}
 
 function pickGroup(groups: GroupSummary[], hint?: string): string | null {
   if (groups.length === 0) return null;
@@ -49,25 +26,6 @@ function pickGroup(groups: GroupSummary[], hint?: string): string | null {
   let last: string | null = null;
   try { last = localStorage.getItem(LAST_GROUP); } catch {}
   return groups.some(g => g.id === last) ? last : groups[0].id;
-}
-
-/** Seed → draft for a specific group (names resolved to that group's members). */
-function draftFor(d: GroupDetail, seed: SplitSeed): ExpenseDraft {
-  const me = d.meMemberId ?? d.members[0]?.id ?? '';
-  const named = (seed.participantNames ?? []).map(n => findMember(d, n)?.id).filter((x): x is string => !!x);
-  const payer = findMember(d, seed.paidByName)?.id ?? me;
-  const all = d.members.filter(m => !m.removed).map(m => m.id);
-  const base = { description: seed.description ?? '', amount: seed.amount ?? null, date: seed.date ?? todayYmd(), paidBy: payer, said: seed.instruction, receiptDataUri: seed.receiptDataUri };
-  if (seed.mode === 'not_mine' && named[0]) return { ...base, method: 'cover', meta: { participants: [named[0]], coveredBy: named[0] } };
-  const participants = named.length ? [...new Set([me, ...named])] : all;
-  if (seed.mode === 'custom' && seed.amountsByName) {
-    const values: Record<string, number> = {};
-    for (const [n, v] of Object.entries(seed.amountsByName)) { const id = findMember(d, n)?.id; if (id) values[id] = v; }
-    const others = Object.values(values).reduce((a, b) => a + b, 0);
-    if (seed.amount && !values[me] && payer === me) values[me] = Math.max(0, Math.round((seed.amount - others) * 100) / 100);
-    return { ...base, method: 'exact', meta: { participants: [...new Set([...participants, ...Object.keys(values)])], values } };
-  }
-  return { ...base, method: 'equal', meta: { participants } };
 }
 
 /** Opens the group split form from anywhere in the app, prefilled from what that screen knows. */
@@ -92,7 +50,7 @@ export function SplitComposer({ open, onOpenChange, seed, spendingDefaults, onSa
   useEffect(() => {
     const d = group.data;
     if (!open || !d) return;
-    const fromSeed = draftFor(d, seed);
+    const fromSeed: ExpenseDraft = draftFor(d, seed, todayYmd());
     if (!seed.instruction?.trim()) { setDraft(fromSeed); return; }
     let cancelled = false; // switching group mid-parse must not drop group A's member ids onto group B
     setParsing(true);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, FileText, HandCoins, Loader2, MoreHorizontal, Plus, Trash2, Users } from 'lucide-react';
 import { pageOf } from '@/lib/split/feed';
 import { ReportSheet } from './report-sheet';
@@ -40,6 +40,13 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
   const [month, setMonth] = useState<string | null>(null); // null = newest month with activity
   const [page, setPage] = useState(0);
   useEffect(() => { setMonth(null); setPage(0); }, [groupId]);
+  // A new expense lands in view: go back to the newest month.
+  const count = q.data?.expenses.length ?? 0;
+  const lastCount = useRef(count);
+  useEffect(() => {
+    if (count > lastCount.current) { setMonth(null); setPage(0); }
+    lastCount.current = count;
+  }, [count]);
 
   // Deep link from the home feed: show that expense's receipt once the group loads.
   useEffect(() => {

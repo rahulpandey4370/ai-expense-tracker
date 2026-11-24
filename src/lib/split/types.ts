@@ -26,6 +26,8 @@ export interface ExpenseMeta {
   said?: string;
   /** How the payer paid. `id` is one of the owner's payment methods (owner only); otherwise free text. */
   paidWith?: { id?: string; name: string };
+  /** The spending row was an existing transaction (split later), not made by Split: unlink it, never delete it. */
+  linkedTx?: boolean;
 }
 
 export interface Expense {

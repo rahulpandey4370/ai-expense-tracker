@@ -377,6 +377,11 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
     if (!ownerSpending(input.amount, input.paidBy, shares, owner?.id).involved) {
       throw new SplitError(400, "You aren't in this split, so it can't stay in your transactions. Add yourself or mark that you paid.");
     }
+    // Drop the old Quick split before linking. Each step is idempotent, so a failure anywhere is fixed by saving again
+    // (the link itself is written last, by the RPC below, so a half-done attempt never reads as "already in a group").
+    await must(db().from('split_expenses').delete().eq('id', `legacy_${linkTx}`));
+    await must(db().from('transaction_splits').delete().eq('transaction_id', linkTx));
+    await must(db().from('transactions').update({ paid_by_id: null }).eq('id', linkTx));
   }
   const id = existing?.id ?? cuid();
   // Re-read the receipt right before writing: a photo attached since the group loaded must survive this save.
@@ -393,6 +398,7 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
         // keep what edits don't touch: the receipt photo, the original words, the import marker
         receipt: freshReceipt, imported: existing?.meta?.imported,
         said: input.said ?? existing?.meta?.said,
+        linkedTx: linkTx ? true : existing?.meta?.linkedTx,
         paidWith: input.paidWith === undefined ? existing?.meta?.paidWith
           : input.paidWith ? { name: input.paidWith.name, ...(isOwner && input.paidWith.id ? { id: input.paidWith.id } : {}) } : undefined,
         participants: input.participants, values: input.values, items: input.items, coveredBy: input.coveredBy,
@@ -401,15 +407,9 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
     p_shares: Object.entries(shares).map(([member_id, amount]) => ({ member_id, amount })),
   }));
 
-  if (linkTx) {
-    // The group expense is now this transaction's split: drop its old Quick-split people so nothing counts twice.
-    await must(db().from('split_expenses').delete().eq('id', `legacy_${linkTx}`));
-    await must(db().from('transaction_splits').delete().eq('transaction_id', linkTx));
-    await must(db().from('transactions').update({ paid_by_id: null }).eq('id', linkTx));
-  }
   await syncSpending({
     id, description: input.description, amount: input.amount, date: input.date, paidBy: input.paidBy, shares,
-    transactionId: existing?.transaction_id ?? linkTx ?? null,
+    transactionId: existing?.transaction_id ?? linkTx ?? null, keepTx: !!(linkTx || existing?.meta?.linkedTx),
   }, o.members, isOwner, isOwner ? input.spending : undefined);
   // Already in my spending: a new "Paid with" card follows onto the transaction.
   if (isOwner && input.paidWith?.id && existing?.transaction_id && !input.spending) {
@@ -426,7 +426,11 @@ export async function deleteExpense(access: Access, groupId: string, expenseId: 
   await must(db().from('split_expenses').delete().eq('id', expenseId).eq('group_id', groupId));
   if (e.meta?.receipt) await removeReceipt(e.meta.receipt);
   // Only the owner removes their own personal transaction; for anyone else the FK just unlinks it.
-  if (e.transaction_id && access.user?.isOwner) await must(db().from('transactions').delete().eq('id', e.transaction_id));
+  // One that existed before it was split goes back to a plain transaction instead.
+  if (e.transaction_id && access.user?.isOwner) {
+    if (e.meta?.linkedTx) await must(db().from('transactions').update({ is_split: false, my_share: null, updated_at: nowIso() }).eq('id', e.transaction_id));
+    else await must(db().from('transactions').delete().eq('id', e.transaction_id));
+  }
   return { ok: true };
 }
 
@@ -456,7 +460,7 @@ export async function linkToSpending(access: Access, groupId: string, expenseId:
  * it (when the owner drops out of the expense) only if the owner made the edit.
  */
 async function syncSpending(
-  e: { id: string; description: string; amount: number; date: string; paidBy: string; shares: Record<string, number>; transactionId: string | null },
+  e: { id: string; description: string; amount: number; date: string; paidBy: string; shares: Record<string, number>; transactionId: string | null; keepTx?: boolean },
   members: MemberRow[],
   byOwner: boolean,
   spending?: SpendingInput,
@@ -472,7 +476,9 @@ async function syncSpending(
     if (!involved) {
       await must(db().from('split_expenses').update({ transaction_id: null }).eq('id', e.id));
       // A friend's edit never deletes the owner's personal data; the owner can remove it on Transactions.
-      if (byOwner) await must(db().from('transactions').delete().eq('id', e.transactionId));
+      // A transaction that existed before it was split just goes back to plain.
+      if (e.keepTx) await must(db().from('transactions').update({ is_split: false, my_share: null, updated_at: now }).eq('id', e.transactionId));
+      else if (byOwner) await must(db().from('transactions').delete().eq('id', e.transactionId));
     } else {
       await must(db().from('transactions').update({ ...money, ...extra }).eq('id', e.transactionId));
     }
