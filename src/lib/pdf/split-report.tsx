@@ -1,7 +1,7 @@
 // Group and person split reports as real PDFs. Browser-only (dynamic import).
 import { Text, View } from '@react-pdf/renderer';
 import type { GroupDetail } from '@/lib/split/types';
-import { groupReportData, personReportData, simplifiedDiffers, type PersonData } from '@/lib/split/report';
+import { groupKpis, groupSummary, personReportData, simplifiedDiffers, type PersonData } from '@/lib/split/report';
 import { C, Doc, Header, Table, Tiles, fmtDate, inr, monthName, s, signedInr, toFile } from './kit';
 
 const today = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -21,7 +21,9 @@ function withMonths<T extends { date: string }>(rows: T[], multi: boolean) {
 }
 
 export async function groupReportPdf(d: GroupDetail, from: string, to: string, label: string): Promise<File> {
-  const r = groupReportData(d, from, to);
+  const r = groupKpis(d, from, to);
+  const all = groupKpis(d);
+  const cut = (x: string, n = 26) => (x.length > n ? `${x.slice(0, n - 1)}…` : x);
   const me = d.meMemberId;
   const name = (id: string) => (id === me ? 'You' : d.members.find(m => m.id === id)?.name ?? 'Someone');
   const multi = spansMonths(from, to);
@@ -41,6 +43,25 @@ export async function groupReportPdf(d: GroupDetail, from: string, to: string, l
             tone: r.myBalanceAtEnd > 0 ? 'pos' as const : r.myBalanceAtEnd < 0 ? 'neg' as const : undefined },
         ] : []),
       ]} />
+      <Tiles items={[
+        { label: 'Expenses', value: String(r.count), note: r.count ? `avg ${inr(r.avgPerExpense)} · ${inr(r.avgPerDay)}/day` : undefined },
+        { label: 'Biggest', value: r.biggest ? inr(r.biggest.amount) : '—', note: r.biggest ? cut(r.biggest.description) : undefined },
+        { label: 'Top payer', value: r.topPayer ? cut(r.topPayer.name, 18) : '—', note: r.topPayer ? inr(r.topPayer.paid) : undefined },
+        { label: 'Payments made', value: inr(r.paymentsTotal) },
+      ]} />
+
+      <Text style={s.h2}>All time</Text>
+      <Tiles items={[
+        { label: 'Group total', value: inr(all.totalSpent), note: `${all.count} expense${all.count === 1 ? '' : 's'}` },
+        { label: 'Average per expense', value: inr(all.avgPerExpense) },
+        { label: 'Top payer', value: all.topPayer ? cut(all.topPayer.name, 18) : '—', note: all.topPayer ? inr(all.topPayer.paid) : undefined },
+        { label: 'Payments made', value: inr(all.paymentsTotal) },
+      ]} />
+
+      <Text style={s.h2}>Summary · balances as of {asOf}</Text>
+      <View style={{ marginBottom: 6 }}>
+        {groupSummary(d, from, to).map((line, i) => <Text key={i} style={s.para}>{line}</Text>)}
+      </View>
 
       <Text style={s.h2}>To settle up · as of {asOf}</Text>
       {past ? <Text style={[s.muted, { fontSize: 8, marginBottom: 4 }]}>Payments made after {asOf} aren&apos;t counted here. Check the app for today&apos;s balances.</Text> : null}

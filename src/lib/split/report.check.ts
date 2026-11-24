@@ -1,6 +1,6 @@
 // Run: npx tsx src/lib/split/report.check.ts
 import assert from 'node:assert/strict';
-import { groupReportData, personReportData, monthRange, simplifiedDiffers } from './report';
+import { groupByMonth, groupKpis, groupSummary, groupReportData, personReportData, monthRange, simplifiedDiffers } from './report';
 
 const members = [
   { id: 'me', name: 'Rahul', email: null, upiId: null, isOwner: true, hasAccount: true, removed: false },
@@ -28,6 +28,44 @@ assert.deepEqual(r.people.map(p => [p.id, p.paid, p.share, p.net]), [['me', 0, 3
 // balance as of 30 Nov counts October too: Oct +1000 me, Nov −300 me, settlement −400 me → Asha owes me 300
 assert.deepEqual(r.transfers, [{ from: 'a', to: 'me', amount: 300 }]);
 assert.equal(r.myBalanceAtEnd, 300);
+
+// KPIs: November only
+const k = groupKpis(detail, '2026-11-01', '2026-11-30');
+assert.equal(k.totalSpent, 600);
+assert.equal(k.count, 1);
+assert.equal(k.avgPerExpense, 600);
+assert.equal(k.avgPerDay, 600); // one day with spending in range → 600 over 1 day
+assert.deepEqual(k.biggest && [k.biggest.description, k.biggest.amount], ['nov-food', 600]);
+assert.equal(k.paymentsTotal, 400);
+assert.deepEqual(k.topPayer && [k.topPayer.name, k.topPayer.paid], ['Asha', 600]);
+// all time: 2700 over 3 expenses, Oct 5 → Dec 1 = 58 days
+const all = groupKpis(detail);
+assert.equal(all.totalSpent, 2700);
+assert.equal(all.count, 3);
+assert.equal(all.avgPerExpense, 900);
+assert.equal(all.avgPerDay, Math.round(2700 / 58 * 100) / 100);
+assert.deepEqual(all.topPayer && [all.topPayer.name, all.topPayer.paid], ['You', 2100]);
+assert.deepEqual(all.transfers, [{ from: 'a', to: 'me', amount: 350 }]); // current: +1000 −300 +50 −400
+// a month with only a payment: no spend, no top payer, no biggest
+const quiet = groupKpis({ ...detail, expenses: [] }, '2026-11-01', '2026-11-30');
+assert.deepEqual([quiet.totalSpent, quiet.count, quiet.avgPerExpense, quiet.avgPerDay, quiet.biggest, quiet.topPayer], [0, 0, 0, 0, null, null]);
+// spend by month: months with expenses, oldest first, last n
+assert.deepEqual(groupByMonth(detail), [{ month: '2026-10', total: 2000 }, { month: '2026-11', total: 600 }, { month: '2026-12', total: 100 }]);
+assert.deepEqual(groupByMonth(detail, 2).map(m => m.month), ['2026-11', '2026-12']);
+
+// plain-language summary for the PDF
+assert.deepEqual(groupSummary(detail, '2026-11-01', '2026-11-30'), [
+  '₹600 was spent across 1 expense (average ₹600).',
+  'You paid ₹0; your share was ₹300.',
+  'Asha paid ₹600; their share was ₹300.',
+  'The biggest expense was nov-food (₹600).',
+  '₹400 was paid back between people.',
+  'Asha owes you ₹300.',
+]);
+assert.deepEqual(groupSummary({ ...detail, expenses: [], settlements: [] }, '2026-11-01', '2026-11-30'), [
+  'Nothing was spent in this period.',
+  'Everyone is square.',
+]);
 
 const person: any = {
   key: 'name:asha', name: 'Asha', net: 350, groups: [{ groupId: 'g', groupName: 'Flat', groupEmoji: '🏠', net: 350 }],

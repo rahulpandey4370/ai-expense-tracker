@@ -14,6 +14,9 @@
   --s-sec: #4f6d6b;
   --s-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --s-pos: #15803d;
+  /* Two-series chart pair (paid vs share), validated for CVD + contrast on the card surface. */
+  --s-chart-a: #00968f;
+  --s-chart-b: #c76a1c;
   color: var(--s-ink);
   background: var(--s-bg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
@@ -31,6 +34,8 @@
   --s-ink: #e5f3f2;
   --s-sec: #93b1ae;
   --s-pos: #4ade80;
+  --s-chart-a: #1fa8a3;
+  --s-chart-b: #cf7f2c;
 }
 
 .split-display { font-family: var(--font-split-serif), Georgia, serif; font-weight: 400; letter-spacing: -0.015em; line-height: 1.05; }

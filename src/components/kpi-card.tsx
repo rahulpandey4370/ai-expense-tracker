@@ -19,7 +19,7 @@ export type KpiTone = 'income' | 'expense' | 'investment' | 'outgoings' | 'savin
 const TONE_STYLES: Record<KpiTone, { rule: string; icon: string; value?: string }> = {
   income:      { rule: 'bg-green-500',  icon: 'text-green-600 dark:text-green-500' },
   expense:     { rule: 'bg-red-500',    icon: 'text-red-600 dark:text-red-400',    value: 'text-red-600 dark:text-red-400' },
-  investment:  { rule: 'bg-blue-500',   icon: 'text-blue-600 dark:text-blue-400',  value: 'text-blue-600 dark:text-blue-400' },
+  investment:  { rule: 'bg-yellow-500', icon: 'text-yellow-600 dark:text-yellow-400', value: 'text-yellow-700 dark:text-yellow-400' }, // TYPE_COLORS.investment
   outgoings:   { rule: 'bg-orange-500', icon: 'text-orange-600 dark:text-orange-400' },
   savings:     { rule: 'bg-emerald-500',icon: 'text-emerald-600 dark:text-emerald-500' },
   rewards:     { rule: 'bg-amber-500',  icon: 'text-amber-600 dark:text-amber-500' },

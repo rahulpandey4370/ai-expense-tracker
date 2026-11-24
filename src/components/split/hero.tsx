@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AudioLines, Pencil, ScanLine } from 'lucide-react';
+import { AudioLines, ChevronRight, Pencil, ScanLine } from 'lucide-react';
 import { inr } from './bits';
 
 /** "Dinner was *96*, split three ways": numbers get the italic accent. */
@@ -25,18 +25,29 @@ function useTyped(lines: string[]) {
 }
 
 /** The big Settl-style card: balance on top, a typed line in the middle, capture buttons at the bottom. */
-export function Hero({ net, lines, onScan, onType, onVoice, onSay, children }: {
+export function Hero({ net, lines, onScan, onType, onVoice, onSay, onBalance, children }: {
   net: number; lines: string[]; onScan: () => void; onType: () => void; onVoice: () => void;
+  /** Tapping the balance: show where it comes from. */
+  onBalance?: () => void;
   /** Tapping the typed line: open the type-it box (AI parses it). */
   onSay: () => void; children?: React.ReactNode;
 }) {
   const { text, done } = useTyped(lines);
   return (
     <section className="s-hero flex min-h-[26rem] flex-col p-5 sm:min-h-[22rem]">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="split-display text-xl">{Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
-        <p className={`text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</p>
-      </div>
+      {(() => {
+        const row = (
+          <>
+            <p className="split-display text-xl">{Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
+            <p className={`flex items-center gap-1 text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>
+              {inr(net)}{onBalance && <ChevronRight className="s-muted h-5 w-5" aria-hidden />}
+            </p>
+          </>
+        );
+        return onBalance
+          ? <button type="button" onClick={onBalance} aria-label="See who owes what, by group" className="flex items-baseline justify-between gap-3 text-left">{row}</button>
+          : <div className="flex items-baseline justify-between gap-3">{row}</div>;
+      })()}
       <button type="button" onClick={onSay} aria-label="Type what happened and let AI log it" className="flex flex-1 items-center py-6 text-left">
         <p className="split-display min-h-[2.2em] text-[2.5rem] leading-[1.08] text-[color-mix(in_srgb,var(--s-ink)_70%,transparent)]" aria-hidden>
           <Accent text={text} />

@@ -19,18 +19,21 @@ export function homeLines(d: HomeData, today: string): string[] {
   return lines.length ? lines : [EMPTY];
 }
 
-export function groupLines(d: GroupDetail): string[] {
+const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' });
+
+/** About one month of the group (the one on screen); null = the group has no expenses yet. */
+export function groupLines(d: GroupDetail, month: string | null): string[] {
   const me = d.meMemberId;
-  const name = (id: string) => first(d.members.find(m => m.id === id)?.name ?? 'Someone');
+  const inMonth = month ? d.expenses.filter(e => e.date.startsWith(month)) : [];
+  if (!month || inMonth.length === 0) return [EMPTY];
+  const mn = monthName(month);
   const lines: string[] = [];
-  const total = d.expenses.reduce((a, e) => a + e.amount, 0);
-  if (total >= 1) lines.push(`${rs(total)} spent in ${d.group.name}`);
-  for (const t of d.transfers.filter(t => me && (t.from === me || t.to === me)).slice(0, 2)) {
-    lines.push(t.from === me ? `You owe ${name(t.to)} ${rs(t.amount)}` : `${name(t.from)} owes you ${rs(t.amount)}`);
-  }
-  const biggest = [...d.expenses].sort((a, b) => b.amount - a.amount)[0];
-  if (biggest) lines.push(`Biggest: ${biggest.description}, ${rs(biggest.amount)}`);
-  const mine = me ? d.expenses.reduce((a, e) => a + (e.shares[me] ?? 0), 0) : 0;
-  if (mine >= 1) lines.push(`Your share so far: ${rs(mine)}`);
-  return lines.length ? lines : [EMPTY];
+  const total = inMonth.reduce((a, e) => a + e.amount, 0);
+  if (total >= 1) lines.push(`${rs(total)} spent in ${mn}`);
+  const mine = me ? inMonth.reduce((a, e) => a + (e.shares[me] ?? 0), 0) : 0;
+  if (mine >= 1) lines.push(`Your share in ${mn}: ${rs(mine)}`);
+  const biggest = [...inMonth].sort((a, b) => b.amount - a.amount)[0];
+  lines.push(`Biggest in ${mn}: ${biggest.description}, ${rs(biggest.amount)}`);
+  lines.push(`${inMonth.length} ${inMonth.length === 1 ? 'expense' : 'expenses'} in ${mn}`);
+  return lines;
 }

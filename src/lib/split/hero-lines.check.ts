@@ -44,15 +44,20 @@ const group = (over: Partial<GroupDetail> = {}): GroupDetail => ({
   meMemberId: 'me', canManage: true, isOwnerViewer: true, shareToken: null, ...over,
 });
 
-assert.deepEqual(groupLines(group()), ['Tap here to log an expense']);
-assert.deepEqual(groupLines(group({
-  expenses: [exp('Hotel', 14920, { me: 7460, s: 7460 }), exp('Bus', 3688, { me: 1844, s: 1844 })],
-  transfers: [{ from: 's', to: 'me', amount: 10616 }, { from: 'b', to: 's', amount: 5 }],
-})), [
-  '₹18,608 spent in Goa Trip',
-  'Shivangi owes you ₹10,616',
-  'Biggest: Hotel, ₹14,920',
-  'Your share so far: ₹9,304',
+assert.deepEqual(groupLines(group(), null), ['Tap here to log an expense']);
+const exp2 = (description: string, amount: number, date: string, shares: Record<string, number>) => ({ ...exp(description, amount, shares), date });
+const g2 = group({
+  expenses: [exp2('Hotel', 14920, '2026-11-03', { me: 7460, s: 7460 }), exp2('Bus', 3688, '2026-11-12', { me: 1844, s: 1844 }), exp2('Old dinner', 50000, '2026-10-01', { me: 0.5, s: 49999.5 })],
+  transfers: [{ from: 's', to: 'me', amount: 10616 }],
+});
+// only the chosen month; lifetime balances are not in the moving text
+assert.deepEqual(groupLines(g2, '2026-11'), [
+  '₹18,608 spent in November',
+  'Your share in November: ₹9,304',
+  'Biggest in November: Hotel, ₹14,920',
+  '2 expenses in November',
 ]);
+assert.deepEqual(groupLines(g2, '2026-10'), ['₹50,000 spent in October', 'Biggest in October: Old dinner, ₹50,000', '1 expense in October']);
+assert.deepEqual(groupLines(g2, '2026-09'), ['Tap here to log an expense']); // a month with only payments
 
 console.log('ok');

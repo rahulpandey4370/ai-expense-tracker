@@ -17,6 +17,7 @@ import { netAmount } from '@/lib/split-utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SplitTag, TypeStripe } from '@/components/tx-markers';
 
 interface RecentTransactionsListProps {
   transactions: AppTransaction[];
@@ -83,8 +84,9 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                     type="button"
                     onClick={() => setSelected(transaction)}
                     aria-label={`Details for ${transaction.description}`}
-                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="relative flex w-full items-center justify-between gap-3 rounded-md px-2 py-1 pl-3 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
+                    {transaction.type === 'expense' && <TypeStripe type={transaction.expenseType} />}
                     <div className="flex min-w-0 items-center gap-3">
                       {transaction.type === 'income' ? (
                         <ArrowUpCircle className="h-6 w-6 shrink-0 text-green-500" />
@@ -110,24 +112,7 @@ export function RecentTransactionsList({ transactions, count = 5, onDataChange }
                         {transaction.type === 'income' ? '+' : '-'} {formatCurrency(netAmount(transaction))}
                       </p>
                        <div className="flex justify-end items-center mt-1">
-                        {transaction.type === 'expense' && transaction.isSplit && (
-                          <Badge
-                            variant="outline"
-                            className="h-7 gap-1 border-yellow-800/40 bg-yellow-900/20 px-1.5 text-yellow-400"
-                            title="This expense is split"
-                          >
-                            <Users className="h-3.5 w-3.5" />
-                          </Badge>
-                        )}
-                        {transaction.type === 'expense' && transaction.expenseType && (
-                          <Badge variant={
-                            transaction.expenseType === 'need' ? 'default' : 
-                            transaction.expenseType === 'want' ? 'secondary' : 
-                            'outline'
-                          } className="text-xs ml-2 capitalize">
-                            {transaction.expenseType.replace('_expense', '')}
-                          </Badge>
-                        )}
+                        {transaction.type === 'expense' && transaction.isSplit && <SplitTag />}
                       </div>
                     </div>
                   </button>

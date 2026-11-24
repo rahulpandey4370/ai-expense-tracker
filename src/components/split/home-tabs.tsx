@@ -14,6 +14,48 @@ import { homeLines } from '@/lib/split/hero-lines';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** "You're owed ₹X": where it comes from, group by group (from each person's per-group balance). */
+function OwedSheet({ open, onOpenChange, data, net, onOpenGroup }: { open: boolean; onOpenChange: (o: boolean) => void; data: HomeData; net: number; onOpenGroup: (id: string) => void }) {
+  const first = (n: string) => n.trim().split(/\s+/)[0] || n;
+  const byGroup = new Map<string, { id: string; name: string; lines: { who: string; net: number }[] }>();
+  for (const p of data.people) for (const g of p.groups) {
+    if (Math.abs(g.net) < 0.01) continue;
+    const row = byGroup.get(g.groupId) ?? { id: g.groupId, name: g.groupName, lines: [] };
+    row.lines.push({ who: p.name, net: g.net });
+    byGroup.set(g.groupId, row);
+  }
+  const groups = [...byGroup.values()].map(g => ({ ...g, total: r2(g.lines.reduce((a, l) => a + l.net, 0)) }))
+    .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  const emoji = (id: string) => { const g = data.groups.find(x => x.id === id); return g ? g.emoji ?? KIND_EMOJI[g.kind] : '👥'; };
+  return (
+    <SplitSheet open={open} onOpenChange={onOpenChange} title={Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em> {inr(net)}</> : <>You <em>owe</em> {inr(net)}</>}>
+      {groups.length === 0 ? <p className="s-muted text-sm">Nobody owes anything in any group.</p> : (
+        <div className="space-y-3">
+          {groups.map(g => (
+            <button key={g.id} type="button" onClick={() => onOpenGroup(g.id)} className="s-card block w-full p-4 text-left">
+              <span className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate font-semibold"><span aria-hidden>{emoji(g.id)} </span>{g.name}</span>
+                <span className={`shrink-0 font-bold tabular-nums ${g.total > 0 ? 's-owed' : 's-owe'}`}>{g.total > 0 ? '+' : '−'}{inr(Math.abs(g.total))}</span>
+              </span>
+              <span className="mt-2 block space-y-1">
+                {g.lines.map((l, i) => (
+                  <span key={i} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="s-muted truncate">{l.net > 0 ? `${first(l.who)} owes you` : `You owe ${first(l.who)}`}</span>
+                    <span className="shrink-0 tabular-nums">{inr(Math.abs(l.net))}</span>
+                  </span>
+                ))}
+              </span>
+            </button>
+          ))}
+          <p className="flex items-center justify-between border-t border-[var(--s-line)] px-1 pt-3 text-sm font-semibold">
+            <span>Net across groups</span><span className={`tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</span>
+          </p>
+        </div>
+      )}
+    </SplitSheet>
+  );
+}
+
 /** A chip that is a native select: the phone's own picker, no custom popover. */
 function FilterChip({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
   return (
@@ -34,6 +76,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [capture, setCapture] = useState<CaptureMode>(null);
+  const [owedOpen, setOwedOpen] = useState(false);
   const net = r2(data.totals.owed - data.totals.owe);
   const q = query.trim().toLowerCase();
   const groups = data.groups.filter(g => !g.archived && (!q || g.name.toLowerCase().includes(q)));
@@ -57,6 +100,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
         net={net}
         lines={homeLines(data, todayYmd())}
         onScan={() => setCapture('scan')} onType={() => setCapture('type')} onVoice={() => setCapture('voice')} onSay={() => setCapture('say')}
+        onBalance={() => setOwedOpen(true)}
       />
 
       <section>
@@ -157,6 +201,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
       )}
 
 
+      <OwedSheet open={owedOpen} onOpenChange={setOwedOpen} data={data} net={net} onOpenGroup={id => { setOwedOpen(false); onOpenGroup(id); }} />
       <CreateGroupSheet open={creating} onOpenChange={setCreating} onCreated={onOpenGroup} />
       <ImportSheet open={importing} onOpenChange={setImporting} onImported={onOpenGroup} myName={data.me.name} />
       <HomeCapture mode={capture} onClose={() => setCapture(null)} groups={data.groups.filter(g => !g.archived)} onNeedGroup={() => { setCapture(null); setCreating(true); }} />

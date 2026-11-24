@@ -6,6 +6,7 @@ import { VoiceSheet } from './voice-sheet';
 import { ReceiptView } from './receipt-view';
 import { Hero } from './hero';
 import { groupLines } from '@/lib/split/hero-lines';
+import { InsightsSheet, KpiStrip } from './group-insights';
 import type { Expense, GroupDetail, Settlement } from '@/lib/split/types';
 import { Avatar, AvatarStack, EmptyState, KIND_EMOJI, KIND_LABEL, inr, monthLabel, prettyDate } from './bits';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
@@ -31,7 +32,7 @@ type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { ki
 export function GroupView({ groupId, token, asMember, onPickMember, onBack, openExpenseId }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'say' | 'receipt' | 'report' | 'group'>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'say' | 'receipt' | 'report' | 'group' | 'insights'>(null);
   const action = useSplitAction(token);
   const { toast } = useToast();
   const [draft, setDraft] = useState<ExpenseDraft | null>(null);
@@ -76,6 +77,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
   }
 
   const d: GroupDetail = q.data;
+  // The month on screen drives the hero text, the KPIs and the list; it opens on the newest month with entries.
+  const curMonth = (feed.find(([m]) => m === month) ?? feed[0])?.[0] ?? null;
   const me = d.meMemberId;
   const label = (id: string) => (id === me ? 'You' : d.members.find(m => m.id === id)?.name ?? 'Someone');
   const myBalance = me ? d.balances[me] ?? 0 : 0;
@@ -134,7 +137,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
 
       <Hero
         net={myBalance}
-        lines={groupLines(d)}
+        lines={groupLines(d, curMonth)}
         onScan={() => setSheet('scan')} onType={() => openExpense(null)} onVoice={() => setSheet('voice')} onSay={() => setSheet('say')}
       >
         <div className="mb-4 flex flex-wrap gap-2">
@@ -143,6 +146,8 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
           <button type="button" className="s-pill" onClick={() => setSheet('report')}><FileText className="h-4 w-4" /> Report</button>
         </div>
       </Hero>
+
+      {d.expenses.length > 0 && <KpiStrip d={d} month={curMonth} onMore={() => setSheet('insights')} />}
 
       {feed.length === 0 ? (
         <EmptyState title={<>Nothing <em>logged</em> yet</>} body="Add the first expense — dinner, a cab, the rent — and everyone's share is worked out.">
@@ -195,6 +200,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />
       <ReportSheet open={sheet === 'report'} onOpenChange={o => !o && setSheet(null)} group={d} />
       <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} />
+      <InsightsSheet key={`${d.group.id}-${curMonth}`} open={sheet === 'insights'} onOpenChange={o => !o && setSheet(null)} d={d} month={curMonth} />
       {d.canManage && <GroupSheet open={sheet === 'group'} onOpenChange={o => !o && setSheet(null)} detail={d} onDeleted={onBack} />}
     </div>
   );

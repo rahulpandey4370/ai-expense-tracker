@@ -249,7 +249,7 @@ export default function YearlyOverviewPage() {
                             <TableCell className={cn("text-right whitespace-nowrap", data.totalIncome > 0 ? "text-teal-600 dark:text-teal-400" : "text-foreground/80")}>{formatCurrency(data.totalIncome)}</TableCell>
                             <TableCell className={cn("text-right whitespace-nowrap", data.totalSpend > 0 ? "text-red-600 dark:text-red-400" : "text-foreground/80")}>{formatCurrency(data.totalSpend)}</TableCell>
                             <TableCell className={cn("text-right whitespace-nowrap", data.totalSavings >= 0 ? "text-green-600 dark:text-green-400" : "text-orange-500 dark:text-orange-400")}>{formatCurrency(data.totalSavings)}</TableCell>
-                            <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-blue-600 dark:text-blue-400" : "text-foreground/80")}>{formatCurrency(data.totalInvestment)}</TableCell>
+                            <TableCell className={cn("text-right whitespace-nowrap", data.totalInvestment > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-foreground/80")}>{formatCurrency(data.totalInvestment)}</TableCell>
                             <TableCell className={cn("text-right whitespace-nowrap", data.totalCashbacksInterestsDividends > 0 ? "text-purple-600 dark:text-purple-400" : "text-foreground/80")}>{formatCurrency(data.totalCashbacksInterestsDividends)}</TableCell>
                           </motion.tr>
                           );
@@ -261,7 +261,7 @@ export default function YearlyOverviewPage() {
                           <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalIncome > 0 ? "text-teal-700 dark:text-teal-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalIncome)}</TableHead>
                           <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSpend > 0 ? "text-red-700 dark:text-red-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalSpend)}</TableHead>
                           <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalSavings >= 0 ? "text-green-700 dark:text-green-500" : "text-orange-600 dark:text-orange-400")}>{formatCurrency(yearlyTotals.totalSavings)}</TableHead>
-                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-blue-700 dark:text-blue-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalInvestment)}</TableHead>
+                          <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalInvestment > 0 ? "text-yellow-700 dark:text-yellow-400" : "text-primary")}>{formatCurrency(yearlyTotals.totalInvestment)}</TableHead>
                           <TableHead className={cn("text-right font-bold whitespace-nowrap", yearlyTotals.totalCashbacksInterestsDividends > 0 ? "text-purple-700 dark:text-purple-500" : "text-primary")}>{formatCurrency(yearlyTotals.totalCashbacksInterestsDividends)}</TableHead>
                         </TableRow>
                       </TableFooter>

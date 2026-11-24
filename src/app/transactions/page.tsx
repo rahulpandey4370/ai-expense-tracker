@@ -52,6 +52,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAIModel } from '@/contexts/AIModelContext';
 import { netAmount as netOfSplit } from '@/lib/split-utils';
 import { downloadFile, toCsv } from '@/lib/export';
+import { SplitTag, TypeDot, TypeLegend, TypeStripe } from '@/components/tx-markers';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -601,6 +602,11 @@ export default function TransactionsPage() {
                 <p className="ml-3 sm:ml-4 text-base sm:text-lg text-primary">Loading transactions...</p>
               </div>
             ) : (
+            <>
+            <div className="mb-2">
+              <TypeLegend expenseType={filterExpenseType} onExpenseType={v => { setFilterExpenseType(v); setCurrentPage(1); }}
+                split={filterSplit} onSplit={v => { setFilterSplit(v); setCurrentPage(1); }} />
+            </div>
             <div className="rounded-md border border-primary/30 bg-background/50">
               {/* Mobile View - Card List */}
               <div className="md:hidden divide-y divide-border/60">
@@ -615,8 +621,6 @@ export default function TransactionsPage() {
                       !byDate && format(day, "d MMM"),
                       t.category?.name || t.source,
                       t.paymentMethod?.name,
-                      t.type === 'expense' && t.expenseType && t.expenseType.charAt(0).toUpperCase() + t.expenseType.slice(1),
-                      t.isSplit && 'split',
                     ].filter(Boolean).join(' · ');
                     const selected = selectedTransactionIds.has(t.id);
                     return (
@@ -638,7 +642,7 @@ export default function TransactionsPage() {
                             if (selectMode) toggleSelectTransaction(t.id); else setEditingTransaction(t);
                           }}
                           className={cn(
-                            "flex items-center gap-3 py-2.5 pl-3 pr-1 transition-colors active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                            "relative flex items-center gap-3 py-2.5 pl-3 pr-1 transition-colors active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                             selected && "bg-primary/10 dark:bg-primary/20"
                           )}
                         >
@@ -650,9 +654,13 @@ export default function TransactionsPage() {
                               aria-label={`Select transaction ${t.description}`}
                             />
                           )}
+                          {t.type === 'expense' && <TypeStripe type={t.expenseType} />}
                           <div className="min-w-0 flex-1">
                             <p className="line-clamp-2 text-sm font-medium text-foreground">{t.description}</p>
-                            <p className="truncate text-xs text-muted-foreground">{meta}</p>
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              {t.isSplit && <SplitTag />}
+                              <span className="truncate">{meta}</span>
+                            </p>
                           </div>
                           <p className={cn("shrink-0 text-sm font-semibold tabular-nums", t.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500')}>
                             {t.type === 'income' ? '+' : '−'}{formatCurrency(netOfSplit(t))}
@@ -740,7 +748,8 @@ export default function TransactionsPage() {
                               />
                             </TableCell>
                           )}
-                          <TableCell className="whitespace-nowrap align-top text-foreground/90 tabular-nums">
+                          <TableCell className="relative whitespace-nowrap align-top text-foreground/90 tabular-nums">
+                            {transaction.type === 'expense' && <TypeStripe type={transaction.expenseType} />}
                             {format(toCalendarDate(transaction.date) || new Date(transaction.date), "dd MMM yy")}
                           </TableCell>
                           <TableCell className="align-top font-medium text-foreground">
@@ -750,11 +759,7 @@ export default function TransactionsPage() {
                             <span className="line-clamp-2" title={transaction.description}>
                               {transaction.description}
                             </span>
-                            {transaction.isSplit && (
-                              <Badge variant="outline" className="mt-1 h-4 border-yellow-500/40 px-1 text-[10px] font-normal text-yellow-700 dark:text-yellow-400">
-                                split
-                              </Badge>
-                            )}
+                            {transaction.isSplit && <SplitTag className="mt-1" />}
                           </TableCell>
                           <TableCell className={cn(
                             "whitespace-nowrap text-right align-top font-semibold tabular-nums",
@@ -773,19 +778,7 @@ export default function TransactionsPage() {
                             </span>
                           </TableCell>
                           <TableCell className="align-top">
-                            {transaction.type === 'expense' && transaction.expenseType && (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "px-1.5 py-0.5 text-xs capitalize border-opacity-50",
-                                  transaction.expenseType === 'need' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40' :
-                                  transaction.expenseType === 'want' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40' :
-                                  'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40'
-                                )}
-                              >
-                                {transaction.expenseType.replace('_expense', '')}
-                              </Badge>
-                            )}
+                            {transaction.type === 'expense' && <TypeDot type={transaction.expenseType} />}
                           </TableCell>
                           <TableCell className="align-top text-right">
                             {/* Three always-on icons per row was four targets of
@@ -841,6 +834,7 @@ export default function TransactionsPage() {
                 </Table>
               </div>
             </div>
+            </>
             )}
 
             {!isLoading && filteredTransactions.length > PAGE_SIZE && (
