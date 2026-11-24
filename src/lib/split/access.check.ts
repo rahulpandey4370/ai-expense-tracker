@@ -1,7 +1,7 @@
 // Run: npx tsx src/lib/split/access.check.ts
 import assert from 'node:assert/strict';
 import { safeNext } from '../auth/roles';
-import { canSeeGroup, pickMe, type Access, type MemberRow } from './access';
+import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
 
 const members: MemberRow[] = [
   { id: 'm1', group_id: 'g1', name: 'Rahul', email: 'owner@x.com', user_id: 'u-owner', is_owner: true, removed_at: null },
@@ -32,6 +32,15 @@ assert.equal(pickMe(guestG1, members, 'm3')?.id, 'm3', 'guest picks who they are
 assert.equal(pickMe(guestG1, members, 'm4'), null, 'guest cannot pick a removed member');
 assert.equal(pickMe(guestG1, members, 'nope'), null);
 assert.equal(pickMe(guestG1, members), null);
+
+// who may edit a person's name/email/UPI (UPI = where money gets sent)
+assert.equal(canEditMember(owner, members, 'm1'), true, 'own seat');
+assert.equal(canEditMember(owner, members, 'm3'), true, 'member edits a seat with no account');
+const ashaClaimed = members.map(m => m.id === 'm2' ? { ...m, user_id: 'u-asha' } : m);
+assert.equal(canEditMember(owner, ashaClaimed, 'm2'), false, "not another account-holder's seat");
+assert.equal(canEditMember(asha, ashaClaimed, 'm2'), true, 'friend edits own seat');
+assert.equal(canEditMember(guestG1, members, 'm3'), false, 'link guests edit nobody');
+assert.equal(canEditMember(stranger, members, 'm3'), false, 'non-member');
 
 // login redirect target stays on this site
 assert.equal(safeNext('/groups?x=1'), '/groups?x=1');

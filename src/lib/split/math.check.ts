@@ -1,6 +1,6 @@
 // Run: npx tsx src/lib/split/math.check.ts
 import assert from 'node:assert/strict';
-import { resolveShares, computeBalances, simplifyDebts } from './math';
+import { resolveShares, computeBalances, simplifyDebts, ownerSpending } from './math';
 
 const sum = (r: Record<string, number>) => Math.round(Object.values(r).reduce((a, b) => a + b, 0) * 100) / 100;
 
@@ -55,5 +55,12 @@ assert.equal(t.length, 2);
 assert.deepEqual(t, [{ from: 'b', to: 'a', amount: 30 }, { from: 'c', to: 'a', amount: 20 }]);
 // chain a→b→c collapses to one transfer
 assert.deepEqual(simplifyDebts({ a: -10, b: 0, c: 10 }), [{ from: 'a', to: 'c', amount: 10 }]);
+
+// owner's personal ledger row for a group expense
+assert.deepEqual(ownerSpending(300, 'me', { me: 100, a: 200 }, 'me'), { involved: true, amount: 300, myShare: 100 }, 'I paid: cash out is the full bill, spend is my share');
+assert.deepEqual(ownerSpending(300, 'a', { me: 100, a: 200 }, 'me'), { involved: true, amount: 100, myShare: 100 }, 'friend paid: I owe my share');
+assert.deepEqual(ownerSpending(300, 'me', { a: 300 }, 'me'), { involved: true, amount: 300, myShare: 0 }, 'I covered a friend');
+assert.deepEqual(ownerSpending(300, 'a', { a: 300 }, 'me'), { involved: false, amount: 0, myShare: 0 }, 'not involved');
+assert.deepEqual(ownerSpending(300, 'a', { a: 300 }, undefined), { involved: false, amount: 0, myShare: 0 }, 'no owner in group');
 
 console.log('ok');

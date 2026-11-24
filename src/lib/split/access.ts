@@ -36,3 +36,17 @@ export function pickMe(access: Access, members: MemberRow[], asMember?: string |
   if (!asMember) return null;
   return members.find(m => m.id === asMember && !m.removed_at) ?? null;
 }
+
+/**
+ * May the caller edit this person's name/email/UPI? UPI decides where settle-up money goes,
+ * so: your own seat, or a seat with no account if you're a signed-in member. Link guests: never.
+ */
+export function canEditMember(access: Access, members: MemberRow[], memberId: string): boolean {
+  const user = access.user;
+  if (!user) return false;
+  const mine = pickMe({ user }, members);
+  if (!mine) return false;
+  if (mine.id === memberId) return true;
+  const target = members.find(m => m.id === memberId && !m.removed_at);
+  return !!target && !target.user_id;
+}

@@ -4,8 +4,8 @@ import cuid from 'cuid';
 import { randomBytes } from 'node:crypto';
 import { getSupabase } from '@/lib/supabase';
 import { isOwnerEmail, type SessionUser } from '@/lib/auth/roles';
-import { resolveShares, computeBalances, simplifyDebts, type SplitMethod, type SplitItem } from './math';
-import { canSeeGroup, pickMe, type Access, type MemberRow } from './access';
+import { resolveShares, computeBalances, simplifyDebts, ownerSpending, type SplitMethod, type SplitItem } from './math';
+import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
 import type {
   ActivityItem, Expense, GroupDetail, GroupInfo, GroupKind, GroupSummary, HomeData, Member, PersonBalance, Settlement,
 } from './types';
@@ -242,9 +242,7 @@ export async function addMember(access: Access, groupId: string, input: { name: 
 export async function updateMember(access: Access, groupId: string, memberId: string, input: { name?: string; email?: string | null; upiId?: string | null }) {
   const o = await openGroup(access, groupId);
   requireActive(o.members, [memberId], 'That person');
-  const target = o.members.find(m => m.id === memberId)!;
-  // Changing who an account-holder's seat belongs to is a manage action.
-  if (input.email !== undefined && (target.user_id || !o.canManage)) throw new SplitError(403, "You can't change this person's email.");
+  if (!canEditMember(access, o.members, memberId)) throw new SplitError(403, "You can't change this person's details.");
   const row: Record<string, unknown> = {};
   if (input.name !== undefined) row.name = input.name;
   if (input.email !== undefined) row.email = input.email?.trim().toLowerCase() || null;
@@ -363,11 +361,9 @@ async function syncSpending(
 ) {
   // The owner's seat: flagged when the owner made the group, or matched by email when a friend added them.
   const owner = active(members).find(m => m.is_owner) ?? active(members).find(m => isOwnerEmail(m.email));
-  const myShare = owner ? e.shares[owner.id] ?? 0 : 0;
-  const iPaid = !!owner && e.paidBy === owner.id;
-  const involved = myShare > 0 || iPaid;
+  const { involved, amount, myShare } = ownerSpending(e.amount, e.paidBy, e.shares, owner?.id);
   const now = nowIso();
-  const money = { amount: iPaid ? e.amount : myShare, my_share: myShare, description: e.description, date: e.date, is_split: true, updated_at: now };
+  const money = { amount, my_share: myShare, description: e.description, date: e.date, is_split: true, updated_at: now };
   const extra = spending ? { category_id: spending.categoryId, payment_method_id: spending.paymentMethodId, expense_type: spending.expenseType } : {};
 
   if (e.transactionId) {

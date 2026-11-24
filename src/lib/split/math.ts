@@ -137,3 +137,15 @@ export function simplifyDebts(balances: Record<string, number>): Transfer[] {
   }
   return out;
 }
+
+/**
+ * The owner's personal-ledger numbers for a group expense: `myShare` is what counts as their
+ * spend (transactions.my_share); `amount` is cash out — the whole bill if they paid, else their share.
+ */
+export function ownerSpending(total: number, paidBy: string, shares: Record<string, number>, ownerId?: string) {
+  if (!ownerId) return { involved: false, amount: 0, myShare: 0 };
+  const myShare = shares[ownerId] ?? 0;
+  const iPaid = paidBy === ownerId;
+  if (!iPaid && myShare <= 0) return { involved: false, amount: 0, myShare: 0 };
+  return { involved: true, amount: iPaid ? total : myShare, myShare };
+}
