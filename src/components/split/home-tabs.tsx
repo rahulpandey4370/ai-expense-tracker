@@ -8,7 +8,7 @@ import { VoiceSheet } from './voice-sheet';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, monthLabel, prettyDate, todayYmd } from './bits';
 import { useSplitAction, useSplitGroup } from './use-split';
-import { feedMonths, filterActivity, monthRange, type FeedFilter } from '@/lib/split/feed';
+import { feedMonths, feedNet, filterActivity, monthRange, type FeedFilter } from '@/lib/split/feed';
 import { EXAMPLE_LINES, FeedSheet, Hero } from './hero';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -44,7 +44,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
   const shown = filtering || q ? feed : feed.slice(0, limit);
   const months = feedMonths(data.activity);
   const thisMonth = todayYmd().slice(0, 7);
-  const shownNet = r2(feed.reduce((s, a) => s + a.myImpact, 0));
+  const shownNet = feedNet(feed);
   const pickTime = (v: string) => {
     setTime(v);
     setFilter(f => ({ ...f, ...(v === '' ? { from: undefined, to: undefined } : v === 'custom' ? {} : monthRange(v)) }));

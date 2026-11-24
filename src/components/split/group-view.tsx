@@ -108,7 +108,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
     <div className="space-y-4 pb-8">
       <header className="flex items-center gap-3">
         {onBack && (
-          <button type="button" onClick={onBack} aria-label="Back to home" title="Back" className="s-icon-btn" data-back><ArrowLeft className="h-5 w-5" strokeWidth={2.5} /></button>
+          <button type="button" onClick={onBack} aria-label="Back to home" title="Back" className="s-nav-btn" data-back><ArrowLeft className="h-5 w-5" strokeWidth={2.5} /></button>
         )}
         <div className="min-w-0 flex-1">
           <h1 className="split-display truncate text-3xl">{d.group.name}</h1>
@@ -116,7 +116,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
         </div>
         <button type="button" className="shrink-0" onClick={() => setSheet('members')} aria-label="People and share link"><AvatarStack names={active.map(m => m.name)} max={3} /></button>
         {d.canManage && (
-          <button type="button" onClick={() => setSheet('group')} aria-label="Edit or delete group" title="Group settings" className="s-icon-btn"><MoreHorizontal className="h-5 w-5" strokeWidth={2.5} /></button>
+          <button type="button" onClick={() => setSheet('group')} aria-label="Edit or delete group" title="Group settings" className="s-nav-btn"><MoreHorizontal className="h-5 w-5" strokeWidth={2.5} /></button>
         )}
       </header>
 

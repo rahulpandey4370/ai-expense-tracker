@@ -125,6 +125,13 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
     return pwText.trim() ? { name: pwText.trim() } : null;
   };
 
+  // The owner's card doesn't describe a bill someone else paid: drop it when the payer moves off the owner.
+  const pickPayer = (id: string) => {
+    setPaidBy(id);
+    const orig = expense?.meta.paidWith, ownerSeat = detail.members.find(x => x.isOwner)?.id;
+    if (orig?.id && pwText === orig.name && id !== ownerSeat) setPwText('');
+  };
+
   const toggle = (id: string) => setParticipants(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
   const save = async () => {
@@ -197,7 +204,7 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
           <p className="s-muted mb-2 text-xs font-semibold uppercase tracking-wide">Paid by</p>
           <div className="flex flex-wrap gap-2">
             {people.map(m => (
-              <button key={m.id} type="button" className="s-chip inline-flex items-center gap-1.5" data-on={paidBy === m.id} onClick={() => setPaidBy(m.id)}>
+              <button key={m.id} type="button" className="s-chip inline-flex items-center gap-1.5" data-on={paidBy === m.id} onClick={() => pickPayer(m.id)}>
                 <Avatar name={m.name} size={18} /> {label(m.id)}
               </button>
             ))}

@@ -1,6 +1,6 @@
 // npx tsx src/lib/split/feed.check.ts
 import assert from 'node:assert/strict';
-import { feedMonths, filterActivity, monthRange } from './feed';
+import { feedMonths, feedNet, filterActivity, monthRange } from './feed';
 import type { ActivityItem } from './types';
 
 const a = (id: string, groupId: string, date: string, people: string[]): ActivityItem => ({
@@ -27,5 +27,12 @@ assert.deepEqual(feedMonths(items), ['2026-11', '2026-10', '2026-02']);
 assert.deepEqual(monthRange('2026-02'), { from: '2026-02-01', to: '2026-02-28' });
 assert.deepEqual(monthRange('2028-02'), { from: '2028-02-01', to: '2028-02-29' });
 assert.deepEqual(monthRange('2026-12'), { from: '2026-12-01', to: '2026-12-31' });
+
+// net: I paid 100 split with Bo (+50 lent), then Bo paid me back 50 → square, not "lent 100"
+const meal = { ...a('meal', 'flat', '2026-03-01', ['name:bo']), myImpact: 50 };
+const back = { ...a('back', 'flat', '2026-03-02', ['name:bo']), kind: 'settlement' as const, myImpact: 50 };
+assert.equal(feedNet([meal, back]), 0);
+assert.equal(feedNet([{ ...meal, myImpact: -50 }, { ...back, myImpact: -50 }]), 0); // I owed 50, then I paid it back
+assert.equal(feedNet([meal]), 50);
 
 console.log('ok');

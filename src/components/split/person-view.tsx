@@ -26,7 +26,7 @@ export function PersonView({ personKey, onBack, onOpenGroup, onOpenExpense }: {
   return (
     <div className="space-y-4 pb-8">
       <header className="flex items-center gap-3">
-        <button type="button" onClick={onBack} aria-label="Back to people" title="Back" className="s-icon-btn" data-back><ArrowLeft className="h-5 w-5" strokeWidth={2.5} /></button>
+        <button type="button" onClick={onBack} aria-label="Back to people" title="Back" className="s-nav-btn" data-back><ArrowLeft className="h-5 w-5" strokeWidth={2.5} /></button>
         <Avatar name={p.name} size={46} />
         <div className="min-w-0 flex-1">
           <h1 className="split-display truncate text-3xl">{p.name}</h1>

@@ -49,18 +49,18 @@
   transition: transform .15s var(--s-ease), background .15s var(--s-ease);
 }
 .s-pill:active { transform: scale(.97); }
-/* Round icon button (back, more). Its own class: .s-pill's padding would beat Tailwind's p-0 and squash the icon. */
-.s-icon-btn {
+/* Header round button (back, more). Own class with its size built in: .s-pill's padding / Tailwind sizes lose to this file. */
+.s-nav-btn {
   display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center;
   width: 2.75rem; height: 2.75rem; border-radius: 999px;
   background: var(--s-card); color: var(--s-ink); border: 1px solid var(--s-line);
   box-shadow: 0 6px 18px rgba(0,0,0,.10);
   transition: transform .15s var(--s-ease), background .15s var(--s-ease);
 }
-.s-icon-btn:hover { background: var(--s-tint); }
-.s-icon-btn:active { transform: scale(.92); }
-.s-icon-btn[data-back] svg { transition: transform .2s var(--s-ease); }
-.s-icon-btn[data-back]:hover svg { transform: translateX(-3px); }
+.s-nav-btn:hover { background: var(--s-tint); }
+.s-nav-btn:active { transform: scale(.92); }
+.s-nav-btn[data-back] svg { transition: transform .2s var(--s-ease); }
+.s-nav-btn[data-back]:hover svg { transform: translateX(-3px); }
 .s-pill:disabled { opacity: .5; pointer-events: none; }
 .s-pill-primary { background: var(--s-deep); color: #fff; border-color: transparent; }
 .dark .s-pill-primary { color: #04201f; }

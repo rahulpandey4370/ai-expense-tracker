@@ -11,6 +11,10 @@ export function filterActivity(items: ActivityItem[], f: FeedFilter): ActivityIt
     && (!f.to || i.date <= f.to));
 }
 
+/** My net across these entries (+ = owed to me). A payment's myImpact is "received/paid back", the opposite sign. */
+export const feedNet = (items: ActivityItem[]) =>
+  Math.round(items.reduce((s, a) => s + (a.kind === 'settlement' ? -a.myImpact : a.myImpact), 0) * 100) / 100;
+
 /** Months with activity, newest first (YYYY-MM). */
 export const feedMonths = (items: ActivityItem[]) => [...new Set(items.map(i => i.date.slice(0, 7)))].sort().reverse();
 
