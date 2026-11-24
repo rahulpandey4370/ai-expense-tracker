@@ -17,6 +17,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Turbopack dev can't bundle @google/adk (crashes loading node:stream/consumers); load it from node_modules.
+  serverExternalPackages: ['@google/adk'],
   // Chat attachments (receipt photos, statement PDFs) go through server actions.
   // 4mb stays under Vercel's 4.5MB request cap; photos are shrunk in the browser first.
   experimental: {
