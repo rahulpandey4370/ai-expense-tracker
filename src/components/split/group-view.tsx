@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, HandCoins, Loader2, Plus, Users } from 'lucide-react';
+import { ArrowLeft, FileText, HandCoins, Loader2, Plus, Users } from 'lucide-react';
+import { ReportSheet } from './report-sheet';
 import { VoiceSheet } from './voice-sheet';
 import { ReceiptView } from './receipt-view';
 import { EXAMPLE_LINES, Hero } from './hero';
@@ -26,7 +27,7 @@ type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { ki
 export function GroupView({ groupId, token, asMember, onPickMember, onBack, openExpenseId }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt'>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt' | 'report'>(null);
   const [draft, setDraft] = useState<ExpenseDraft | null>(null);
   const [viewing, setViewing] = useState<Expense | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -117,6 +118,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
         <div className="mb-4 flex flex-wrap gap-2">
           <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
           <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
+          <button type="button" className="s-pill" onClick={() => setSheet('report')}><FileText className="h-4 w-4" /> Report</button>
         </div>
       </Hero>
 
@@ -148,6 +150,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
       <ReceiptView open={sheet === 'receipt'} onOpenChange={o => !o && setSheet(null)} expense={viewing ? d.expenses.find(x => x.id === viewing.id) ?? viewing : null} detail={d} token={token}
         onEdit={() => { if (viewing) openExpense(d.expenses.find(x => x.id === viewing.id) ?? viewing); }} />
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />
+      <ReportSheet open={sheet === 'report'} onOpenChange={o => !o && setSheet(null)} group={d} />
       <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} onDeleted={onBack} />
     </div>
   );

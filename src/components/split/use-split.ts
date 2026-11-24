@@ -45,3 +45,13 @@ export function useSplitAction(token?: string) {
     onSuccess: () => qc.invalidateQueries(),
   });
 }
+
+/** Everything between me and one person across groups (signed-in users only). */
+export function useSplitPerson(key: string | null) {
+  return useQuery({
+    queryKey: ['split', 'person', key ?? ''] as const,
+    queryFn: () => splitApi<import('@/lib/split/report').PersonData>('person', { key }),
+    enabled: !!key,
+    refetchInterval: 30_000,
+  });
+}

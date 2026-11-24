@@ -57,7 +57,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Skip only real static files: Next's own assets and top-level files in /public. A nested
+  // Skip only real static files: Next's own assets, /fonts/*.ttf (PDFs for link guests) and top-level files in /public. A nested
   // "/portfolio/a.png" is a dynamic page and must still pass through the gate.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-[^/]*$|[^/]+\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|workbox-[^/]*$|fonts/[^/]+\\.ttf$|[^/]+\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
 };

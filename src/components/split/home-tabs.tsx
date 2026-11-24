@@ -6,7 +6,7 @@ import type { GroupKind, GroupSummary, HomeData } from '@/lib/split/types';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
 import { VoiceSheet } from './voice-sheet';
 import { useToast } from '@/hooks/use-toast';
-import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, prettyDate } from './bits';
+import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, monthLabel, prettyDate } from './bits';
 import { useSplitAction, useSplitGroup } from './use-split';
 import { EXAMPLE_LINES, FeedSheet, Hero } from './hero';
 
@@ -37,8 +37,11 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
           <p className="s-muted px-4 py-5 text-sm">{q ? 'Nothing matches that search.' : 'Expenses from your groups show up here.'}</p>
         ) : (
           <ul>
-            {feed.slice(0, 25).map(a => (
+            {feed.slice(0, 40).map((a, idx, arr) => (
               <li key={a.id}>
+                {(idx === 0 || arr[idx - 1].at.slice(0, 7) !== a.at.slice(0, 7)) && (
+                  <p className="s-muted px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide">{monthLabel(a.at.slice(0, 10))}</p>
+                )}
                 <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]"
                   onClick={() => (a.kind === 'expense' ? onOpenExpense(a.groupId, a.id) : onOpenGroup(a.groupId))}>
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-xl" aria-hidden>{a.emoji ?? '🧾'}</span>
@@ -154,21 +157,22 @@ function HomeCapture({ mode, onClose, groups, onNeedGroup }: { mode: CaptureMode
 }
 
 /** People: net with each person across every shared group. */
-export function PeopleTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (id: string) => void }) {
+export function PeopleTab({ data, onOpenGroup, onOpenPerson }: { data: HomeData; onOpenGroup: (id: string) => void; onOpenPerson: (key: string) => void }) {
   if (data.people.length === 0) {
-    return <EmptyState title={<>No one owes <em>anyone</em></>} body="When a group has open balances, the people you owe and who owe you show up here." />;
+    return <EmptyState title={<>No one <em>yet</em></>} body="People you share a group with show up here, with their history by month." />;
   }
   return (
     <ul className="space-y-3">
       {data.people.map(p => (
         <li key={p.key} className="s-card p-4">
-          <div className="flex items-center gap-3">
+          <button type="button" className="flex w-full items-center gap-3 text-left" onClick={() => onOpenPerson(p.key)}>
             <Avatar name={p.name} size={40} />
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">{p.name}</p>
               <BalanceText value={p.net} className="text-sm" owedLabel="owes you" oweLabel="you owe" />
             </div>
-          </div>
+            <ChevronRight className="s-muted h-4 w-4" />
+          </button>
           <div className="mt-3 flex flex-wrap gap-2">
             {p.groups.map(g => (
               <button key={g.groupId} type="button" className="s-chip" onClick={() => onOpenGroup(g.groupId)}>

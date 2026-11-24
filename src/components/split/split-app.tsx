@@ -11,6 +11,7 @@ import { LOOKS, useLook } from './looks';
 import { Sidekick } from './sidekick';
 import { ImportSheet } from './import-sheet';
 import { GroupView } from './group-view';
+import { PersonView } from './person-view';
 import { ActivityTab, HomeTab, InsightsTab, PeopleTab } from './home-tabs';
 import { useSplitHome } from './use-split';
 
@@ -43,6 +44,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
   const params = useSearchParams();
   const groupId = params.get('g');
   const expenseId = params.get('e');
+  const personKey = params.get('p');
   const [look] = useLook();
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -51,10 +53,11 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
   const home = useSplitHome();
   const { user, logout } = useAuth();
 
-  const go = (next: { g?: string | null; tab?: Tab }) => {
+  const go = (next: { g?: string | null; p?: string | null; tab?: Tab }) => {
     const sp = new URLSearchParams(params.toString());
-    if ('g' in next) { next.g ? sp.set('g', next.g) : sp.delete('g'); sp.delete('e'); }
-    if (next.tab) { sp.set('tab', next.tab); sp.delete('g'); sp.delete('e'); }
+    if ('g' in next) { next.g ? sp.set('g', next.g) : sp.delete('g'); sp.delete('e'); sp.delete('p'); }
+    if ('p' in next) { next.p ? sp.set('p', next.p) : sp.delete('p'); sp.delete('g'); sp.delete('e'); }
+    if (next.tab) { sp.set('tab', next.tab); sp.delete('g'); sp.delete('e'); sp.delete('p'); }
     router.push(`${pathname}${sp.size ? `?${sp}` : ''}`, { scroll: true });
   };
   const openGroup = (id: string) => go({ g: id });
@@ -81,7 +84,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
         </div>
       )}
 
-      {mode === 'owner' && !groupId && (
+      {mode === 'owner' && !groupId && !personKey && (
         <nav className="mb-4 flex gap-1 rounded-full border border-[var(--s-line)] bg-[var(--s-card)] p-1" aria-label="Split sections">
           {tabs.map(t => (
             <button key={t.id} type="button" onClick={() => go({ tab: t.id })} data-on={tab === t.id}
@@ -94,6 +97,8 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
 
       {groupId ? (
         <GroupView groupId={groupId} openExpenseId={expenseId} onBack={() => go({ g: null })} />
+      ) : personKey ? (
+        <PersonView personKey={personKey} onBack={() => go({ p: null, tab: 'people' })} onOpenGroup={openGroup} onOpenExpense={openExpense} />
       ) : tab === 'you' ? (
         <YouTab name={user?.name ?? ''} email={user?.email ?? ''} onLogout={mode === 'friend' ? logout : undefined} onImported={openGroup} />
       ) : home.isLoading ? (
@@ -103,7 +108,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
           <button type="button" className="s-pill" onClick={() => home.refetch()}>Retry</button>
         </EmptyState>
       ) : tab === 'people' ? (
-        <PeopleTab data={home.data} onOpenGroup={openGroup} />
+        <PeopleTab data={home.data} onOpenGroup={openGroup} onOpenPerson={k => go({ p: k })} />
       ) : tab === 'insights' ? (
         <InsightsTab data={home.data} />
       ) : (
@@ -157,7 +162,7 @@ function YouTab({ name, email, onLogout, onImported }: { name: string; email: st
               style={{ background: l.bg, color: l.fg }}>
               <span className="text-[11px] font-semibold opacity-80">{l.name}</span>
               <span className="split-display mt-1 text-lg leading-snug">{l.tagline}</span>
-              <span className="absolute -bottom-3 -right-3 rounded-full bg-white/92 p-3 shadow-lg"><Sidekick look={l.id} size={64} wink={look === l.id} /></span>
+              <span className="absolute -bottom-3 -right-3 rounded-full bg-white/90 p-3 shadow-lg"><Sidekick look={l.id} size={64} wink={look === l.id} /></span>
               {look === l.id && <Check className="absolute right-3 top-3 h-4 w-4" />}
             </button>
           ))}

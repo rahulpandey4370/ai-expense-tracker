@@ -151,6 +151,12 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
       totalSpent: r2(expenses.reduce((a, e) => a + e.amount, 0)), lastActivity,
     });
 
+    // Everyone I share this group with is listed (settled people too), so their history stays reachable.
+    for (const m of active(members)) {
+      if (m.id === me.id) continue;
+      const key = personKey(m);
+      if (!people.has(key)) people.set(key, { key, name: m.name, net: 0, groups: [] });
+    }
     for (const t of transfers) {
       if (t.from !== me.id && t.to !== me.id) continue;
       const other = members.find(m => m.id === (t.from === me.id ? t.to : t.from))!;
@@ -184,7 +190,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     }
   }
 
-  const peopleList = [...people.values()].filter(p => Math.abs(p.net) >= 0.01).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  const peopleList = [...people.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || a.name.localeCompare(b.name));
   return {
     me: { name: user.name, email: user.email, isOwner: user.isOwner },
     totals: {
@@ -601,4 +607,60 @@ export async function scanReceipt(access: Access, input: { groupId: string; data
     const msg = (e as Error).message;
     throw new SplitError(502, msg.includes('resting') ? msg : "Couldn't read that receipt. Try a sharper, flatter photo.");
   }
+}
+
+// ---------- one person, across groups ----------
+
+export interface PersonItem {
+  kind: 'expense' | 'settlement';
+  id: string;
+  groupId: string;
+  groupName: string;
+  groupEmoji: string | null;
+  date: string;
+  createdAt: string;
+  title: string;
+  emoji: string | null;
+  amount: number;
+  paidByName: string;
+  theirShare: number;
+  myShare: number;
+  /** + they owe me more / paid me back less; − I owe them more */
+  impact: number;
+}
+
+/** Everything between me and one person (by personKey) in every group we share, newest first. */
+export async function getPerson(user: SessionUser, key: string) {
+  const loaded = await loadGroups(await myGroupIds(user));
+  const items: PersonItem[] = [];
+  const groups: { groupId: string; groupName: string; groupEmoji: string | null; net: number }[] = [];
+  let name = '';
+  for (const g of loaded.groups) {
+    const { members, expenses, settlements, transfers } = ledgerOf(g.id, loaded);
+    const me = pickMe({ user }, members);
+    const them = members.find(m => personKey(m) === key);
+    if (!me || !them || me.id === them.id) continue;
+    name = them.name;
+    const net = r2(transfers.reduce((a, t) => a + (t.from === them.id && t.to === me.id ? t.amount : t.from === me.id && t.to === them.id ? -t.amount : 0), 0));
+    groups.push({ groupId: g.id, groupName: g.name, groupEmoji: g.emoji, net });
+    const nameOf = (id: string) => (id === me.id ? 'You' : members.find(m => m.id === id)?.name ?? 'Someone');
+    for (const e of expenses) {
+      const theirs = e.shares[them.id] ?? 0, mine = e.shares[me.id] ?? 0;
+      const themIn = e.paidBy === them.id || theirs > 0, meIn = e.paidBy === me.id || mine > 0;
+      if (!themIn || !meIn) continue; // only what the two of us shared
+      const impact = e.paidBy === me.id ? theirs : e.paidBy === them.id ? -mine : 0;
+      items.push({ kind: 'expense', id: e.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, date: e.date, createdAt: e.createdAt,
+        title: e.description, emoji: e.emoji, amount: e.amount, paidByName: nameOf(e.paidBy), theirShare: theirs, myShare: mine, impact: r2(impact) });
+    }
+    for (const s of settlements) {
+      const between = (s.from === them.id && s.to === me.id) || (s.from === me.id && s.to === them.id);
+      if (!between) continue;
+      items.push({ kind: 'settlement', id: s.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, date: s.date, createdAt: s.createdAt,
+        title: `${nameOf(s.from)} paid ${nameOf(s.to)}`, emoji: '💸', amount: s.amount, paidByName: nameOf(s.from), theirShare: 0, myShare: 0,
+        impact: s.from === them.id ? -s.amount : s.amount });
+    }
+  }
+  if (!name) throw new SplitError(404, 'Person not found.');
+  items.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  return { key, name, net: r2(groups.reduce((a, g) => a + g.net, 0)), groups, items };
 }

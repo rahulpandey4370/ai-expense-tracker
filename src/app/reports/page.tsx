@@ -23,7 +23,6 @@ import { MarkdownContent } from '@/components/markdown-content';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { monthlyStatementPdf } from '@/lib/export';
-import { renderReport } from '@/lib/report-pdf';
 import { ShareFileDialog, type ShareFiles } from '@/components/share-file-dialog';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
@@ -232,12 +231,12 @@ export default function ReportsPage() {
   const periodName = reportMonth === -1 ? `${reportYear}` : `${monthNamesList[reportMonth]} ${reportYear}`;
 
   const prepareReport = async () => {
-    const el = document.getElementById('report-content-area');
-    if (!el) return;
     setPreparing('report');
     try {
-      const { pdf, image } = await renderReport(el, `FinWise_report_${periodName.replace(' ', '_')}`);
-      setShareFiles({ title: `FinWise ${reportMonth === -1 ? 'annual' : 'monthly'} report, ${periodName}`, pdf, image });
+      // A real document (fonts, tables, page breaks), not a screenshot of the page.
+      const { financeReportPdf } = await import('@/lib/pdf/finance-report');
+      const pdf = await financeReportPdf({ periodName, annual: reportMonth === -1, transactions: filteredTransactionsForPeriod, ai: aiAnalysis });
+      setShareFiles({ title: `FinWise ${reportMonth === -1 ? 'annual' : 'monthly'} report, ${periodName}`, pdf });
     } catch (error: any) {
       console.error("Error exporting PDF:", error);
       toast({ title: "Couldn't make the PDF", description: error?.message || 'Please try again.', variant: "destructive" });
