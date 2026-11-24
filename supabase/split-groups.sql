@@ -108,13 +108,15 @@ begin
     select 'legacy_' || t.id, 'legacy', t.description, t.amount, t.date, 'exact',
            coalesce('legacy_' || t.paid_by_id, 'legacy_me'), '{"imported":true}'::jsonb, t.id, t.created_at, t.updated_at
     from transactions t
-    where t.paid_by_id is not null or exists (select 1 from transaction_splits s where s.transaction_id = t.id);
+    where t.amount > 0
+      and (t.paid_by_id is not null or exists (select 1 from transaction_splits s where s.transaction_id = t.id));
 
   -- others' shares
   insert into split_expense_shares (expense_id, member_id, amount)
-    select 'legacy_' || s.transaction_id, 'legacy_' || s.user_id, s.share_amount
+    select 'legacy_' || s.transaction_id, 'legacy_' || s.user_id, sum(s.share_amount)
     from transaction_splits s join split_expenses e on e.id = 'legacy_' || s.transaction_id
-    where s.share_amount > 0;
+    where s.share_amount > 0
+    group by s.transaction_id, s.user_id;
   -- my share
   insert into split_expense_shares (expense_id, member_id, amount)
     select 'legacy_' || t.id, 'legacy_me', t.my_share
