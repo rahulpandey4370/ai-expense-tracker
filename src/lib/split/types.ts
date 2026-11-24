@@ -104,6 +104,10 @@ export interface ActivityItem {
   amount: number;
   myImpact: number; // + I get back / lent, − I owe / paid back
   at: string;
+  /** The expense's / payment's own date (YYYY-MM-DD). */
+  date: string;
+  /** Person keys of everyone else involved: payer, sharers, or either side of a payment. */
+  people: string[];
 }
 
 export interface HomeData {

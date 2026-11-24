@@ -1,16 +1,30 @@
 import { useState } from 'react';
 import { useEffect } from 'react';
-import { ChevronRight, FileUp, Loader2, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileUp, Loader2, Plus, X } from 'lucide-react';
 import { ImportSheet } from './import-sheet';
 import type { GroupKind, GroupSummary, HomeData } from '@/lib/split/types';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
 import { VoiceSheet } from './voice-sheet';
 import { useToast } from '@/hooks/use-toast';
-import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, monthLabel, prettyDate } from './bits';
+import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, monthLabel, prettyDate, todayYmd } from './bits';
 import { useSplitAction, useSplitGroup } from './use-split';
+import { feedMonths, filterActivity, monthRange, type FeedFilter } from '@/lib/split/feed';
 import { EXAMPLE_LINES, FeedSheet, Hero } from './hero';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** A chip that is a native select: the phone's own picker, no custom popover. */
+function FilterChip({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return (
+    <label className="s-chip relative inline-flex shrink-0 items-center gap-1" data-on={value !== ''}>
+      <span className="max-w-[9rem] truncate">{options.find(([v]) => v === value)?.[1] ?? options[0][1]}</span>
+      <ChevronDown className="h-3 w-3 opacity-70" aria-hidden />
+      <select aria-label={label} className="absolute inset-0 cursor-pointer opacity-0" value={value} onChange={e => onChange(e.target.value)}>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </label>
+  );
+}
 
 /** Home: hero (balance, this week, capture buttons), groups strip, then a Settl-style feed. */
 export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
@@ -22,7 +36,20 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
   const net = r2(data.totals.owed - data.totals.owe);
   const q = query.trim().toLowerCase();
   const groups = data.groups.filter(g => !g.archived && (!q || g.name.toLowerCase().includes(q)));
-  const feed = data.activity.filter(a => !q || `${a.title} ${a.groupName} ${a.who}`.toLowerCase().includes(q));
+  const [filter, setFilter] = useState<FeedFilter>({});
+  const [time, setTime] = useState(''); // '' any · 'YYYY-MM' · 'custom'
+  const [limit, setLimit] = useState(40);
+  const filtering = !!(filter.groupId || filter.person || filter.from || filter.to);
+  const feed = filterActivity(data.activity, filter).filter(a => !q || `${a.title} ${a.groupName} ${a.who}`.toLowerCase().includes(q));
+  const shown = filtering || q ? feed : feed.slice(0, limit);
+  const months = feedMonths(data.activity);
+  const thisMonth = todayYmd().slice(0, 7);
+  const shownNet = r2(feed.reduce((s, a) => s + a.myImpact, 0));
+  const pickTime = (v: string) => {
+    setTime(v);
+    setFilter(f => ({ ...f, ...(v === '' ? { from: undefined, to: undefined } : v === 'custom' ? {} : monthRange(v)) }));
+  };
+  const clear = () => { setFilter({}); setTime(''); };
 
   return (
     <div className="space-y-5">
@@ -33,14 +60,37 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
       />
 
       <FeedSheet>
+        <div className="flex gap-2 overflow-x-auto px-4 pb-1 pt-2" role="group" aria-label="Filter activity">
+          <FilterChip label="Group" value={filter.groupId ?? ''} onChange={v => setFilter(f => ({ ...f, groupId: v || undefined }))}
+            options={[['', 'All groups'], ...data.groups.map(g => [g.id, g.name] as [string, string])]} />
+          <FilterChip label="Person" value={filter.person ?? ''} onChange={v => setFilter(f => ({ ...f, person: v || undefined }))}
+            options={[['', 'Everyone'], ...data.people.map(p => [p.key, p.name] as [string, string])]} />
+          <FilterChip label="When" value={time} onChange={pickTime}
+            options={[['', 'Any time'], ...months.map(m => [m, m === thisMonth ? `This month` : monthLabel(`${m}-01`)] as [string, string]), ['custom', 'Custom dates…']]} />
+          {filtering && <button type="button" className="s-chip inline-flex shrink-0 items-center gap-1" onClick={clear}><X className="h-3 w-3" />Clear</button>}
+        </div>
+        {time === 'custom' && (
+          <div className="flex items-center gap-2 px-4 pb-1 pt-1 text-xs">
+            <input type="date" className="s-input w-auto py-1.5 text-xs" aria-label="From date" value={filter.from ?? ''} max={filter.to}
+              onChange={e => setFilter(f => ({ ...f, from: e.target.value || undefined }))} />
+            <span className="s-muted">to</span>
+            <input type="date" className="s-input w-auto py-1.5 text-xs" aria-label="To date" value={filter.to ?? ''} min={filter.from}
+              onChange={e => setFilter(f => ({ ...f, to: e.target.value || undefined }))} />
+          </div>
+        )}
+        {filtering && feed.length > 0 && (
+          <p className="s-muted px-4 pt-1 text-xs">
+            {feed.length} {feed.length === 1 ? 'entry' : 'entries'} · {Math.abs(shownNet) < 0.01 ? 'evens out' : shownNet > 0 ? <>you lent <span className="s-owed font-semibold">{inr(shownNet)}</span></> : <>you owe <span className="s-owe font-semibold">{inr(shownNet)}</span></>}
+          </p>
+        )}
         {feed.length === 0 ? (
-          <p className="s-muted px-4 py-5 text-sm">{q ? 'Nothing matches that search.' : 'Expenses from your groups show up here.'}</p>
+          <p className="s-muted px-4 py-5 text-sm">{q || filtering ? 'Nothing matches.' : 'Expenses from your groups show up here.'}</p>
         ) : (
           <ul>
-            {feed.slice(0, 40).map((a, idx, arr) => (
+            {shown.map((a, idx, arr) => (
               <li key={a.id}>
-                {(idx === 0 || arr[idx - 1].at.slice(0, 7) !== a.at.slice(0, 7)) && (
-                  <p className="s-muted px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide">{monthLabel(a.at.slice(0, 10))}</p>
+                {(idx === 0 || arr[idx - 1].date.slice(0, 7) !== a.date.slice(0, 7)) && (
+                  <p className="s-muted px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide">{monthLabel(a.date)}</p>
                 )}
                 <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]"
                   onClick={() => (a.kind === 'expense' ? onOpenExpense(a.groupId, a.id) : onOpenGroup(a.groupId))}>
@@ -49,7 +99,7 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
                     <span className="block truncate font-semibold">{a.title}</span>
                     <span className="flex items-center gap-1.5 text-xs">
                       <span className="s-group-chip">{a.groupName}</span>
-                      <span className="s-muted truncate">{a.kind === 'settlement' ? prettyDate(a.at.slice(0, 10)) : `${a.paidByMe ? 'You' : a.who} paid ${inr(a.amount)}`}</span>
+                      <span className="s-muted truncate">{a.kind === 'settlement' ? prettyDate(a.date) : `${a.paidByMe ? 'You' : a.who} paid ${inr(a.amount)} · ${prettyDate(a.date)}`}</span>
                     </span>
                   </span>
                   {Math.abs(a.myImpact) >= 0.01 && (
@@ -62,6 +112,9 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
               </li>
             ))}
           </ul>
+        )}
+        {shown.length < feed.length && (
+          <button type="button" className="s-muted w-full py-3 text-sm font-semibold" onClick={() => setLimit(l => l + 100)}>Show more</button>
         )}
       </FeedSheet>
 

@@ -143,6 +143,8 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     const me = pickMe({ user }, members);
     if (!me) continue;
     const name = (id: string) => members.find(m => m.id === id)?.name ?? 'Someone';
+    const keysOf = (ids: string[]) => [...new Set(ids.filter(id => id !== me.id)
+      .map(id => members.find(m => m.id === id)).filter((m): m is MemberRow => !!m).map(personKey))];
     const lastActivity = [g.updated_at, expenses[0]?.createdAt, settlements[0]?.createdAt].filter(Boolean).sort().at(-1)!;
     groups.push({
       ...toInfo(g), myBalance: balances[me.id] ?? 0, memberCount: active(members).length,
@@ -175,7 +177,8 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
       activity.push({
         id: e.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, emoji: e.emoji, paidByMe: e.paidBy === me.id,
         kind: 'expense', title: e.description, who: name(e.paidBy),
-        amount: e.amount, myImpact: e.paidBy === me.id ? r2(e.amount - mine) : -mine, at: e.createdAt,
+        amount: e.amount, myImpact: e.paidBy === me.id ? r2(e.amount - mine) : -mine, at: e.createdAt, date: e.date,
+        people: keysOf([e.paidBy, ...Object.keys(e.shares)]),
       });
       if (user.isOwner && mine > 0 && !e.inMySpending && !e.meta?.imported) {
         unlinked.push({ groupId: g.id, groupName: g.name, expenseId: e.id, description: e.description, myShare: mine, date: e.date });
@@ -186,6 +189,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
         id: s.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, emoji: '💸', paidByMe: s.from === me.id,
         kind: 'settlement', title: `${name(s.from)} paid ${name(s.to)}`,
         who: name(s.from), amount: s.amount, myImpact: s.from === me.id ? -s.amount : s.to === me.id ? s.amount : 0, at: s.createdAt,
+        date: s.date, people: keysOf([s.from, s.to]),
       });
     }
   }
@@ -199,7 +203,8 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     },
     groups: groups.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity)),
     people: peopleList,
-    activity: activity.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60),
+    // ponytail: whole history so the home filters can reach old months; page it if anyone passes ~2000 entries.
+    activity: activity.sort((a, b) => b.date.localeCompare(a.date) || b.at.localeCompare(a.at)).slice(0, 2000),
     weekCount,
     spentByMonth: [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, amount]) => ({ month, amount })),
     unlinked: unlinked.slice(0, 20),
