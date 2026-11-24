@@ -67,6 +67,10 @@ assert.deepEqual(groupSummary({ ...detail, expenses: [], settlements: [] }, '202
   'Everyone is square.',
 ]);
 
+// paise print like the PDF tiles: ₹1,250.50, not ₹1,250.5
+const paise = groupSummary({ ...detail, expenses: [ex('tea', '2026-11-02', 1250.5, 'me', { me: 1250.5 })], settlements: [] }, '2026-11-01', '2026-11-30');
+assert.equal(paise[0], '₹1,250.50 was spent across 1 expense (average ₹1,250.50).');
+
 const person: any = {
   key: 'name:asha', name: 'Asha', net: 350, groups: [{ groupId: 'g', groupName: 'Flat', groupEmoji: '🏠', net: 350 }],
   items: [

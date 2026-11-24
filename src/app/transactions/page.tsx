@@ -230,7 +230,8 @@ export default function TransactionsPage() {
     }
     
     if (filterExpenseType !== 'all') {
-      tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType);
+      // "Investment" also covers investment expenses: they wear the same colour.
+      tempTransactions = tempTransactions.filter(t => t.expenseType === filterExpenseType || (filterExpenseType === 'investment' && (t.expenseType as string) === 'investment_expense'));
     }
 
     if (filterExpenseTypes.length > 0) {

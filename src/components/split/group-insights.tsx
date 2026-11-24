@@ -30,9 +30,9 @@ export function KpiStrip({ d, month, onMore }: { d: GroupDetail; month: string |
           ? <Kpi label={`Your share · ${mn || 'month'}`} value={inr(m?.myShare ?? 0)} note={m && m.myPaid > 0 ? `you paid ${inr(m.myPaid)}` : undefined} />
           : <Kpi label={`Avg expense · ${mn || 'month'}`} value={inr(m?.avgPerExpense ?? 0)} />}
         <Kpi label="Group total" value={inr(all.totalSpent)} note={`${all.count} ${all.count === 1 ? 'expense' : 'expenses'} · all time`} />
-        <Kpi label={`Top payer · ${mn || 'month'}`} value={m?.topPayer?.name ?? '—'} note={m?.topPayer ? inr(m.topPayer.paid) : 'nothing paid yet'} />
+        <Kpi label={`Top payer · ${mn || 'month'}`} value={m?.topPayer?.name ?? '—'} note={m?.topPayer ? inr(m.topPayer.paid) : 'no expenses this month'} />
       </div>
-      <button type="button" className="s-pill w-full justify-between" onClick={onMore}>
+      <button type="button" className="s-card flex w-full items-center justify-between px-4 py-3 text-sm font-semibold" onClick={onMore}>
         More insights <ChevronRight className="h-4 w-4" aria-hidden />
       </button>
     </section>
@@ -76,13 +76,14 @@ function SpendByMonth({ months, selected }: { months: { month: string; total: nu
   return (
     <figure className="space-y-2">
       <figcaption className="text-sm font-semibold">Spend by month</figcaption>
-      <div className="flex h-32 items-end gap-2 border-b border-[var(--s-line)]" role="list">
+      <div className="flex h-32 items-end gap-2 border-b border-[var(--s-line)] pt-5" role="list">
         {months.map(m => {
           const on = m.month === selected;
           return (
-            <div key={m.month} role="listitem" className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${long(m.month)}: ${inr(m.total)}`}>
-              {on && <span className="text-[11px] font-semibold tabular-nums">{inr(m.total)}</span>}
-              <div className="w-full max-w-10 rounded-t-[4px]" style={{ height: `${Math.max(2, (m.total / max) * 100)}%`, background: 'var(--s-chart-a)', opacity: on ? 1 : 0.35 }} />
+            <div key={m.month} role="listitem" className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={`${long(m.month)}: ${inr(m.total)}`}>
+              <div className="relative w-full max-w-10 shrink-0 rounded-t-[4px]" style={{ height: `${Math.max(2, (m.total / max) * 100)}%`, background: 'var(--s-chart-a)', opacity: on ? 1 : 0.35 }}>
+                {on && <span className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold tabular-nums text-[var(--s-ink)]">{inr(m.total)}</span>}
+              </div>
             </div>
           );
         })}

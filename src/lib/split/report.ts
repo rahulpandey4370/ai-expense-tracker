@@ -70,7 +70,7 @@ export function groupByMonth(d: GroupDetail, n = 6): { month: string; total: num
   return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-n).map(([month, total]) => ({ month, total: r2(total) }));
 }
 
-const rupees = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const rupees = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: Math.round(n * 100) % 100 ? 2 : 0, maximumFractionDigits: 2 })}`; // matches the PDF's inr()
 
 /** The report's Summary, in plain sentences: totals, each person, biggest, payments, who owes whom at the end date. */
 export function groupSummary(d: GroupDetail, from: string, to: string): string[] {

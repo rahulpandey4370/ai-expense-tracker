@@ -45,7 +45,7 @@ export function Hero({ net, lines, onScan, onType, onVoice, onSay, onBalance, ch
           </>
         );
         return onBalance
-          ? <button type="button" onClick={onBalance} aria-label="See who owes what, by group" className="flex items-baseline justify-between gap-3 text-left">{row}</button>
+          ? <button type="button" onClick={onBalance} aria-label={`${Math.abs(net) < 0.01 ? 'All square' : net > 0 ? `You're owed ${inr(net)}` : `You owe ${inr(net)}`}. See who owes what, by group`} className="flex items-baseline justify-between gap-3 text-left">{row}</button>
           : <div className="flex items-baseline justify-between gap-3">{row}</div>;
       })()}
       <button type="button" onClick={onSay} aria-label="Type what happened and let AI log it" className="flex flex-1 items-center py-6 text-left">
