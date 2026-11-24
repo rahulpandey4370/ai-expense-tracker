@@ -13,12 +13,14 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag, Target, Edit } from "lucide-react";
+import { SplitSquareHorizontal, User, Bell, Palette, ShieldCheck, Save, SettingsIcon, PlusCircle, Trash2, Loader2, List, Tag, Target, Edit } from "lucide-react";
 import { ThemeToggle } from '@/components/theme-toggle';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { NOTIFICATION_KINDS, type NotificationKind } from '@/lib/notification-kinds';
 import { getNotificationPrefs, setNotificationPref } from '@/lib/actions/pending';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { getSplitFullAmount, setSplitFullAmount } from '@/lib/actions/settings';
 import type { Category, PaymentMethod, Budget } from '@/lib/types';
 import { getCategories, getPaymentMethods, addCategory, addPaymentMethod, deleteCategory, deletePaymentMethod } from '@/lib/actions/transactions';
 import { getBudgets, addBudget, updateBudget, deleteBudget } from '@/lib/actions/budgets';
@@ -347,6 +349,8 @@ export default function SettingsPage() {
               </motion.div>
             </motion.section>
                 <Separator />
+            <SplitSpendSetting />
+                <Separator />
             <motion.section variants={sectionVariants}>
               <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><Palette className="text-accent"/>Appearance</h3>
               <motion.div variants={itemVariants} className="flex items-center justify-between p-3 rounded-md bg-background/50 border border-primary/10">
@@ -616,5 +620,44 @@ export default function SettingsPage() {
             </DialogContent>
         </Dialog>
     </main>
+  );
+}
+
+/** Settings → Profile: whether splits I paid count at their full amount in Home, Transactions, Reports and budgets. */
+function SplitSpendSetting() {
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<{ on: boolean; ready: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getSplitFullAmount().then(setState).catch(() => setState({ on: false, ready: false })); }, []);
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await setSplitFullAmount(on);
+      setState({ on, ready: true });
+      await queryClient.invalidateQueries(); // every total is recalculated server-side
+      toast({ title: on ? 'Splits you paid now count in full' : 'Only your share of splits counts now' });
+    } catch (e: any) {
+      toast({ title: "Couldn't change it", description: e?.message, variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section>
+      <h3 className="text-lg sm:text-xl font-semibold text-primary mb-4 flex items-center gap-2"><SplitSquareHorizontal className="text-accent" />Split expenses</h3>
+      <div className="flex items-center justify-between gap-3 p-3 rounded-md bg-background/50 border border-primary/10">
+        <div>
+          <Label htmlFor="splitFull" className="text-sm text-foreground">Count the full amount of splits I paid</Label>
+          <p className="text-xs text-muted-foreground">
+            {state && !state.ready
+              ? 'Run supabase/split-full-amount.sql in Supabase first.'
+              : 'On: a shared bill you paid counts in full on Home, Transactions, Reports and budgets. Off: only your share counts. When a friend paid, only your share counts either way. Saves straight away.'}
+          </p>
+        </div>
+        {busy || !state
+          ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+          : <Switch id="splitFull" checked={state.on} disabled={!state.ready} onCheckedChange={toggle} />}
+      </div>
+    </section>
   );
 }

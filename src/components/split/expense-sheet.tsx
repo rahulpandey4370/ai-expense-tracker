@@ -61,7 +61,10 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   const [values, setValues] = useState<Record<string, string>>({});
   const [items, setItems] = useState<{ name: string; amount: string; memberIds: string[] }[]>([]);
   const [coveredBy, setCoveredBy] = useState<string>('');
-  const [inSpending, setInSpending] = useState(true);
+  // Started from the main app (transaction form, SMS inbox): that's already a transaction, so no checkbox. Inside FinWise
+  // Split it stays out of the main app unless ticked.
+  const fromMainApp = !!spendingDefaults;
+  const [inSpending, setInSpending] = useState(fromMainApp);
   const [receipt, setReceipt] = useState<string | null>(null); // data URI waiting to be attached on save
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [spending, setSpending] = useState<{ categoryId: string; paymentMethodId: string; expenseType: ExpenseType }>({ categoryId: '', paymentMethodId: '', expenseType: 'want' });
@@ -80,7 +83,7 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
     setValues(Object.fromEntries(Object.entries(src?.meta.values ?? {}).map(([k, v]) => [k, String(v)])));
     setItems((src?.meta.items ?? []).map(i => ({ name: i.name, amount: String(i.amount), memberIds: i.memberIds })));
     setCoveredBy(src?.meta.coveredBy ?? '');
-    setInSpending(!expense || expense.inMySpending);
+    setInSpending(expense ? expense.inMySpending : fromMainApp);
     try {
       const saved = JSON.parse(localStorage.getItem(SPENDING_KEY) ?? 'null');
       if (saved) setSpending(saved);
@@ -303,10 +306,14 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
         {/* Owner: personal spending */}
         {showSpending && (
           <section className="s-card space-y-3 p-3">
-            <label className="flex items-center justify-between gap-3 text-sm font-medium">
-              Add my share to my spending
-              <input type="checkbox" className="h-5 w-5 accent-[var(--s-deep)]" checked={inSpending} onChange={e => setInSpending(e.target.checked)} />
-            </label>
+            {fromMainApp ? (
+              <p className="text-sm font-medium">Your spending</p>
+            ) : (
+              <label className="flex items-center justify-between gap-3 text-sm font-medium">
+                <span>Add to my spending<span className="s-muted block text-xs font-normal">Off: stays only in FinWise Split</span></span>
+                <input type="checkbox" className="h-5 w-5 accent-[var(--s-deep)]" checked={inSpending} onChange={e => setInSpending(e.target.checked)} />
+              </label>
+            )}
             {inSpending && (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <select className="s-input text-sm" aria-label="Category" value={spending.categoryId} onChange={e => setSpending(s => ({ ...s, categoryId: e.target.value }))}>
