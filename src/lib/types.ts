@@ -45,7 +45,7 @@ export interface RawTransaction {
   paidById?: string;                // SplitUser id who actually paid. Undefined = I paid.
   splitMethod?: 'equally' | 'shares' | 'custom' | 'not_mine';
   myShareSettled?: boolean;         // Only meaningful when paidById is set: have I paid back my share?
-  netAmount?: number;               // Server-computed: myShare ?? amount. Always what KPIs should sum.
+  netAmount?: number;               // Server-computed (net_amount): my share, or the full amount of splits I paid when that setting is on. What KPIs sum.
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   // For cosmos DB

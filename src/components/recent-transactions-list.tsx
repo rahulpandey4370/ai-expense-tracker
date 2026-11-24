@@ -168,7 +168,7 @@ function TransactionDetails({ transaction: t, onClose }: { transaction: AppTrans
         {t.isSplit && (
           <>
             <DetailRow label="Total bill">{formatCurrency(t.amount)}</DetailRow>
-            <DetailRow label="Your share">{formatCurrency(netAmount(t))}</DetailRow>
+            <DetailRow label="Your share">{formatCurrency(t.myShare ?? t.amount)}</DetailRow>
             <DetailRow label="Paid by">{t.paidBy?.name ?? 'You'}</DetailRow>
             {(t.splits ?? []).map(s => (
               <DetailRow key={s.userId} label={s.userName}>

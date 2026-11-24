@@ -1,10 +1,11 @@
 import type { AppTransaction, ParsedAITransaction, SplitUser, TransactionSplitInput } from '@/lib/types';
 
 /** What counts as "my" spend for this transaction — the number every KPI/report should sum. */
-export const netAmount = (t: AppTransaction): number => t.myShare ?? t.amount;
+/** What counts as my spend. The server decides (Settings → "count the full amount of splits I paid"); falls back to my share. */
+export const netAmount = (t: AppTransaction): number => t.netAmount ?? t.myShare ?? t.amount;
 
 /** The portion of this transaction that belongs to other people. */
-export const othersShare = (t: AppTransaction): number => t.amount - netAmount(t);
+export const othersShare = (t: AppTransaction): number => t.amount - (t.myShare ?? t.amount);
 
 /** True if a transaction has any split rows (equivalent to the server-derived isSplit flag). */
 export const hasSplit = (t: AppTransaction): boolean => !!t.isSplit && (t.splits?.length ?? 0) > 0;

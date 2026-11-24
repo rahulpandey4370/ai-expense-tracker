@@ -150,7 +150,7 @@ export async function monthlyStatementPdf(txs: AppTransaction[], label: string, 
   const splits = expenses.filter(t => t.isSplit);
   if (splits.length) {
     const paid = splits.reduce((s, t) => s + t.amount, 0);
-    const mine = splits.reduce((s, t) => s + netAmount(t), 0);
+    const mine = splits.reduce((s, t) => s + (t.myShare ?? t.amount), 0);
     const open = splits.flatMap(t => (t.splits ?? []).filter(x => !x.isSettled)).reduce((s, x) => s + (x.shareAmount ?? 0), 0);
     section('Split expenses', `${splits.length} shared`);
     ([['Total of shared bills', paid], ['Your share', mine], ['Still owed to you', open]] as const).forEach(([k, v]) => {
