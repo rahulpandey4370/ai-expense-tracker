@@ -3,20 +3,22 @@
 import './split.css';
 import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Activity, BarChart3, Home, Loader2, LogIn, LogOut, User, Users } from 'lucide-react';
+import { BarChart3, Bell, Check, FileUp, Home, Loader2, LogIn, LogOut, Search, User, Users, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { Avatar, EmptyState, splitSerif } from './bits';
+import { Avatar, EmptyState, SplitSheet, splitSerif } from './bits';
+import { LOOKS, sidekickOf, useLook } from './looks';
+import { ImportSheet } from './import-sheet';
 import { GroupView } from './group-view';
 import { ActivityTab, HomeTab, InsightsTab, PeopleTab } from './home-tabs';
 import { useSplitHome } from './use-split';
 
-type Tab = 'home' | 'people' | 'activity' | 'insights' | 'you';
+type Tab = 'home' | 'people' | 'insights' | 'you';
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'people', label: 'People', icon: Users },
-  { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'insights', label: 'Insights', icon: BarChart3 },
+  { id: 'you', label: 'You', icon: User },
 ];
 
 /**
@@ -24,8 +26,9 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
  * bottom nav, so tabs sit on top); `friend` is the standalone app with a bottom tab bar.
  */
 export function SplitApp({ mode }: { mode: 'owner' | 'friend' }) {
+  const [look] = useLook();
   return (
-    <div className={cn('split-ui min-h-full', splitSerif.variable, mode === 'friend' && 'min-h-dvh')}>
+    <div data-look={look} className={cn('split-ui min-h-full', splitSerif.variable, mode === 'friend' && 'min-h-dvh')}>
       <Suspense fallback={<Spinner />}>
         <SplitAppInner mode={mode} />
       </Suspense>
@@ -38,26 +41,43 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const groupId = params.get('g');
+  const expenseId = params.get('e');
+  const [look] = useLook();
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [bell, setBell] = useState(false);
   const tab = (params.get('tab') as Tab) || 'home';
   const home = useSplitHome();
   const { user, logout } = useAuth();
 
   const go = (next: { g?: string | null; tab?: Tab }) => {
     const sp = new URLSearchParams(params.toString());
-    if ('g' in next) next.g ? sp.set('g', next.g) : sp.delete('g');
-    if (next.tab) { sp.set('tab', next.tab); sp.delete('g'); }
+    if ('g' in next) { next.g ? sp.set('g', next.g) : sp.delete('g'); sp.delete('e'); }
+    if (next.tab) { sp.set('tab', next.tab); sp.delete('g'); sp.delete('e'); }
     router.push(`${pathname}${sp.size ? `?${sp}` : ''}`, { scroll: true });
   };
   const openGroup = (id: string) => go({ g: id });
-  const tabs = mode === 'friend' ? [...TABS, { id: 'you' as Tab, label: 'You', icon: User }] : TABS;
+  const openExpense = (g: string, e: string) => router.push(`${pathname}?g=${encodeURIComponent(g)}&e=${encodeURIComponent(e)}`, { scroll: true });
+  const tabs = TABS;
 
   return (
     <div className={cn('mx-auto w-full max-w-2xl px-4 pt-4', mode === 'friend' ? 'pb-28' : 'pb-8')}>
-      {mode === 'friend' && (
-        <header className="mb-4 flex items-center justify-between">
-          <p className="split-display text-2xl">FinWise <em>split</em></p>
-          {user && <Avatar name={user.name} size={34} />}
-        </header>
+      <header className="mb-4 flex items-center justify-between gap-3">
+        <button type="button" onClick={() => go({ tab: 'home' })} className="flex items-center gap-2" aria-label="Split home">
+          <span className="text-2xl" aria-hidden>{sidekickOf(look)}</span>
+          <span className="split-display text-[1.6rem]">finwise <em>split</em></span>
+        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" className="s-icon-btn" aria-label="Search" aria-pressed={searching}
+            onClick={() => { setSearching(v => !v); setQuery(''); if (groupId) go({ g: null }); }}><Search className="h-4 w-4" /></button>
+          <button type="button" className="s-icon-btn" aria-label="Activity" onClick={() => setBell(true)}><Bell className="h-4 w-4" /></button>
+        </div>
+      </header>
+      {searching && !groupId && (
+        <div className="mb-4 flex items-center gap-2">
+          <input autoFocus className="s-input" placeholder="Search expenses, groups, people" aria-label="Search" value={query} onChange={e => setQuery(e.target.value)} />
+          <button type="button" className="s-icon-btn shrink-0" aria-label="Close search" onClick={() => { setSearching(false); setQuery(''); }}><X className="h-4 w-4" /></button>
+        </div>
       )}
 
       {mode === 'owner' && !groupId && (
@@ -72,9 +92,9 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
       )}
 
       {groupId ? (
-        <GroupView groupId={groupId} onBack={() => go({ g: null })} />
+        <GroupView groupId={groupId} openExpenseId={expenseId} onBack={() => go({ g: null })} />
       ) : tab === 'you' ? (
-        <YouTab name={user?.name ?? ''} email={user?.email ?? ''} onLogout={logout} />
+        <YouTab name={user?.name ?? ''} email={user?.email ?? ''} onLogout={mode === 'friend' ? logout : undefined} onImported={openGroup} />
       ) : home.isLoading ? (
         <Spinner />
       ) : !home.data ? (
@@ -83,13 +103,15 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
         </EmptyState>
       ) : tab === 'people' ? (
         <PeopleTab data={home.data} onOpenGroup={openGroup} />
-      ) : tab === 'activity' ? (
-        <ActivityTab data={home.data} onOpenGroup={openGroup} />
       ) : tab === 'insights' ? (
         <InsightsTab data={home.data} />
       ) : (
-        <HomeTab data={home.data} onOpenGroup={openGroup} />
+        <HomeTab data={home.data} onOpenGroup={openGroup} onOpenExpense={openExpense} query={query} />
       )}
+
+      <SplitSheet open={bell} onOpenChange={setBell} title={<>Recent <em>activity</em></>}>
+        {home.data ? <ActivityTab data={home.data} onOpenGroup={id => { setBell(false); openGroup(id); }} /> : <Spinner />}
+      </SplitSheet>
 
       {mode === 'friend' && (
         <nav className="s-tabbar fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)]" aria-label="Split sections">
@@ -107,9 +129,11 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
   );
 }
 
-function YouTab({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {
+function YouTab({ name, email, onLogout, onImported }: { name: string; email: string; onLogout?: () => void; onImported: (id: string) => void }) {
+  const [look, setLook] = useLook();
+  const [importing, setImporting] = useState(false);
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <section className="s-hero flex items-center gap-4 p-5">
         <Avatar name={name || '?'} size={52} />
         <div className="min-w-0">
@@ -117,11 +141,32 @@ function YouTab({ name, email, onLogout }: { name: string; email: string; onLogo
           <p className="s-muted truncate text-sm">{email}</p>
         </div>
       </section>
+
+      <section>
+        <p className="split-display mb-1 text-2xl">Four looks. Four <em>sidekicks</em>.</p>
+        <p className="s-muted mb-3 text-sm">The whole split app re-dresses itself. Saved on this device.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {LOOKS.map(l => (
+            <button key={l.id} type="button" onClick={() => setLook(l.id)} aria-pressed={look === l.id}
+              className={cn('relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-[22px] p-4 text-left transition', look === l.id && 'ring-4 ring-offset-2 ring-[var(--s-accent)] ring-offset-[var(--s-bg)]')}
+              style={{ background: l.bg, color: l.fg }}>
+              <span className="text-[11px] font-semibold opacity-80">{l.name}</span>
+              <span className="split-display mt-1 text-lg leading-snug">{l.tagline}</span>
+              <span className="absolute -bottom-1 right-2 text-5xl drop-shadow" aria-hidden>{l.sidekick}</span>
+              {look === l.id && <Check className="absolute right-3 top-3 h-4 w-4" />}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <button type="button" className="s-pill w-full" onClick={() => setImporting(true)}><FileUp className="h-4 w-4" /> Import a group from Splitwise</button>
+
       <section className="s-card space-y-2 p-4 text-sm">
         <p className="font-semibold">How it works</p>
-        <p className="s-muted">Open a group, tap <strong>+</strong> to add what you paid and who it&apos;s for. Balances update for everyone. <strong>Settle up</strong> shows the fewest payments to clear it all; tap <strong>Mark as paid</strong> once money moves. No money moves through this app.</p>
+        <p className="s-muted">Open a group and tap the mic to say what happened, the scan button to snap a receipt, or the pencil to type it. Balances update for everyone. <strong>Settle up</strong> shows the fewest payments; tap <strong>Mark as paid</strong> once money moves. No money moves through this app.</p>
       </section>
-      <button type="button" className="s-pill w-full" onClick={onLogout}><LogOut className="h-4 w-4" /> Sign out</button>
+      {onLogout && <button type="button" className="s-pill w-full" onClick={onLogout}><LogOut className="h-4 w-4" /> Sign out</button>}
+      <ImportSheet open={importing} onOpenChange={setImporting} onImported={onImported} myName={name} />
     </div>
   );
 }
@@ -145,11 +190,12 @@ export function SplitGuest({ token }: { token: string }) {
     try { id ? localStorage.setItem(key, id) : localStorage.removeItem(key); } catch {}
   };
 
+  const [look] = useLook();
   return (
-    <div className={cn('split-ui min-h-dvh', splitSerif.variable)}>
+    <div data-look={look} className={cn('split-ui min-h-dvh', splitSerif.variable)}>
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <header className="mb-4 flex items-center justify-between">
-          <p className="split-display text-2xl">FinWise <em>split</em></p>
+          <p className="split-display text-2xl"><span className="mr-1" aria-hidden>{sidekickOf(look)}</span>finwise <em>split</em></p>
           {asMember ? (
             <button type="button" className="s-chip" onClick={() => pick(null)}>Not you?</button>
           ) : !isAuthenticated && (

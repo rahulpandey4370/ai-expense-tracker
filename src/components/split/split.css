@@ -13,6 +13,7 @@
   --s-ink: #0b1f1e;
   --s-sec: #4f6d6b;
   --s-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --s-pos: #15803d;
   color: var(--s-ink);
   background: var(--s-bg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
@@ -29,6 +30,7 @@
   --s-line: #1d3331;
   --s-ink: #e5f3f2;
   --s-sec: #93b1ae;
+  --s-pos: #4ade80;
 }
 
 .split-display { font-family: var(--font-split-serif), Georgia, serif; font-weight: 400; letter-spacing: -0.015em; line-height: 1.05; }
@@ -37,7 +39,7 @@
 .s-card { background: var(--s-card); border: 1px solid var(--s-line); border-radius: 22px; }
 .s-hero { background: linear-gradient(160deg, var(--s-tint), var(--s-soft)); border-radius: 26px; border: 1px solid var(--s-line); }
 .s-muted { color: var(--s-sec); }
-.s-owed { color: var(--s-deep); }
+.s-owed { color: var(--s-pos); } /* money coming back: green in every look */
 .s-owe { color: var(--s-coral); }
 
 .s-pill {
@@ -73,3 +75,43 @@
 .s-row + .s-row { border-top: 1px solid var(--s-line); }
 
 .s-sheet { background: var(--s-bg) !important; color: var(--s-ink); }
+
+/* ---------- Looks: each re-dresses the whole split UI (our own palettes) ---------- */
+.split-ui[data-look="onyx"]  { --s-accent: #2b2b2b; --s-deep: #111111; --s-soft: #e6e6e3; --s-tint: #f3f3f1; --s-bg: #fafaf8; --s-line: #e4e4e0; }
+.split-ui[data-look="coral"] { --s-accent: #e0485f; --s-deep: #b02a42; --s-soft: #fbd3da; --s-tint: #fdeef1; --s-bg: #fff8f8; --s-line: #f5dde1; }
+.split-ui[data-look="grape"] { --s-accent: #7b4fd6; --s-deep: #4f2aa6; --s-soft: #e2d7fb; --s-tint: #f1ecfe; --s-bg: #f8f5ff; --s-line: #e6ddfa; }
+.dark .split-ui[data-look="onyx"]  { --s-accent: #f2f2f2; --s-deep: #ffffff; --s-soft: #2a2a2a; --s-tint: #181818; --s-bg: #0b0b0b; --s-card: #141414; --s-line: #262626; }
+.dark .split-ui[data-look="coral"] { --s-accent: #ff6b81; --s-deep: #ff94a5; --s-soft: #4a1d27; --s-tint: #2a1217; --s-bg: #140a0c; --s-card: #1d1013; --s-line: #3a1d23; }
+.dark .split-ui[data-look="grape"] { --s-accent: #a98bff; --s-deep: #c3adff; --s-soft: #33215e; --s-tint: #1d1436; --s-bg: #0e0a1a; --s-card: #161026; --s-line: #2c2148; }
+.dark .split-ui[data-look="onyx"] .s-pill-primary, .dark .split-ui[data-look="onyx"] .s-chip[data-on="true"] { color: #111; }
+
+/* Hero: soft wash + faint grid, like a sheet of graph paper */
+.s-hero {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--s-deep) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--s-deep) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(165deg, var(--s-tint), var(--s-soft));
+  background-size: 22px 22px, 22px 22px, 100% 100%;
+}
+.s-icon-btn { display: inline-flex; height: 2.4rem; width: 2.4rem; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-ink); }
+.s-voice-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--s-deep); color: #fff; box-shadow: 0 0 0 6px color-mix(in srgb, var(--s-deep) 18%, transparent); }
+.dark .s-voice-btn { color: #0b0b0b; }
+.s-group-chip { display: inline-flex; align-items: center; gap: .25rem; border-radius: 6px; padding: 0 .4rem; font-size: .68rem; font-weight: 600; background: var(--s-soft); color: var(--s-deep); }
+
+/* Receipt: paper stays paper in dark mode too */
+.s-receipt {
+  --paper: #fbfaf5; --ink: #1d1d1b; --rule: #b9b6ab;
+  position: relative; background: var(--paper); color: var(--ink); padding: 1.4rem 1.3rem 2rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: .82rem; letter-spacing: .01em;
+  transform: rotate(-1.2deg); box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 0 rgba(0,0,0,.04);
+}
+.s-receipt::after { /* torn zig-zag bottom edge */
+  content: ""; position: absolute; left: 0; right: 0; bottom: -9px; height: 10px;
+  background: linear-gradient(-45deg, transparent 6px, var(--paper) 0) 0 0 / 12px 10px repeat-x,
+              linear-gradient(45deg, transparent 6px, var(--paper) 0) 0 0 / 12px 10px repeat-x;
+}
+.s-receipt .r-rule { border-top: 1px dashed var(--rule); margin: .8rem 0; }
+.s-receipt .r-row { display: flex; justify-content: space-between; gap: 1rem; padding: .18rem 0; }
+.s-receipt .r-quote { font-family: var(--font-split-serif), Georgia, serif; font-size: 1.35rem; line-height: 1.25; letter-spacing: -0.01em; }
+.s-receipt .r-quote em { font-style: italic; font-weight: 650; }
+.s-receipt .r-muted { color: #6f6c63; }

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, HandCoins, Loader2, Mic, Plus, Users } from 'lucide-react';
-import type { VoiceDraft } from '@/lib/split/voice';
+import { ArrowLeft, HandCoins, Loader2, Mic, Pencil, Plus, ScanLine, Users } from 'lucide-react';
 import { VoiceSheet } from './voice-sheet';
+import { ReceiptView } from './receipt-view';
 import type { Expense, GroupDetail, Settlement } from '@/lib/split/types';
 import { Avatar, AvatarStack, EmptyState, KIND_EMOJI, KIND_LABEL, inr, monthLabel, prettyDate } from './bits';
-import { ExpenseSheet } from './expense-sheet';
+import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
+import { useEffect } from 'react';
 import { SettleSheet } from './settle-sheet';
 import { MembersSheet } from './members-sheet';
 import { useSplitGroup } from './use-split';
@@ -15,15 +16,27 @@ interface Props {
   asMember?: string | null;
   onPickMember?: (memberId: string) => void;
   onBack?: () => void;
+  /** Open this expense's receipt view on load (tapped from the home feed). */
+  openExpenseId?: string | null;
 }
 
 type FeedItem = { kind: 'expense'; at: string; date: string; e: Expense } | { kind: 'settlement'; at: string; date: string; s: Settlement };
 
-export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Props) {
+export function GroupView({ groupId, token, asMember, onPickMember, onBack, openExpenseId }: Props) {
   const q = useSplitGroup(groupId, token, asMember);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice'>(null);
-  const [draft, setDraft] = useState<VoiceDraft | null>(null);
+  const [sheet, setSheet] = useState<null | 'expense' | 'settle' | 'members' | 'voice' | 'scan' | 'receipt'>(null);
+  const [draft, setDraft] = useState<ExpenseDraft | null>(null);
+  const [viewing, setViewing] = useState<Expense | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
+
+  // Deep link from the home feed: show that expense's receipt once the group loads.
+  useEffect(() => {
+    if (!openExpenseId || opened === openExpenseId || !q.data) return;
+    const e = q.data.expenses.find(x => x.id === openExpenseId);
+    if (e) { setViewing(e); setSheet('receipt'); }
+    setOpened(openExpenseId);
+  }, [openExpenseId, opened, q.data]);
 
   const feed = useMemo(() => {
     if (!q.data) return [] as [string, FeedItem[]][];
@@ -73,10 +86,11 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
   }
 
   const openExpense = (e: Expense | null) => { setEditing(e); setDraft(null); setSheet('expense'); };
-  const review = (v: VoiceDraft) => { setEditing(null); setDraft(v); setSheet('expense'); };
+  const review = (v: ExpenseDraft) => { setEditing(null); setDraft(v); setSheet('expense'); };
+  const view = (e: Expense) => { setViewing(e); setSheet('receipt'); };
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-8">
       <header className="flex items-center gap-3">
         {onBack && (
           <button type="button" onClick={onBack} aria-label="Back to groups" className="s-pill h-10 w-10 p-0"><ArrowLeft className="h-4 w-4" /></button>
@@ -103,11 +117,16 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
             {t.from === me ? <>You owe {label(t.to)} <span className="s-owe font-semibold">{inr(t.amount)}</span></> : <>{label(t.from)} owes you <span className="s-owed font-semibold">{inr(t.amount)}</span></>}
           </p>
         ))}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="s-pill s-pill-primary" onClick={() => setSheet('voice')}><Mic className="h-4 w-4" /> Say it</button>
-          <button type="button" className="s-pill" onClick={() => openExpense(null)}><Plus className="h-4 w-4" /> Add</button>
-          <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
-          <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
+        <div className="mt-5 flex items-end justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
+            <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" onClick={() => setSheet('scan')} aria-label="Scan a receipt"><ScanLine className="h-5 w-5" /></button>
+            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" onClick={() => openExpense(null)} aria-label="Type an expense"><Pencil className="h-5 w-5" /></button>
+            <button type="button" className="s-voice-btn h-14 w-14" onClick={() => setSheet('voice')} aria-label="Say an expense"><Mic className="h-6 w-6" /></button>
+          </div>
         </div>
       </section>
 
@@ -121,7 +140,7 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
           <ul className="s-card overflow-hidden">
             {items.map(it => it.kind === 'expense' ? (
               <li key={it.e.id}>
-                <ExpenseRow e={it.e} me={me} label={label} isOwner={d.isOwnerViewer} onClick={() => openExpense(it.e)} />
+                <ExpenseRow e={it.e} me={me} label={label} isOwner={d.isOwnerViewer} onClick={() => view(it.e)} />
               </li>
             ) : (
               <li key={it.s.id} className="s-row text-sm">
@@ -134,15 +153,10 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack }: Pr
         </section>
       ))}
 
-      <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-5 z-30 flex flex-col items-center gap-3 md:bottom-8">
-        <button type="button" onClick={() => openExpense(null)} aria-label="Add expense by typing"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-[var(--s-ink)] shadow-md"><Plus className="h-6 w-6" /></button>
-        <button type="button" onClick={() => setSheet('voice')} aria-label="Say an expense"
-          className="s-pill-primary flex h-16 w-16 items-center justify-center rounded-full shadow-lg"><Mic className="h-7 w-7" /></button>
-      </div>
-
       <ExpenseSheet open={sheet === 'expense'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} expense={editing} draft={draft} />
-      <VoiceSheet open={sheet === 'voice'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} onReview={review} />
+      <VoiceSheet open={sheet === 'voice' || sheet === 'scan'} startWithPhoto={sheet === 'scan'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} onReview={review} />
+      <ReceiptView open={sheet === 'receipt'} onOpenChange={o => !o && setSheet(null)} expense={viewing ? d.expenses.find(x => x.id === viewing.id) ?? viewing : null} detail={d} token={token}
+        onEdit={() => { if (viewing) openExpense(d.expenses.find(x => x.id === viewing.id) ?? viewing); }} />
       <SettleSheet open={sheet === 'settle'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} asMember={asMember} />
       <MembersSheet open={sheet === 'members'} onOpenChange={o => !o && setSheet(null)} detail={d} token={token} onDeleted={onBack} />
     </div>
@@ -155,18 +169,19 @@ function ExpenseRow({ e, me, label, isOwner, onClick }: { e: Expense; me: string
   const impact = iPaid ? e.amount - mine : -mine;
   return (
     <button type="button" onClick={onClick} className="s-row w-full text-left hover:bg-[var(--s-tint)]">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--s-tint)] text-xl" aria-hidden>{e.emoji ?? '🧾'}</span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-xl" aria-hidden>{e.emoji ?? '🧾'}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{e.description}</span>
-        <span className="s-muted block text-xs">
-          {label(e.paidBy)} paid {inr(e.amount)} · {prettyDate(e.date)}
+        <span className="block truncate font-semibold">{e.description}</span>
+        <span className="s-muted block truncate text-xs">
+          {iPaid ? 'You' : label(e.paidBy)} paid {inr(e.amount)} · {prettyDate(e.date)}
+          {e.meta.receipt && ' · 🧾'}
           {isOwner && mine > 0 && !e.inMySpending && <span className="s-owe"> · not in my spending</span>}
         </span>
       </span>
-      <span className="text-right text-xs">
-        {Math.abs(impact) < 0.01 ? <span className="s-muted">not involved</span> : impact > 0
-          ? <><span className="s-muted block">you lent</span><span className="s-owed text-sm font-semibold">{inr(impact)}</span></>
-          : <><span className="s-muted block">you borrowed</span><span className="s-owe text-sm font-semibold">{inr(impact)}</span></>}
+      <span className="text-right">
+        {Math.abs(impact) < 0.01 ? <span className="s-muted text-xs">not involved</span> : impact > 0
+          ? <><span className="s-owed block text-sm font-bold tabular-nums">{inr(impact)}</span><span className="s-muted text-[11px]">you lent</span></>
+          : <><span className="s-owe block text-sm font-bold tabular-nums">{inr(impact)}</span><span className="s-muted text-[11px]">you borrowed</span></>}
       </span>
     </button>
   );

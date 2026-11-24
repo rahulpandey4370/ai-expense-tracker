@@ -6,6 +6,7 @@ import { useCategories, usePaymentMethods } from '@/hooks/use-finance-queries';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, SplitSheet, emojiFor, inr, todayYmd } from './bits';
 import { useSplitAction } from './use-split';
+import { toDataUri } from '@/lib/attachment';
 
 const METHODS: { id: SplitMethod; label: string }[] = [
   { id: 'equal', label: 'Equally' },
@@ -27,10 +28,23 @@ interface Props {
   asMember?: string | null;
   expense?: Expense | null;
   /** Prefill from "Say it" for review (a new expense, not an edit). */
-  draft?: { description: string; amount: number | null; date: string | null; paidBy: string; method: SplitMethod; meta: Expense['meta'] } | null;
+  draft?: ExpenseDraft | null;
+  /** Shown above the form (e.g. a group switcher). */
+  header?: React.ReactNode;
+  /** Prefill the owner's spending fields (from the transaction form / SMS). */
+  spendingDefaults?: Partial<{ categoryId: string; paymentMethodId: string; expenseType: ExpenseType }>;
+  onSaved?: (expenseId: string) => void;
 }
 
-export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense, draft }: Props) {
+export interface ExpenseDraft {
+  description: string; amount: number | null; date: string | null; paidBy: string; method: SplitMethod; meta: Expense['meta'];
+  /** Words it came from (voice/SMS/chat), kept for the receipt view. */
+  said?: string;
+  /** A photo to attach once saved (scan, AI entry receipt). */
+  receiptDataUri?: string;
+}
+
+export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expense, draft, header, spendingDefaults, onSaved }: Props) {
   const { toast } = useToast();
   const action = useSplitAction(token);
   const people = detail.members.filter(m => !m.removed);
@@ -48,6 +62,8 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   const [items, setItems] = useState<{ name: string; amount: string; memberIds: string[] }[]>([]);
   const [coveredBy, setCoveredBy] = useState<string>('');
   const [inSpending, setInSpending] = useState(true);
+  const [receipt, setReceipt] = useState<string | null>(null); // data URI waiting to be attached on save
+  const [receiptBusy, setReceiptBusy] = useState(false);
   const [spending, setSpending] = useState<{ categoryId: string; paymentMethodId: string; expenseType: ExpenseType }>({ categoryId: '', paymentMethodId: '', expenseType: 'want' });
 
   // Reset the form every time the sheet opens.
@@ -69,6 +85,8 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
       const saved = JSON.parse(localStorage.getItem(SPENDING_KEY) ?? 'null');
       if (saved) setSpending(saved);
     } catch {}
+    if (spendingDefaults) setSpending(s => ({ ...s, ...Object.fromEntries(Object.entries(spendingDefaults).filter(([, v]) => v)) }));
+    setReceipt(draft?.receiptDataUri ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense?.id, draft]);
 
@@ -101,13 +119,21 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
     }
     if (wantSpending) try { localStorage.setItem(SPENDING_KEY, JSON.stringify(spending)); } catch {}
     try {
-      await action.mutateAsync({
+      const res = await action.mutateAsync({
         op: 'saveExpense', groupId: detail.group.id, id: expense?.id, description: description.trim(), amount: total, date,
         emoji: emojiFor(description), method, paidBy, participants, values: num(values), items: parsedItems,
         coveredBy: coveredBy || undefined, asMember, spending: wantSpending ? spending : undefined,
+        said: !expense ? draft?.said : undefined,
       });
+      const savedId: string = res.id;
+      if (receipt) {
+        // The expense is saved either way; a failed upload just says so.
+        await action.mutateAsync({ op: 'attachReceipt', groupId: detail.group.id, expenseId: savedId, dataUri: receipt })
+          .catch((e: any) => toast({ title: `Saved, but the receipt didn't upload: ${e.message}`, variant: 'destructive' }));
+      }
       toast({ title: expense ? 'Expense updated' : 'Expense added' });
       onOpenChange(false);
+      onSaved?.(savedId);
     } catch (e: any) {
       toast({ title: e.message, variant: 'destructive' });
     }
@@ -127,6 +153,7 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   return (
     <SplitSheet open={open} onOpenChange={onOpenChange} title={expense ? <>Edit <em>expense</em></> : <>Add an <em>expense</em></>}>
       <div className="space-y-5">
+        {header}
         {/* Amount + what */}
         <div className="s-hero flex flex-col gap-3 p-4">
           <div className="flex items-baseline gap-1">
@@ -246,6 +273,30 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
                 {!(paidBy in preview.shares) && <li className="s-owed">{label(paidBy)} paid {inr(total)} and gets it all back</li>}
               </ul>
             )}
+          </section>
+        )}
+
+        {/* Receipt photo */}
+        {!bridged && (
+          <section className="s-card flex items-center gap-3 p-3">
+            {receipt ? (
+              receipt.startsWith('data:application/pdf')
+                ? <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-[var(--s-tint)] text-xs font-semibold">PDF</span>
+                : <img src={receipt} alt="Receipt to attach" className="h-14 w-14 rounded-lg object-cover" />
+            ) : <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-[var(--s-tint)] text-2xl" aria-hidden>🧾</span>}
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-medium">{receipt ? 'Receipt attached' : expense?.meta.receipt ? 'Has a receipt' : 'Receipt photo'}</p>
+              <p className="s-muted text-xs">{receipt ? 'Saved with the expense; everyone in the group can view it.' : 'Optional. Everyone in the group can view it.'}</p>
+            </div>
+            <label className="s-pill cursor-pointer px-3 py-1.5 text-xs">
+              {receiptBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : receipt || expense?.meta.receipt ? 'Replace' : 'Add'}
+              <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={async ev => {
+                const f = ev.target.files?.[0]; if (!f) return;
+                setReceiptBusy(true);
+                try { setReceipt(await toDataUri(f)); } catch (e: any) { toast({ title: e.message, variant: 'destructive' }); }
+                finally { setReceiptBusy(false); ev.target.value = ''; }
+              }} />
+            </label>
           </section>
         )}
 

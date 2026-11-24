@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { formatCurrency } from '@/lib/format';
 import type { GroupKind } from '@/lib/split/types';
 export { emojiFor } from '@/lib/split/emoji';
+import { useLook } from './looks';
 
 export const splitSerif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-split-serif' });
 
@@ -68,10 +69,12 @@ export function EmptyState({ title, body, children }: { title: React.ReactNode; 
 
 /** Bottom sheet carrying the split tokens (sheets portal outside .split-ui). */
 export function SplitSheet({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: React.ReactNode; children: React.ReactNode }) {
+  const [look] = useLook();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        data-look={look}
         className={cn('split-ui s-sheet max-h-[92dvh] overflow-y-auto rounded-t-[28px] border-0 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 sm:mx-auto sm:max-w-lg', splitSerif.variable)}
       >
         <SheetHeader className="mb-3 text-left">

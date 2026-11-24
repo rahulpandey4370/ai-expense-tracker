@@ -100,9 +100,10 @@ export function ImportSheet({ open, onOpenChange, onImported, myName }: { open: 
               {l.skipped.otherCurrency > 0 && ` · ${l.skipped.otherCurrency} in other currencies skipped`}
               {l.skipped.zero > 0 && ` · ${l.skipped.zero} with no effect skipped`}
             </p>
+            {p.currency !== 'INR' && <p className="s-owe text-sm font-medium">This group is in {p.currency}. Only INR (₹) groups can be imported.</p>}
             {l.balanceMismatch && <p className="s-owe text-sm">Balances don&apos;t exactly match Splitwise&apos;s totals; check the group after importing.</p>}
             <p className="s-muted text-xs">Receipts, comments and recurring schedules aren&apos;t in the export, so they aren&apos;t imported.</p>
-            <button type="button" className="s-pill s-pill-primary w-full py-3 text-base" disabled={me === null || action.isPending} onClick={run}>
+            <button type="button" className="s-pill s-pill-primary w-full py-3 text-base" disabled={me === null || action.isPending || p.currency !== 'INR'} onClick={run}>
               {action.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {me === null ? 'Pick which one is you' : 'Import group'}
             </button>
           </>

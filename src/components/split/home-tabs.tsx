@@ -1,39 +1,48 @@
 import { useState } from 'react';
-import { ChevronRight, FileUp, Loader2, Plus, X } from 'lucide-react';
+import { useEffect } from 'react';
+import { AudioLines, ChevronRight, FileUp, Loader2, Pencil, Plus, ScanLine, X } from 'lucide-react';
 import { ImportSheet } from './import-sheet';
-import type { GroupKind, HomeData } from '@/lib/split/types';
+import type { GroupKind, GroupSummary, HomeData } from '@/lib/split/types';
+import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
+import { VoiceSheet } from './voice-sheet';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, prettyDate } from './bits';
-import { useSplitAction } from './use-split';
+import { useSplitAction, useSplitGroup } from './use-split';
 
-/** Home: the headline balance, then groups by recent activity. */
-export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (id: string) => void }) {
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Home: hero (balance, this week, capture buttons), groups strip, then a Settl-style feed. */
+export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
+  data: HomeData; onOpenGroup: (id: string) => void; onOpenExpense: (groupId: string, expenseId: string) => void; query: string;
+}) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const net = data.totals.owed - data.totals.owe;
-  const active = data.groups.filter(g => !g.archived);
-  const archived = data.groups.filter(g => g.archived);
+  const [capture, setCapture] = useState<CaptureMode>(null);
+  const net = r2(data.totals.owed - data.totals.owe);
+  const q = query.trim().toLowerCase();
+  const groups = data.groups.filter(g => !g.archived && (!q || g.name.toLowerCase().includes(q)));
+  const feed = data.activity.filter(a => !q || `${a.title} ${a.groupName} ${a.who}`.toLowerCase().includes(q));
 
   return (
     <div className="space-y-5">
-      <section className="s-hero p-6">
-        <p className="s-muted text-sm">Hi {data.me.name.split(' ')[0]}</p>
-        {Math.abs(net) < 0.01 && data.totals.owed < 0.01 ? (
-          <p className="split-display mt-1 text-4xl">You&apos;re all <em>square</em>.</p>
-        ) : (
-          <div className="mt-1 flex items-baseline justify-between gap-3">
-            <p className="split-display text-3xl">{net >= 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
-            <p className={`text-4xl font-bold tabular-nums ${net >= 0 ? 's-owed' : 's-owe'}`}>{inr(net)}</p>
-          </div>
-        )}
-        {(data.totals.owed > 0 || data.totals.owe > 0) && (
-          <p className="s-muted mt-2 text-sm">
-            <span className="s-owed font-semibold">{inr(data.totals.owed)}</span> coming back · <span className="s-owe font-semibold">{inr(data.totals.owe)}</span> to pay
+      <section className="s-hero flex min-h-[19rem] flex-col p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="split-display text-xl">{Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
+          <p className={`text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</p>
+        </div>
+        <div className="flex flex-1 items-center py-6">
+          <p className="split-display text-[2.6rem] leading-[1.05] text-[color-mix(in_srgb,var(--s-ink)_78%,transparent)]">
+            {data.weekCount > 0
+              ? <><em className="text-[var(--s-ink)]">{data.weekCount}</em> {data.weekCount === 1 ? 'expense' : 'expenses'} logged this week</>
+              : <>Snap it, say it, or <em className="text-[var(--s-ink)]">type</em> it.</>}
           </p>
-        )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
-          <button type="button" className="s-pill" onClick={() => setImporting(true)}><FileUp className="h-4 w-4" /> Import from Splitwise</button>
+        </div>
+        <div className="flex items-end justify-between">
+          <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" aria-label="Scan a receipt" onClick={() => setCapture('scan')}><ScanLine className="h-5 w-5" /></button>
+          <div className="flex items-center gap-3">
+            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" aria-label="Type an expense" onClick={() => setCapture('type')}><Pencil className="h-5 w-5" /></button>
+            <button type="button" className="s-voice-btn h-16 w-16" aria-label="Say an expense" onClick={() => setCapture('voice')}><AudioLines className="h-7 w-7" /></button>
+          </div>
         </div>
       </section>
 
@@ -42,7 +51,7 @@ export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (i
           <p className="text-sm font-semibold">Not in your spending yet</p>
           <p className="s-muted mb-2 text-xs">Friends added these and you have a share. Open one and save it to count it in your budget.</p>
           {data.unlinked.slice(0, 4).map(u => (
-            <button key={u.expenseId} type="button" onClick={() => onOpenGroup(u.groupId)} className="flex w-full items-center justify-between py-1.5 text-left text-sm">
+            <button key={u.expenseId} type="button" onClick={() => onOpenExpense(u.groupId, u.expenseId)} className="flex w-full items-center justify-between py-1.5 text-left text-sm">
               <span className="truncate">{u.description} <span className="s-muted">· {u.groupName} · {prettyDate(u.date)}</span></span>
               <span className="s-owe font-semibold">{inr(u.myShare)}</span>
             </button>
@@ -50,32 +59,107 @@ export function HomeTab({ data, onOpenGroup }: { data: HomeData; onOpenGroup: (i
         </section>
       )}
 
-      {active.length === 0 ? (
-        <EmptyState title={<>Start a <em>group</em></>} body="A trip, your flat, a couple, or one dinner — add people and start logging who paid.">
-          <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
-        </EmptyState>
-      ) : (
-        <ul className="s-card overflow-hidden">
-          {active.map(g => (
-            <li key={g.id}>
-              <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]" onClick={() => onOpenGroup(g.id)}>
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--s-tint)] text-2xl" aria-hidden>{g.emoji ?? KIND_EMOJI[g.kind]}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">{g.name}</span>
-                  <span className="s-muted block text-xs">{KIND_LABEL[g.kind]} · {g.memberCount} people · {inr(g.totalSpent)}</span>
-                </span>
-                <BalanceText value={g.myBalance} className="text-right text-xs" />
-                <ChevronRight className="s-muted h-4 w-4" />
+      <section>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="s-muted text-xs font-semibold uppercase tracking-wide">Groups</p>
+          <div className="flex gap-1">
+            <button type="button" className="s-chip" onClick={() => setImporting(true)}><FileUp className="mr-1 inline h-3 w-3" />Splitwise</button>
+            <button type="button" className="s-chip" onClick={() => setCreating(true)}><Plus className="mr-1 inline h-3 w-3" />New</button>
+          </div>
+        </div>
+        {groups.length === 0 ? (
+          <EmptyState title={<>Start a <em>group</em></>} body="A trip, your flat, a couple, or one dinner — add people and start logging who paid.">
+            <button type="button" className="s-pill s-pill-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New group</button>
+          </EmptyState>
+        ) : (
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
+            {groups.map(g => (
+              <button key={g.id} type="button" onClick={() => onOpenGroup(g.id)} className="s-card w-40 shrink-0 snap-start p-3 text-left">
+                <span className="text-2xl" aria-hidden>{g.emoji ?? KIND_EMOJI[g.kind]}</span>
+                <span className="mt-1 block truncate font-semibold">{g.name}</span>
+                <BalanceText value={g.myBalance} className="block truncate text-xs" />
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
+            ))}
+          </div>
+        )}
+      </section>
 
-      {archived.length > 0 && <p className="s-muted text-center text-xs">{archived.length} archived group(s)</p>}
+      <section>
+        <p className="s-muted mb-2 px-1 text-xs font-semibold uppercase tracking-wide">Recent</p>
+        {feed.length === 0 ? (
+          <p className="s-muted px-1 text-sm">{q ? 'Nothing matches that search.' : 'Expenses from your groups show up here.'}</p>
+        ) : (
+          <ul className="s-card overflow-hidden">
+            {feed.slice(0, 25).map(a => (
+              <li key={a.id}>
+                <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]"
+                  onClick={() => (a.kind === 'expense' ? onOpenExpense(a.groupId, a.id) : onOpenGroup(a.groupId))}>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-xl" aria-hidden>{a.emoji ?? '🧾'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{a.title}</span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <span className="s-group-chip">{a.groupName}</span>
+                      <span className="s-muted truncate">{a.kind === 'settlement' ? prettyDate(a.at.slice(0, 10)) : `${a.paidByMe ? 'You' : a.who} paid ${inr(a.amount)}`}</span>
+                    </span>
+                  </span>
+                  {Math.abs(a.myImpact) >= 0.01 && (
+                    <span className="text-right">
+                      <span className={`block text-sm font-bold tabular-nums ${a.myImpact > 0 ? 's-owed' : 's-owe'}`}>{inr(a.myImpact)}</span>
+                      <span className="s-muted text-[11px]">{a.kind === 'settlement' ? (a.myImpact > 0 ? 'received' : 'paid back') : a.myImpact > 0 ? 'you lent' : 'you owe'}</span>
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <CreateGroupSheet open={creating} onOpenChange={setCreating} onCreated={onOpenGroup} />
       <ImportSheet open={importing} onOpenChange={setImporting} onImported={onOpenGroup} myName={data.me.name} />
+      <HomeCapture mode={capture} onClose={() => setCapture(null)} groups={data.groups.filter(g => !g.archived)} onNeedGroup={() => { setCapture(null); setCreating(true); }} />
     </div>
+  );
+}
+
+type CaptureMode = null | 'voice' | 'scan' | 'type';
+const LAST_GROUP = 'split-last-group';
+
+/** Capture from Home: into the last-used group, with chips to switch. */
+function HomeCapture({ mode, onClose, groups, onNeedGroup }: { mode: CaptureMode; onClose: () => void; groups: GroupSummary[]; onNeedGroup: () => void }) {
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ExpenseDraft | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const group = useSplitGroup(mode || reviewing ? groupId : null);
+
+  useEffect(() => {
+    if (!mode) return;
+    if (groups.length === 0) { onNeedGroup(); return; }
+    let last: string | null = null;
+    try { last = localStorage.getItem(LAST_GROUP); } catch {}
+    setGroupId(groups.some(g => g.id === last) ? last : groups[0].id); // groups are newest-activity first
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  const pick = (id: string) => { setGroupId(id); try { localStorage.setItem(LAST_GROUP, id); } catch {} };
+  const switcher = (
+    <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="radiogroup" aria-label="Group">
+      {groups.map(g => (
+        <button key={g.id} type="button" role="radio" aria-checked={g.id === groupId} className="s-chip shrink-0" data-on={g.id === groupId} onClick={() => pick(g.id)}>
+          {g.emoji ?? KIND_EMOJI[g.kind]} {g.name}
+        </button>
+      ))}
+    </div>
+  );
+  const d = group.data;
+  if (!d) return null;
+  return (
+    <>
+      <VoiceSheet open={mode === 'voice' || mode === 'scan'} startWithPhoto={mode === 'scan'} onOpenChange={o => !o && onClose()} detail={d}
+        header={switcher} onReview={v => { setDraft(v); onClose(); setReviewing(true); }} />
+      <ExpenseSheet open={mode === 'type' || reviewing} onOpenChange={o => { if (!o) { onClose(); setReviewing(false); setDraft(null); } }}
+        detail={d} draft={draft} header={switcher} />
+    </>
   );
 }
 
