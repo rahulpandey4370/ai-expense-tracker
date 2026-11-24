@@ -29,7 +29,7 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('updateMember'), groupId: id, memberId: id, name: name.optional(),
     email: email.nullable().optional(), upiId: z.string().max(100).nullable().optional() }),
   z.object({ op: z.literal('removeMember'), groupId: id, memberId: id }),
-  z.object({ op: z.literal('saveExpense'), groupId: id, id: id.optional(), description: z.string().trim().min(1).max(120),
+  z.object({ op: z.literal('saveExpense'), groupId: id, id: id.optional(), description: z.string().trim().min(1).max(120), said: z.string().max(600).optional(),
     amount: money, date, emoji, method: z.enum(['equal', 'exact', 'percent', 'shares', 'items', 'cover']), paidBy: id,
     participants: z.array(id).max(50), values: z.record(id, z.number().min(0).max(100_000_000)).optional(),
     items: z.array(z.object({ name: z.string().trim().max(80), amount: z.number().min(0).max(100_000_000), memberIds: z.array(id).max(50) })).max(100).optional(),
@@ -39,6 +39,9 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('settle'), groupId: id, from: id, to: id, amount: money, date, note: z.string().max(200).optional(), asMember }),
   z.object({ op: z.literal('deleteSettlement'), groupId: id, settlementId: id }),
   z.object({ op: z.literal('shareLink'), groupId: id, action: z.enum(['create', 'revoke']) }),
+  z.object({ op: z.literal('attachReceipt'), groupId: id, expenseId: id, dataUri: z.string().max(7_500_000) }),
+  z.object({ op: z.literal('receiptUrl'), groupId: id, expenseId: id }),
+  z.object({ op: z.literal('scanReceipt'), groupId: id, dataUri: z.string().max(7_500_000), text: z.string().max(400).optional(), today: date, asMember }),
   z.object({ op: z.literal('parseVoice'), groupId: id, text: z.string().trim().min(2).max(600), today: date, asMember }),
   z.object({ op: z.literal('importSplitwise'), csv: z.string().min(10).max(4_000_000), groupName: name, meIndex: z.number().int().min(0).max(200),
     emails: z.array(z.object({ index: z.number().int().min(0).max(200), email })).max(200).optional() }),
@@ -71,6 +74,9 @@ export async function POST(req: Request) {
         case 'deleteSettlement': return svc.deleteSettlement(access, body.groupId, body.settlementId);
         case 'shareLink': return svc.shareLink(access, body.groupId, body.action);
         case 'parseVoice': return svc.parseVoice(access, body);
+        case 'attachReceipt': return svc.attachReceipt(access, body);
+        case 'receiptUrl': return svc.receiptUrl(access, body.groupId, body.expenseId);
+        case 'scanReceipt': return svc.scanReceipt(access, body);
         case 'importSplitwise': return svc.importSplitwise(needUser(), body);
       }
     })();

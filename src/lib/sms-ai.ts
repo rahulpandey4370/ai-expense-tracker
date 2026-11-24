@@ -5,7 +5,7 @@ import { getSupabase } from '@/lib/supabase';
 import { redactSms } from '@/lib/sms';
 import { parseTransactionsFromText } from '@/ai/flows/parse-transactions-flow';
 
-export const SMS_MODEL = 'openai::gpt-5.6-luna';
+export const SMS_MODEL = 'openai::gpt-6-luna';
 const FALLBACK_CATEGORY = /^(others?|misc(ellaneous)?|general|uncategori[sz]ed)$/i;
 const EXPENSE_TYPES = ['need', 'want', 'investment', 'investment_expense'] as const;
 type ExpenseType = (typeof EXPENSE_TYPES)[number];

@@ -1,7 +1,7 @@
 // "Say it": a spoken/typed sentence → a split expense draft for one group.
 import { z } from 'zod';
 import { callStructuredLLM } from '@/lib/ai-client';
-import { getDefaultModelForTask } from '@/lib/task-models';
+import { SMS_MODEL } from '@/lib/sms-ai';
 import { withAiFeature } from '@/lib/usage';
 import { getSupabase } from '@/lib/supabase';
 import { resolveShares, type SplitMethod } from './math';
@@ -26,7 +26,7 @@ const PROMPT = `You turn one spoken sentence about a shared expense into a struc
 Group members (id: name):
 {{{members}}}
 The speaker is "{{{speaker}}}" (id {{{speakerId}}}). "I", "me", "my" mean the speaker.
-Today is {{{today}}}. Amounts are Indian rupees unless said otherwise.
+Today is {{{today}}}. All amounts are Indian rupees (INR, ₹); treat any number as rupees.
 
 Rules:
 - paidBy: who paid. If not said, the speaker.
@@ -42,6 +42,17 @@ Sentence: """{{{text}}}"""`;
 
 const DAILY_LIMIT = Number(process.env.SPLIT_VOICE_DAILY_LIMIT ?? 150);
 
+/** Split voice + receipt scan use the same Luna model as the SMS flow (override with SPLIT_AI_MODEL). */
+export const SPLIT_MODEL = process.env.SPLIT_AI_MODEL || SMS_MODEL;
+
+// ponytail: one app-wide daily cap (friends and link guests spend the owner's AI credits); per-person caps if it gets abused.
+export async function assertAiBudget() {
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count } = await getSupabase().from('ai_usage').select('id', { count: 'exact', head: true })
+    .in('feature', ['split_voice', 'split_scan']).gte('created_at', since);
+  if ((count ?? 0) >= DAILY_LIMIT) throw new Error('Voice and scan are resting for today. Type the expense instead.');
+}
+
 export interface VoiceDraft {
   description: string;
   amount: number | null;
@@ -54,13 +65,9 @@ export interface VoiceDraft {
 }
 
 export async function parseVoiceDraft(text: string, members: { id: string; name: string }[], speaker: { id: string; name: string }, today: string): Promise<VoiceDraft> {
-  // ponytail: one app-wide daily cap (friends and link guests spend the owner's AI credits); per-person caps if it gets abused.
-  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { count } = await getSupabase().from('ai_usage').select('id', { count: 'exact', head: true }).eq('feature', 'split_voice').gte('created_at', since);
-  if ((count ?? 0) >= DAILY_LIMIT) throw new Error('Voice entry is resting for today. Type the expense instead.');
-
+  await assertAiBudget();
   const raw = await withAiFeature('split_voice', () => callStructuredLLM(
-    getDefaultModelForTask('transaction_parsing'),
+    SPLIT_MODEL,
     PROMPT,
     { members: members.map(m => `${m.id}: ${m.name}`).join('\n'), speaker: speaker.name, speakerId: speaker.id, today, text: text.slice(0, 600) },
     DraftSchema,

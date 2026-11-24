@@ -20,6 +20,10 @@ export interface ExpenseMeta {
   items?: SplitItem[];
   coveredBy?: string;
   imported?: string | boolean;
+  /** Storage path of an attached receipt photo/PDF. */
+  receipt?: string;
+  /** Words it was created from (voice, SMS note, chat). */
+  said?: string;
 }
 
 export interface Expense {
@@ -90,6 +94,9 @@ export interface ActivityItem {
   id: string;
   groupId: string;
   groupName: string;
+  groupEmoji: string | null;
+  emoji: string | null;
+  paidByMe: boolean;
   kind: 'expense' | 'settlement';
   title: string;
   who: string;
@@ -104,6 +111,8 @@ export interface HomeData {
   groups: GroupSummary[];
   people: PersonBalance[];
   activity: ActivityItem[];
+  /** Expenses added across my groups in the last 7 days. */
+  weekCount: number;
   /** My share of group spending per month, oldest first. */
   spentByMonth: { month: string; amount: number }[];
   /** Expenses that include me but aren't in my personal spending yet (owner only). */

@@ -61,7 +61,8 @@ export function parseSplitwise(text: string): ParsedSplitwise {
   }
   const counts = new Map<string, number>();
   rows.forEach(r => counts.set(r.currency, (counts.get(r.currency) ?? 0) + 1));
-  const currency = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'INR';
+  // The app is INR-only: import the INR rows; anything else is skipped and reported.
+  const currency = counts.has('INR') ? 'INR' : [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'INR';
   return { members, rows, currency, totals: totalsByCurrency.get(currency) ?? null };
 }
 

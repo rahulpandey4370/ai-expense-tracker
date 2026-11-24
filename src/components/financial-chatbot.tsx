@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { askFinancialBot } from "@/ai/flows/financial-chatbot-flow";
 import { clearChat, getChat, rememberFact, renameChat, undoChatDelete } from "@/ai/flows/chat-actions";
 import type { AppTransaction } from "@/lib/types";
+import { toAttachment } from '@/lib/attachment';
 import type { ChatAttachment, ChatItem, ChatOptions, ChatTurnResult } from "@/lib/chat-types";
 import { cn } from '@/lib/utils';
 import { useAIModel } from '@/contexts/AIModelContext';
@@ -82,7 +83,6 @@ const CURRENT_CHAT_KEY = 'finwise.chat.current.v2';
 const CHAT_VERBOSE_KEY = 'finwise.chat.verbose.v1';
 const CHAT_INVESTMENT_MODE_KEY = 'finwise.chat.investmentMode.v1';
 const MAX_FILES = 3;
-const MAX_PDF_BYTES = 2_800_000;
 
 function readFlag(key: string): boolean {
   try { return sessionStorage.getItem(key) === '1'; } catch { return false; }
@@ -95,26 +95,6 @@ function readCurrentChat(): string | undefined {
 }
 function writeCurrentChat(id?: string) {
   try { if (id) localStorage.setItem(CURRENT_CHAT_KEY, id); else localStorage.removeItem(CURRENT_CHAT_KEY); } catch { /* private mode */ }
-}
-
-/** Photos are shrunk to ≤1600px JPEG in the browser so they fit the request limit. */
-async function toAttachment(file: File): Promise<ChatAttachment> {
-  if (file.type === 'application/pdf') {
-    if (file.size > MAX_PDF_BYTES) throw new Error(`${file.name} is over 2.8 MB.`);
-    const buf = new Uint8Array(await file.arrayBuffer());
-    let bin = '';
-    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-    return { name: file.name, mime: 'application/pdf', dataBase64: btoa(bin) };
-  }
-  if (!file.type.startsWith('image/')) throw new Error(`${file.name}: attach a photo or a PDF.`);
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-  return { name: file.name, mime: 'image/jpeg', dataBase64: dataUrl.split(',')[1] };
 }
 
 /** Slash commands, run in the browser without asking the AI (except /review). */

@@ -8,6 +8,7 @@ import { resolveShares, computeBalances, simplifyDebts, ownerSpending, type Spli
 import { canSeeGroup, pickMe, canEditMember, type Access, type MemberRow } from './access';
 import { parseSplitwise, splitwiseToLedger } from './splitwise';
 import { parseVoiceDraft } from './voice';
+import { decodeDataUri, removeReceipt, scanReceiptDraft, signedReceiptUrl, storeReceipt } from './receipt';
 import { emojiFor } from './emoji';
 import type {
   ActivityItem, Expense, GroupDetail, GroupInfo, GroupKind, GroupSummary, HomeData, Member, PersonBalance, Settlement,
@@ -134,6 +135,8 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
   const activity: ActivityItem[] = [];
   const unlinked: HomeData['unlinked'] = [];
   const byMonth = new Map<string, number>();
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  let weekCount = 0;
 
   for (const g of loaded.groups) {
     const { members, expenses, settlements, balances, transfers } = ledgerOf(g.id, loaded);
@@ -160,9 +163,11 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
 
     for (const e of expenses) {
       const mine = e.shares[me.id] ?? 0;
+      if (e.createdAt >= weekAgo) weekCount++;
       if (mine > 0) byMonth.set(e.date.slice(0, 7), r2((byMonth.get(e.date.slice(0, 7)) ?? 0) + mine));
       activity.push({
-        id: e.id, groupId: g.id, groupName: g.name, kind: 'expense', title: e.description, who: name(e.paidBy),
+        id: e.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, emoji: e.emoji, paidByMe: e.paidBy === me.id,
+        kind: 'expense', title: e.description, who: name(e.paidBy),
         amount: e.amount, myImpact: e.paidBy === me.id ? r2(e.amount - mine) : -mine, at: e.createdAt,
       });
       if (user.isOwner && mine > 0 && !e.inMySpending && !e.meta?.imported) {
@@ -171,7 +176,8 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     }
     for (const s of settlements) {
       activity.push({
-        id: s.id, groupId: g.id, groupName: g.name, kind: 'settlement', title: `${name(s.from)} paid ${name(s.to)}`,
+        id: s.id, groupId: g.id, groupName: g.name, groupEmoji: g.emoji, emoji: '💸', paidByMe: s.from === me.id,
+        kind: 'settlement', title: `${name(s.from)} paid ${name(s.to)}`,
         who: name(s.from), amount: s.amount, myImpact: s.from === me.id ? -s.amount : s.to === me.id ? s.amount : 0, at: s.createdAt,
       });
     }
@@ -187,6 +193,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     groups: groups.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity)),
     people: peopleList,
     activity: activity.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60),
+    weekCount,
     spentByMonth: [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, amount]) => ({ month, amount })),
     unlinked: unlinked.slice(0, 20),
   };
@@ -319,6 +326,8 @@ export interface SaveExpenseInput {
   coveredBy?: string;
   asMember?: string | null;
   spending?: SpendingInput;
+  /** What was said/typed to create it (voice, SMS note) — shown on the receipt view. */
+  said?: string;
 }
 
 export async function saveExpense(access: Access, input: SaveExpenseInput) {
@@ -344,7 +353,12 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
       id, group_id: input.groupId, description: input.description, amount: input.amount, date: input.date,
       emoji: input.emoji ?? null, method: input.method, paid_by: input.paidBy,
       created_by: existing?.created_by ?? o.me.id, transaction_id: existing?.transaction_id ?? null,
-      meta: { participants: input.participants, values: input.values, items: input.items, coveredBy: input.coveredBy },
+      meta: {
+        // keep what edits don't touch: the receipt photo, the original words, the import marker
+        receipt: existing?.meta?.receipt, imported: existing?.meta?.imported,
+        said: input.said ?? existing?.meta?.said,
+        participants: input.participants, values: input.values, items: input.items, coveredBy: input.coveredBy,
+      },
     },
     p_shares: Object.entries(shares).map(([member_id, amount]) => ({ member_id, amount })),
   }));
@@ -362,6 +376,7 @@ export async function deleteExpense(access: Access, groupId: string, expenseId: 
   const e = o.loaded.expenses.find(x => x.id === expenseId);
   if (!e) throw new SplitError(404, 'Expense not found.');
   await must(db().from('split_expenses').delete().eq('id', expenseId).eq('group_id', groupId));
+  if (e.meta?.receipt) await removeReceipt(e.meta.receipt);
   // Only the owner removes their own personal transaction; for anyone else the FK just unlinks it.
   if (e.transaction_id && access.user?.isOwner) await must(db().from('transactions').delete().eq('id', e.transaction_id));
   return { ok: true };
@@ -487,6 +502,7 @@ export async function importSplitwise(user: SessionUser, input: { csv: string; g
   let parsed;
   try { parsed = parseSplitwise(input.csv); } catch (e) { throw new SplitError(400, (e as Error).message); }
   if (input.meIndex < 0 || input.meIndex >= parsed.members.length) throw new SplitError(400, 'Pick which column is you.');
+  if (parsed.currency !== 'INR') throw new SplitError(400, `This group is in ${parsed.currency}. Only INR (₹) groups can be imported.`);
   const ledger = splitwiseToLedger(parsed);
   if (ledger.expenses.length + ledger.settlements.length === 0) throw new SplitError(400, 'No expenses found in that file.');
 
@@ -528,4 +544,43 @@ export async function importSplitwise(user: SessionUser, input: { csv: string; g
     throw e;
   }
   return { groupId, expenses: ledger.expenses.length, settlements: ledger.settlements.length, skipped: ledger.skipped, balanceMismatch: ledger.balanceMismatch, currency: parsed.currency };
+}
+
+// ---------- receipts ----------
+
+/** Attach a receipt photo/PDF to an expense (any member or link guest of the group). */
+export async function attachReceipt(access: Access, input: { groupId: string; expenseId: string; dataUri: string }) {
+  assertNotBridged(input.expenseId);
+  const o = await openGroup(access, input.groupId);
+  const e = o.loaded.expenses.find(x => x.id === input.expenseId);
+  if (!e) throw new SplitError(404, 'Expense not found.');
+  const file = decodeDataUri(input.dataUri);
+  if (!file) throw new SplitError(400, 'Use a JPG, PNG, WEBP, HEIC or PDF under 5 MB.');
+  const path = await storeReceipt(input.groupId, input.expenseId, file);
+  await must(db().from('split_expenses').update({ meta: { ...(e.meta ?? {}), receipt: path }, updated_at: nowIso() }).eq('id', e.id));
+  if (e.meta?.receipt) await removeReceipt(e.meta.receipt);
+  return { ok: true };
+}
+
+/** Short-lived link to view an expense's receipt; only for people who can see the group. */
+export async function receiptUrl(access: Access, groupId: string, expenseId: string) {
+  const o = await openGroup(access, groupId);
+  const e = o.loaded.expenses.find(x => x.id === expenseId);
+  if (!e?.meta?.receipt) throw new SplitError(404, 'No receipt on this expense.');
+  const url = await signedReceiptUrl(e.meta.receipt);
+  if (!url) throw new SplitError(404, 'Receipt file is missing.');
+  return { url, isPdf: String(e.meta.receipt).endsWith('.pdf') };
+}
+
+/** Luna reads the receipt into line items (optionally "who had what" from text) — a draft, not saved. */
+export async function scanReceipt(access: Access, input: { groupId: string; dataUri: string; text?: string; asMember?: string | null; today: string }) {
+  const o = await openGroup(access, input.groupId, input.asMember);
+  if (!o.me) throw new SplitError(400, 'Pick who you are first.');
+  if (!decodeDataUri(input.dataUri)) throw new SplitError(400, 'Use a JPG, PNG, WEBP, HEIC or PDF under 5 MB.');
+  try {
+    return await scanReceiptDraft(input.dataUri, active(o.members).map(m => ({ id: m.id, name: m.name })), o.me.name, input.text ?? '', input.today);
+  } catch (e) {
+    const msg = (e as Error).message;
+    throw new SplitError(502, msg.includes('resting') ? msg : "Couldn't read that receipt. Try a sharper, flatter photo.");
+  }
 }
