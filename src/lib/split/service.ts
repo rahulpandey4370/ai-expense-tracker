@@ -121,6 +121,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
   const people = new Map<string, PersonBalance>();
   const activity: ActivityItem[] = [];
   const unlinked: HomeData['unlinked'] = [];
+  const byMonth = new Map<string, number>();
 
   for (const g of loaded.groups) {
     const { members, expenses, settlements, balances, transfers } = ledgerOf(g.id, loaded);
@@ -130,6 +131,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     const lastActivity = [g.updated_at, expenses[0]?.createdAt, settlements[0]?.createdAt].filter(Boolean).sort().at(-1)!;
     groups.push({
       ...toInfo(g), myBalance: balances[me.id] ?? 0, memberCount: active(members).length,
+      myShareTotal: r2(expenses.reduce((a, e) => a + (e.shares[me.id] ?? 0), 0)),
       totalSpent: r2(expenses.reduce((a, e) => a + e.amount, 0)), lastActivity,
     });
 
@@ -146,6 +148,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
 
     for (const e of expenses) {
       const mine = e.shares[me.id] ?? 0;
+      if (mine > 0) byMonth.set(e.date.slice(0, 7), r2((byMonth.get(e.date.slice(0, 7)) ?? 0) + mine));
       activity.push({
         id: e.id, groupId: g.id, groupName: g.name, kind: 'expense', title: e.description, who: name(e.paidBy),
         amount: e.amount, myImpact: e.paidBy === me.id ? r2(e.amount - mine) : -mine, at: e.createdAt,
@@ -172,6 +175,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     groups: groups.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity)),
     people: peopleList,
     activity: activity.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60),
+    spentByMonth: [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, amount]) => ({ month, amount })),
     unlinked: unlinked.slice(0, 20),
   };
 }

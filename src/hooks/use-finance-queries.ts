@@ -45,12 +45,12 @@ export function useTransactionsQuery(opts: TransactionQueryOptions) {
   });
 }
 
-export function useCategories() {
-  return useQuery({ queryKey: financeKeys.categories(), queryFn: () => read('getCategories') });
+export function useCategories(enabled = true) {
+  return useQuery({ queryKey: financeKeys.categories(), queryFn: () => read('getCategories'), enabled });
 }
 
-export function usePaymentMethods() {
-  return useQuery({ queryKey: financeKeys.paymentMethods(), queryFn: () => read('getPaymentMethods') });
+export function usePaymentMethods(enabled = true) {
+  return useQuery({ queryKey: financeKeys.paymentMethods(), queryFn: () => read('getPaymentMethods'), enabled });
 }
 
 export function useBudgets() {

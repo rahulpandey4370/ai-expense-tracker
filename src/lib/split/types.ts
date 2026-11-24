@@ -72,6 +72,7 @@ export interface GroupDetail {
 
 export interface GroupSummary extends GroupInfo {
   myBalance: number;
+  myShareTotal: number;
   memberCount: number;
   totalSpent: number;
   lastActivity: string;
@@ -102,6 +103,8 @@ export interface HomeData {
   groups: GroupSummary[];
   people: PersonBalance[];
   activity: ActivityItem[];
+  /** My share of group spending per month, oldest first. */
+  spentByMonth: { month: string; amount: number }[];
   /** Expenses that include me but aren't in my personal spending yet (owner only). */
   unlinked: { groupId: string; groupName: string; expenseId: string; description: string; myShare: number; date: string }[];
 }

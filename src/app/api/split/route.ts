@@ -20,7 +20,7 @@ const spending = z.object({
 
 const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('home') }),
-  z.object({ op: z.literal('group'), groupId: id, asMember }),
+  z.object({ op: z.literal('group'), groupId: id.optional(), asMember }), // link guests omit groupId
   z.object({ op: z.literal('createGroup'), name, emoji, kind,
     members: z.array(z.object({ name, email: email.optional() })).max(50) }),
   z.object({ op: z.literal('updateGroup'), groupId: id, name: name.optional(), emoji, kind: kind.optional(), archived: z.boolean().optional() }),
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     const data = await (async () => {
       switch (body.op) {
         case 'home': return svc.getHome(needUser());
-        case 'group': return svc.getGroup(access, body.groupId, body.asMember);
+        case 'group': return svc.getGroup(access, body.groupId ?? access.tokenGroupId ?? '', body.asMember);
         case 'createGroup': return svc.createGroup(needUser(), body);
         case 'updateGroup': return svc.updateGroup(access, body.groupId, body);
         case 'deleteGroup': return svc.deleteGroup(access, body.groupId);
