@@ -45,3 +45,4 @@ firebase-debug.log
 firestore-debug.log
 # Local migration/date-fix backups (data dumps, not for commit)
 migration-backups/
+.playwright-mcp/
