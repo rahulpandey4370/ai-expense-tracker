@@ -485,6 +485,7 @@ export const ParsedAITransactionSchema = z.object({
     includeMe: lenientBoolean.default(true).describe("False when the user's own share is zero (mode 'not_mine'). True otherwise."),
     participants: z.array(SplitParticipantSchema).min(1).describe("The other people (not the user) involved in the split, in the order mentioned."),
     paidByName: aiOptional(z.string()).describe("Name of who actually paid, if it wasn't the user (e.g., 'Aman paid, my share is 400'). Leave blank if the user paid."),
+    groupName: aiOptional(z.string()).describe("The split group this belongs to, exactly as named in the groups list, if the text names one (e.g. 'in Goa trip'). Leave blank otherwise."),
   })).describe("Populate only if the text mentions splitting the bill, reimbursement, or a charge that isn't the user's own expense."),
   model: z.string().optional(),
 });

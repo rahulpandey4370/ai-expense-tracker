@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, HandCoins, Loader2, Mic, Pencil, Plus, ScanLine, Users } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Plus, Users } from 'lucide-react';
 import { VoiceSheet } from './voice-sheet';
 import { ReceiptView } from './receipt-view';
+import { EXAMPLE_LINES, Hero } from './hero';
 import type { Expense, GroupDetail, Settlement } from '@/lib/split/types';
 import { Avatar, AvatarStack, EmptyState, KIND_EMOJI, KIND_LABEL, inr, monthLabel, prettyDate } from './bits';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
@@ -103,32 +104,21 @@ export function GroupView({ groupId, token, asMember, onPickMember, onBack, open
         <button type="button" onClick={() => setSheet('members')} aria-label="People and share link"><AvatarStack names={active.map(m => m.name)} max={3} /></button>
       </header>
 
-      <section className="s-hero p-5">
-        {Math.abs(myBalance) < 0.01 ? (
-          <p className="split-display text-3xl">You&apos;re all <em>square</em>.</p>
-        ) : (
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="split-display text-2xl">You {myBalance > 0 ? <>are <em>owed</em></> : <><em>owe</em></>}</p>
-            <p className={`text-3xl font-bold tabular-nums ${myBalance > 0 ? 's-owed' : 's-owe'}`}>{inr(myBalance)}</p>
-          </div>
-        )}
-        {d.transfers.filter(t => t.from === me || t.to === me).slice(0, 3).map((t, i) => (
-          <p key={i} className="s-muted mt-1 text-sm">
-            {t.from === me ? <>You owe {label(t.to)} <span className="s-owe font-semibold">{inr(t.amount)}</span></> : <>{label(t.from)} owes you <span className="s-owed font-semibold">{inr(t.amount)}</span></>}
-          </p>
-        ))}
-        <div className="mt-5 flex items-end justify-between gap-2">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
-            <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" onClick={() => setSheet('scan')} aria-label="Scan a receipt"><ScanLine className="h-5 w-5" /></button>
-            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" onClick={() => openExpense(null)} aria-label="Type an expense"><Pencil className="h-5 w-5" /></button>
-            <button type="button" className="s-voice-btn h-14 w-14" onClick={() => setSheet('voice')} aria-label="Say an expense"><Mic className="h-6 w-6" /></button>
-          </div>
+      <Hero
+        net={myBalance}
+        lines={[
+          `${d.expenses.length} ${d.expenses.length === 1 ? 'expense' : 'expenses'} in ${d.group.name}`,
+          ...d.transfers.filter(t => t.from === me || t.to === me).slice(0, 2)
+            .map(t => (t.from === me ? `You owe ${label(t.to)} ${Math.round(t.amount)}` : `${label(t.from)} owes you ${Math.round(t.amount)}`)),
+          ...EXAMPLE_LINES.slice(0, 2),
+        ]}
+        onScan={() => setSheet('scan')} onType={() => openExpense(null)} onVoice={() => setSheet('voice')}
+      >
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button type="button" className="s-pill" onClick={() => setSheet('settle')}><HandCoins className="h-4 w-4" /> Settle up</button>
+          <button type="button" className="s-pill" onClick={() => setSheet('members')}><Users className="h-4 w-4" /> People</button>
         </div>
-      </section>
+      </Hero>
 
       {feed.length === 0 ? (
         <EmptyState title={<>Nothing <em>logged</em> yet</>} body="Add the first expense — dinner, a cab, the rent — and everyone's share is worked out.">

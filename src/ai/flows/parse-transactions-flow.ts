@@ -41,6 +41,7 @@ const ParseTransactionTextInputSchemaInternal = z.object({
   incomeCategories: z.array(CategorySchemaForAIInternal.omit({ type: true })).describe("A list of available income categories (name, id) to help with mapping."),
   paymentMethods: z.array(PaymentMethodSchemaForAIInternal).describe("A list of available payment methods (for expenses)."),
   splitUsers: z.array(SplitUserSchemaForAIInternal).default([]).describe("People the user has split expenses with before — match names mentioned in the text against this list."),
+  splitGroups: z.array(z.object({ name: z.string(), members: z.string() })).default([]).describe("The user's split groups and their members."),
   currentDate: z.string().describe("The current date in YYYY-MM-DD format, to help resolve relative dates like 'yesterday' or 'last Tuesday'."),
   model: z.string().optional(),
 });
@@ -61,6 +62,8 @@ export async function parseTransactionsFromText(
     categories: { id: string; name: string; type: 'income' | 'expense' }[]; // Combined categories from client
     paymentMethods: z.infer<typeof PaymentMethodSchemaForAIInternal>[];
     splitUsers?: z.infer<typeof SplitUserSchemaForAIInternal>[];
+    /** The user's split groups ("Goa trip": "Asha, Ben") so the text can name one. */
+    splitGroups?: { name: string; members: string }[];
     model: AIModel;
   }
 ): Promise<ParseTransactionTextOutput> {
@@ -85,6 +88,7 @@ export async function parseTransactionsFromText(
       incomeCategories: incomeCategoriesForAI,
       paymentMethods: input.paymentMethods,
       splitUsers: input.splitUsers ?? [],
+      splitGroups: input.splitGroups ?? [],
       currentDate,
       model: modelToUse,
     });

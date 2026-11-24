@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEffect } from 'react';
-import { AudioLines, ChevronRight, FileUp, Loader2, Pencil, Plus, ScanLine, X } from 'lucide-react';
+import { ChevronRight, FileUp, Loader2, Plus, X } from 'lucide-react';
 import { ImportSheet } from './import-sheet';
 import type { GroupKind, GroupSummary, HomeData } from '@/lib/split/types';
 import { ExpenseSheet, type ExpenseDraft } from './expense-sheet';
@@ -8,6 +8,7 @@ import { VoiceSheet } from './voice-sheet';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, BalanceText, EmptyState, KIND_EMOJI, KIND_LABEL, SplitSheet, inr, prettyDate } from './bits';
 import { useSplitAction, useSplitGroup } from './use-split';
+import { EXAMPLE_LINES, FeedSheet, Hero } from './hero';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -25,26 +26,41 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
 
   return (
     <div className="space-y-5">
-      <section className="s-hero flex min-h-[19rem] flex-col p-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="split-display text-xl">{Math.abs(net) < 0.01 ? <>All <em>square</em></> : net > 0 ? <>You&apos;re <em>owed</em></> : <>You <em>owe</em></>}</p>
-          <p className={`text-[1.7rem] font-bold tabular-nums ${net > 0 ? 's-owed' : net < 0 ? 's-owe' : ''}`}>{inr(net)}</p>
-        </div>
-        <div className="flex flex-1 items-center py-6">
-          <p className="split-display text-[2.6rem] leading-[1.05] text-[color-mix(in_srgb,var(--s-ink)_78%,transparent)]">
-            {data.weekCount > 0
-              ? <><em className="text-[var(--s-ink)]">{data.weekCount}</em> {data.weekCount === 1 ? 'expense' : 'expenses'} logged this week</>
-              : <>Snap it, say it, or <em className="text-[var(--s-ink)]">type</em> it.</>}
-          </p>
-        </div>
-        <div className="flex items-end justify-between">
-          <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" aria-label="Scan a receipt" onClick={() => setCapture('scan')}><ScanLine className="h-5 w-5" /></button>
-          <div className="flex items-center gap-3">
-            <button type="button" className="s-icon-btn h-12 w-12 rounded-2xl" aria-label="Type an expense" onClick={() => setCapture('type')}><Pencil className="h-5 w-5" /></button>
-            <button type="button" className="s-voice-btn h-16 w-16" aria-label="Say an expense" onClick={() => setCapture('voice')}><AudioLines className="h-7 w-7" /></button>
-          </div>
-        </div>
-      </section>
+      <Hero
+        net={net}
+        lines={[data.weekCount > 0 ? `${data.weekCount} ${data.weekCount === 1 ? 'expense' : 'expenses'} logged this week` : 'Nothing logged this week yet', ...EXAMPLE_LINES]}
+        onScan={() => setCapture('scan')} onType={() => setCapture('type')} onVoice={() => setCapture('voice')}
+      />
+
+      <FeedSheet>
+        {feed.length === 0 ? (
+          <p className="s-muted px-4 py-5 text-sm">{q ? 'Nothing matches that search.' : 'Expenses from your groups show up here.'}</p>
+        ) : (
+          <ul>
+            {feed.slice(0, 25).map(a => (
+              <li key={a.id}>
+                <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]"
+                  onClick={() => (a.kind === 'expense' ? onOpenExpense(a.groupId, a.id) : onOpenGroup(a.groupId))}>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-xl" aria-hidden>{a.emoji ?? '🧾'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{a.title}</span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <span className="s-group-chip">{a.groupName}</span>
+                      <span className="s-muted truncate">{a.kind === 'settlement' ? prettyDate(a.at.slice(0, 10)) : `${a.paidByMe ? 'You' : a.who} paid ${inr(a.amount)}`}</span>
+                    </span>
+                  </span>
+                  {Math.abs(a.myImpact) >= 0.01 && (
+                    <span className="text-right">
+                      <span className={`block text-sm font-bold tabular-nums ${a.myImpact > 0 ? 's-owed' : 's-owe'}`}>{inr(a.myImpact)}</span>
+                      <span className="s-muted text-[11px]">{a.kind === 'settlement' ? (a.myImpact > 0 ? 'received' : 'paid back') : a.myImpact > 0 ? 'you lent' : 'you owe'}</span>
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </FeedSheet>
 
       {data.unlinked.length > 0 && (
         <section className="s-card p-4">
@@ -81,37 +97,6 @@ export function HomeTab({ data, onOpenGroup, onOpenExpense, query }: {
               </button>
             ))}
           </div>
-        )}
-      </section>
-
-      <section>
-        <p className="s-muted mb-2 px-1 text-xs font-semibold uppercase tracking-wide">Recent</p>
-        {feed.length === 0 ? (
-          <p className="s-muted px-1 text-sm">{q ? 'Nothing matches that search.' : 'Expenses from your groups show up here.'}</p>
-        ) : (
-          <ul className="s-card overflow-hidden">
-            {feed.slice(0, 25).map(a => (
-              <li key={a.id}>
-                <button type="button" className="s-row w-full text-left hover:bg-[var(--s-tint)]"
-                  onClick={() => (a.kind === 'expense' ? onOpenExpense(a.groupId, a.id) : onOpenGroup(a.groupId))}>
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--s-line)] bg-[var(--s-card)] text-xl" aria-hidden>{a.emoji ?? '🧾'}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{a.title}</span>
-                    <span className="flex items-center gap-1.5 text-xs">
-                      <span className="s-group-chip">{a.groupName}</span>
-                      <span className="s-muted truncate">{a.kind === 'settlement' ? prettyDate(a.at.slice(0, 10)) : `${a.paidByMe ? 'You' : a.who} paid ${inr(a.amount)}`}</span>
-                    </span>
-                  </span>
-                  {Math.abs(a.myImpact) >= 0.01 && (
-                    <span className="text-right">
-                      <span className={`block text-sm font-bold tabular-nums ${a.myImpact > 0 ? 's-owed' : 's-owe'}`}>{inr(a.myImpact)}</span>
-                      <span className="s-muted text-[11px]">{a.kind === 'settlement' ? (a.myImpact > 0 ? 'received' : 'paid back') : a.myImpact > 0 ? 'you lent' : 'you owe'}</span>
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
         )}
       </section>
 

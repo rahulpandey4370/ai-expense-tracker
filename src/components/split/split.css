@@ -88,12 +88,12 @@
 /* Hero: soft wash + faint grid, like a sheet of graph paper */
 .s-hero {
   background-image:
-    linear-gradient(color-mix(in srgb, var(--s-deep) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--s-deep) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--s-deep) 2.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--s-deep) 2.5%, transparent) 1px, transparent 1px),
     linear-gradient(165deg, var(--s-tint), var(--s-soft));
   background-size: 22px 22px, 22px 22px, 100% 100%;
 }
-.s-icon-btn { display: inline-flex; height: 2.4rem; width: 2.4rem; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-ink); }
+.s-icon-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-ink); }
 .s-voice-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--s-deep); color: #fff; box-shadow: 0 0 0 6px color-mix(in srgb, var(--s-deep) 18%, transparent); }
 .dark .s-voice-btn { color: #0b0b0b; }
 .s-group-chip { display: inline-flex; align-items: center; gap: .25rem; border-radius: 6px; padding: 0 .4rem; font-size: .68rem; font-weight: 600; background: var(--s-soft); color: var(--s-deep); }

@@ -68,15 +68,15 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
           <span className="split-display text-[1.6rem]">finwise <em>split</em></span>
         </button>
         <div className="flex items-center gap-2">
-          <button type="button" className="s-icon-btn" aria-label="Search" aria-pressed={searching}
+          <button type="button" className="s-icon-btn h-10 w-10" aria-label="Search" aria-pressed={searching}
             onClick={() => { setSearching(v => !v); setQuery(''); if (groupId) go({ g: null }); }}><Search className="h-4 w-4" /></button>
-          <button type="button" className="s-icon-btn" aria-label="Activity" onClick={() => setBell(true)}><Bell className="h-4 w-4" /></button>
+          <button type="button" className="s-icon-btn h-10 w-10" aria-label="Activity" onClick={() => setBell(true)}><Bell className="h-4 w-4" /></button>
         </div>
       </header>
       {searching && !groupId && (
         <div className="mb-4 flex items-center gap-2">
           <input autoFocus className="s-input" placeholder="Search expenses, groups, people" aria-label="Search" value={query} onChange={e => setQuery(e.target.value)} />
-          <button type="button" className="s-icon-btn shrink-0" aria-label="Close search" onClick={() => { setSearching(false); setQuery(''); }}><X className="h-4 w-4" /></button>
+          <button type="button" className="s-icon-btn h-10 w-10 shrink-0" aria-label="Close search" onClick={() => { setSearching(false); setQuery(''); }}><X className="h-4 w-4" /></button>
         </div>
       )}
 

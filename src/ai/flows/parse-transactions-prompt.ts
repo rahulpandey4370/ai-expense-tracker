@@ -53,12 +53,18 @@ People the user has split expenses with before (match names mentioned in the tex
 - {{this.name}}
 {{/each}}
 
+The user's split groups (name: members) — if the text names a group ("in Goa trip", "for the flat"), set splitDetails.groupName to that group's exact name, and match people against its members:
+{{#each splitGroups}}
+- {{this.name}}: {{this.members}}
+{{/each}}
+
 🤝 SPLITTING (populate \`splitDetails\` only if the text mentions sharing this expense, a reimbursement, or a charge that isn't the user's own):
 - Words like "split with", "split N ways", "divided between", "shared with" → mode: "equally". Set includeMe: true and list the OTHER people (not the user) in \`participants\`.
 - Explicit per-person amounts ("Tanshu owes me 500", "Priya's share is 300") → mode: "custom", with each participant's \`amount\` filled in.
 - Phrases meaning the WHOLE amount belongs to someone else — "my sister used my card", "not my expense", "paid for X's dinner", "on behalf of Y" → mode: "not_mine", includeMe: false, and put that one person in \`participants\` (amount not needed, it's the full total).
 - "X paid, my share is Y" or "Aman paid for this" → also set \`paidByName\` to that person's name.
 - Copy participant names exactly as they appear in the input text (or match them to the "People" list above if close). Never invent a name that isn't mentioned.
+- "in <group>" / "for <group>" / "add to <group>" → groupName: that group's exact name from the groups list (blank if none matches).
 - If the text says nothing about splitting or reimbursement, omit \`splitDetails\` entirely.
 
 For each transaction identified, provide:
@@ -76,6 +82,7 @@ For each transaction identified, provide:
 - sourceGuess: (Optional, for income) Brief income source. If unsure or expense, leave blank.
 - confidenceScore: Your confidence (0.0-1.0) for this transaction. 1.0 means very confident.
 - error: (Optional, concise) If a part is unparseable/missing info, note the error briefly.
+- splitDetails: (Optional, only per the SPLITTING rules) exactly { "mode": "equally" | "custom" | "not_mine" | "shares", "includeMe": true | false, "participants": [{ "name": "person", "amount": number (custom only) }], "paidByName": "name" (only if someone else paid), "groupName": "exact group name" (only if a group is named) }
 
 Input Text:
 \`\`\`
