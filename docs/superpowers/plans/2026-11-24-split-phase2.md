@@ -28,3 +28,11 @@ Task 1: complete (b2ed1bc) checks math/access/bridge/splitwise/voice/receipt ok;
 Task 6 (partial): Luna live-verified — split scan, voice x2, parse-receipt flow, chat read_attachment all correct on generated GST receipt; fixed JSON-mode prompt bug (59ac711)
 Tasks 2-4: complete (6368575); guest page screenshots grape/coral + receipt view OK; Ruling: Home/You tabs not screenshotted (behind Google login) — user to check at localhost
 Task 5: complete (321aad1); Luna parse picked groupName 'Goa trip' + participants live; Ruling: editing an existing transaction keeps the old split editor (legacy Quick splits) — only new entries go through groups — cost: can't move an old transaction into a group from the form
+Final review (phase 2): fable reviewer — With fixes; fixed I1 bulk drop, I2 chat receipt (removed), I3 cap race (reservation), I4 meta CAS, I5 group receipt cleanup, I6 group switching; minors fixed: motion, sr, IST date, blank group, size limits, photo race, capture attr
+Final: Ruling: quota reservations are rows in ai_usage (feature split_ai_quota, 0 tokens) — no DDL needed — cost: Usage page shows an extra zero-cost feature row
+Final: minor (deferred): gpt-6-luna has no catalog price (cost_usd null); SMS split skips sms_account_hints learning; seatless guests can replace receipts; HomeCapture/composer error states partial
+
+## Phase 3 (2026-11-24)
+Ruling: Settl's mascot artwork not copied — original sidekicks (purse/coin/receipt/piggy SVGs) — cost: not identical to Settl
+Ruling: @react-pdf/renderer 4.7.0 with all internals pinned via overrides — 2026-11-24 sub-releases broken (unpublished hyphenate; font/render expect registerStdFonts) — cost: manual bumps later
+Verified: group/person/finance PDFs rendered in Node (rasterised) and group PDF generated + viewed in browser (1.3s); build ok; gate 9/9; checks math/access/bridge/splitwise/voice/receipt/report ok
