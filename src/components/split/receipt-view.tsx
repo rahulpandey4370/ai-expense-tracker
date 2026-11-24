@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { FileText, Loader2, Pencil } from 'lucide-react';
+import { FileText, Loader2, Pencil, Trash2 } from 'lucide-react';
 import type { Expense, GroupDetail } from '@/lib/split/types';
 import { SplitSheet, prettyDate } from './bits';
-import { splitApi } from './use-split';
+import { splitApi, useSplitAction } from './use-split';
+import { useToast } from '@/hooks/use-toast';
 
 const num = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -19,6 +20,8 @@ export function ReceiptView({ open, onOpenChange, expense: e, detail, token, onE
 }) {
   const [photo, setPhoto] = useState<{ url: string; isPdf: boolean } | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const action = useSplitAction(token);
+  const { toast } = useToast();
 
   useEffect(() => {
     setPhoto(null);
@@ -90,6 +93,7 @@ export function ReceiptView({ open, onOpenChange, expense: e, detail, token, onE
             {e.meta.said && <p className="r-quote mt-2"><Quote text={e.meta.said} /></p>}
             <div className="r-rule" />
             <div className="r-row font-semibold uppercase"><span>{e.description} · {name(e.paidBy)} paid</span><span>{num(e.amount)}</span></div>
+            {e.meta.paidWith && <div className="r-row r-muted"><span>paid with {e.meta.paidWith.name}</span></div>}
             {lines.map(([l, r], i) => <div key={i} className="r-row"><span>{l}</span><span>{r}</span></div>)}
             <div className="r-rule" />
             {people.map(([id, v]) => (
@@ -102,7 +106,21 @@ export function ReceiptView({ open, onOpenChange, expense: e, detail, token, onE
           </article>
         </div>
 
-        <button type="button" className="s-pill w-full" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit expense</button>
+        <div className="flex gap-2">
+          <button type="button" className="s-pill flex-1" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit</button>
+          {!e.id.startsWith('legacy_') && (
+            <button type="button" className="s-pill s-pill-danger flex-1" disabled={action.isPending} onClick={async () => {
+              if (!confirm(`Delete "${e.description}"?`)) return;
+              try {
+                await action.mutateAsync({ op: 'deleteExpense', groupId: detail.group.id, expenseId: e.id });
+                toast({ title: 'Expense deleted' });
+                onOpenChange(false);
+              } catch (err: any) {
+                toast({ title: err.message, variant: 'destructive' });
+              }
+            }}><Trash2 className="h-4 w-4" /> Delete</button>
+          )}
+        </div>
       </div>
     </SplitSheet>
   );

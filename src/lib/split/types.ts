@@ -24,6 +24,8 @@ export interface ExpenseMeta {
   receipt?: string;
   /** Words it was created from (voice, SMS note, chat). */
   said?: string;
+  /** How the payer paid. `id` is one of the owner's payment methods (owner only); otherwise free text. */
+  paidWith?: { id?: string; name: string };
 }
 
 export interface Expense {

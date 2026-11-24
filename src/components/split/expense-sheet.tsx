@@ -68,6 +68,9 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   const [receipt, setReceipt] = useState<string | null>(null); // data URI waiting to be attached on save
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [spending, setSpending] = useState<{ categoryId: string; paymentMethodId: string; expenseType: ExpenseType }>({ categoryId: '', paymentMethodId: '', expenseType: 'want' });
+  // "Paid with": the owner paying picks one of their payment methods (pwId); anyone else types it (pwText).
+  const [pwId, setPwId] = useState('');
+  const [pwText, setPwText] = useState('');
 
   // Reset the form every time the sheet opens.
   useEffect(() => {
@@ -84,11 +87,15 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
     setItems((src?.meta.items ?? []).map(i => ({ name: i.name, amount: String(i.amount), memberIds: i.memberIds })));
     setCoveredBy(src?.meta.coveredBy ?? '');
     setInSpending(expense ? expense.inMySpending : fromMainApp);
+    let lastMethod = '';
     try {
       const saved = JSON.parse(localStorage.getItem(SPENDING_KEY) ?? 'null');
-      if (saved) setSpending(saved);
+      if (saved) { setSpending(saved); lastMethod = saved.paymentMethodId ?? ''; }
     } catch {}
     if (spendingDefaults) setSpending(s => ({ ...s, ...Object.fromEntries(Object.entries(spendingDefaults).filter(([, v]) => v)) }));
+    const pw = src?.meta.paidWith;
+    setPwText(pw?.name ?? '');
+    setPwId(pw?.id ?? (expense || pw ? '' : spendingDefaults?.paymentMethodId || lastMethod));
     setReceipt(draft?.receiptDataUri ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense?.id, draft]);
@@ -111,21 +118,32 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
   const methods = usePaymentMethods(owner); // owner-only data; friends never fetch it
   const expenseCats = (categories.data ?? []).filter(c => c.type === 'expense');
 
+  const ownerPays = owner && !!me && paidBy === me;
+  const methodName = (id: string) => (methods.data ?? []).find(p => p.id === id)?.name;
+  const paidWithValue = (): { id?: string; name: string } | null => {
+    if (ownerPays && pwId && methodName(pwId)) return { id: pwId, name: methodName(pwId)! };
+    return pwText.trim() ? { name: pwText.trim() } : null;
+  };
+
   const toggle = (id: string) => setParticipants(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
   const save = async () => {
     if (!description.trim()) return toast({ title: 'Add a description', variant: 'destructive' });
     if (preview.error) return toast({ title: preview.error, variant: 'destructive' });
     const wantSpending = showSpending && inSpending;
-    if (wantSpending && (!spending.categoryId || !spending.paymentMethodId)) {
-      return toast({ title: 'Pick a category and payment method for your spending', variant: 'destructive' });
+    const spend = { ...spending, paymentMethodId: ownerPays ? pwId : spending.paymentMethodId };
+    if (wantSpending && (!spend.categoryId || !spend.paymentMethodId)) {
+      return toast({ title: ownerPays && !pwId ? 'Pick what you paid with' : 'Pick a category and payment method for your spending', variant: 'destructive' });
     }
-    if (wantSpending) try { localStorage.setItem(SPENDING_KEY, JSON.stringify(spending)); } catch {}
+    if (wantSpending || (ownerPays && pwId)) try { localStorage.setItem(SPENDING_KEY, JSON.stringify(spend)); } catch {}
+    // Unchanged name keeps the saved value (and the owner's method id when someone else edits).
+    const pw = paidWithValue(), orig = expense?.meta.paidWith;
+    const paidWith = orig && pw && pw.name === orig.name && (!pw.id || pw.id === orig.id) ? undefined : pw;
     try {
       const res = await action.mutateAsync({
         op: 'saveExpense', groupId: detail.group.id, id: expense?.id, description: description.trim(), amount: total, date,
         emoji: emojiFor(description), method, paidBy, participants, values: num(values), items: parsedItems,
-        coveredBy: coveredBy || undefined, asMember, spending: wantSpending ? spending : undefined,
+        coveredBy: coveredBy || undefined, asMember, spending: wantSpending ? spend : undefined, paidWith,
         said: !expense ? draft?.said : undefined,
       });
       const savedId: string = res.id;
@@ -184,6 +202,22 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Paid with */}
+        <section>
+          <p className="s-muted mb-2 text-xs font-semibold uppercase tracking-wide">Paid with</p>
+          {ownerPays ? (
+            <select className="s-input text-sm" aria-label="Paid with" value={pwId || (pwText ? '__typed' : '')}
+              onChange={e => { const v = e.target.value; if (v === '') { setPwId(''); setPwText(''); } else if (v !== '__typed') setPwId(v); }}>
+              <option value="">Not set</option>
+              {pwText && !pwId && <option value="__typed">{pwText}</option>}
+              {(methods.data ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          ) : (
+            <input className="s-input text-sm" aria-label="Paid with" placeholder="Cash, UPI, card… (optional)" maxLength={60}
+              value={pwText} onChange={e => setPwText(e.target.value)} />
+          )}
         </section>
 
         {/* Split method */}
@@ -315,15 +349,15 @@ export function ExpenseSheet({ open, onOpenChange, detail, token, asMember, expe
               </label>
             )}
             {inSpending && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className={`grid grid-cols-1 gap-2 ${ownerPays ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
                 <select className="s-input text-sm" aria-label="Category" value={spending.categoryId} onChange={e => setSpending(s => ({ ...s, categoryId: e.target.value }))}>
                   <option value="">Category…</option>
                   {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <select className="s-input text-sm" aria-label="Payment method" value={spending.paymentMethodId} onChange={e => setSpending(s => ({ ...s, paymentMethodId: e.target.value }))}>
+                {!ownerPays && <select className="s-input text-sm" aria-label="Payment method" value={spending.paymentMethodId} onChange={e => setSpending(s => ({ ...s, paymentMethodId: e.target.value }))}>
                   <option value="">Paid with…</option>
                   {(methods.data ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                </select>}
                 <select className="s-input text-sm" aria-label="Expense type" value={spending.expenseType} onChange={e => setSpending(s => ({ ...s, expenseType: e.target.value as ExpenseType }))}>
                   <option value="need">Need</option>
                   <option value="want">Want</option>

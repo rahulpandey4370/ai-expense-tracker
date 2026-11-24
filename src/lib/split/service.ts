@@ -339,6 +339,8 @@ export interface SaveExpenseInput {
   coveredBy?: string;
   asMember?: string | null;
   spending?: SpendingInput;
+  /** Omitted = keep the saved value; null = clear. */
+  paidWith?: { id?: string; name: string } | null;
   /** What was said/typed to create it (voice, SMS note) — shown on the receipt view. */
   said?: string;
 }
@@ -359,6 +361,7 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
 
   const existing = input.id ? o.loaded.expenses.find(e => e.id === input.id) : undefined;
   if (input.id && !existing) throw new SplitError(404, 'Expense not found.');
+  const isOwner = !!access.user?.isOwner;
   const id = existing?.id ?? cuid();
   // Re-read the receipt right before writing: a photo attached since the group loaded must survive this save.
   const freshReceipt = existing
@@ -374,6 +377,8 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
         // keep what edits don't touch: the receipt photo, the original words, the import marker
         receipt: freshReceipt, imported: existing?.meta?.imported,
         said: input.said ?? existing?.meta?.said,
+        paidWith: input.paidWith === undefined ? existing?.meta?.paidWith
+          : input.paidWith ? { name: input.paidWith.name, ...(isOwner && input.paidWith.id ? { id: input.paidWith.id } : {}) } : undefined,
         participants: input.participants, values: input.values, items: input.items, coveredBy: input.coveredBy,
       },
     },
@@ -383,7 +388,11 @@ export async function saveExpense(access: Access, input: SaveExpenseInput) {
   await syncSpending({
     id, description: input.description, amount: input.amount, date: input.date, paidBy: input.paidBy, shares,
     transactionId: existing?.transaction_id ?? null,
-  }, o.members, !!access.user?.isOwner, access.user?.isOwner ? input.spending : undefined);
+  }, o.members, isOwner, isOwner ? input.spending : undefined);
+  // Already in my spending: a new "Paid with" card follows onto the transaction.
+  if (isOwner && input.paidWith?.id && existing?.transaction_id && !input.spending) {
+    await must(db().from('transactions').update({ payment_method_id: input.paidWith.id }).eq('id', existing.transaction_id));
+  }
   return { id };
 }
 
