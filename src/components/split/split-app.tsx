@@ -129,10 +129,9 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
             {tabs.map(t => {
               const on = !groupId && tab === t.id;
               return (
-                <button key={t.id} type="button" className="s-tab flex flex-1 flex-col items-center gap-0.5 rounded-full py-1 text-[11px] font-semibold"
-                  data-on={on} aria-current={on ? 'page' : undefined} onClick={() => go({ tab: t.id })}>
-                  <span className={cn('flex h-7 w-12 items-center justify-center rounded-full', on && 'bg-[var(--s-soft)]')}><t.icon className="h-5 w-5" /></span>
-                  {t.label}
+                <button key={t.id} type="button" className="s-tab flex h-12 flex-1 items-center justify-center rounded-full"
+                  data-on={on} aria-current={on ? 'page' : undefined} aria-label={t.label} title={t.label} onClick={() => go({ tab: t.id })}>
+                  <span className={cn('flex h-10 w-12 items-center justify-center rounded-full', on && 'bg-[var(--s-soft)]')}><t.icon aria-hidden className="h-[1.35rem] w-[1.35rem]" /></span>
                 </button>
               );
             })}

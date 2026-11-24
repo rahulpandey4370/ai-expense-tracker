@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowRightLeft, BarChart3, Bot, MessageSquareText } from 'lucide-react';
+import { LayoutDashboard, ArrowRightLeft, BarChart3, Bot, MessageSquareText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePendingCount } from '@/hooks/use-finance-queries';
 import { useHideOnScroll } from '@/hooks/use-hide-on-scroll';
@@ -18,6 +18,7 @@ const ITEMS = [
   { href: '/transactions', label: 'Activity', icon: ArrowRightLeft },
   { href: '/pending', label: 'Inbox', icon: MessageSquareText },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/split-expenses', label: 'FinWise Split', icon: Users },
   { href: '/chatbot', label: 'Ask AI', icon: Bot },
 ];
 
@@ -39,30 +40,31 @@ export function MobileBottomNav() {
         hidden && 'pointer-events-none translate-y-[calc(100%+var(--dock-bottom)+0.5rem)] opacity-0'
       )}
     >
-      <ul className="grid grid-cols-5 p-1">
+      <ul className="grid grid-cols-6 p-1">
         {ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = href === '/' ? pathname === href : pathname.startsWith(href);
           return (
             <li key={href}>
               <Link
                 href={href}
                 aria-current={active ? 'page' : undefined}
+                aria-label={href === '/pending' && pendingCount > 0 ? `${label}, ${pendingCount} waiting` : label}
+                title={label}
                 className={cn(
-                  // 52px tall: above the 44px minimum touch target.
-                  'group flex h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-medium transition-colors',
+                  // Icons only (the name is announced to screen readers and shown on long-press); 48px tall touch target.
+                  'group flex h-12 items-center justify-center rounded-full transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
                   active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <span className={cn('relative flex h-7 w-12 items-center justify-center rounded-full transition-colors', active && 'bg-primary/15 dark:bg-primary/25')}>
-                  <Icon className={cn('h-5 w-5', active && 'stroke-[2.4]')} />
+                <span className={cn('relative flex h-10 w-11 items-center justify-center rounded-full transition-colors', active && 'bg-primary/15 dark:bg-primary/25')}>
+                    <Icon aria-hidden className={cn('h-[1.35rem] w-[1.35rem]', active && 'stroke-[2.4]')} />
                   {href === '/pending' && pendingCount > 0 && (
-                    <span aria-label={`${pendingCount} waiting`} className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                    <span aria-hidden className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
                       {pendingCount}
                     </span>
                   )}
                 </span>
-                {label}
               </Link>
             </li>
           );

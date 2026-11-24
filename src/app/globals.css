@@ -10,7 +10,7 @@ body {
 /* Phone floating dock: sits low, tucked into the home-indicator area (not stacked on top of it). */
 :root {
   --dock-bottom: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.75rem));
-  --dock-h: 3.75rem;                                          /* dock height incl. its padding */
+  --dock-h: 3.5rem;                                           /* dock height incl. its padding */
   --dock-clear: calc(var(--dock-bottom) + var(--dock-h) + 0.75rem); /* space content leaves for it */
 }
 
