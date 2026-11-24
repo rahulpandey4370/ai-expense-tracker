@@ -910,7 +910,7 @@ export default function TransactionsPage() {
 
     {/* Outside the backdrop-blur div: backdrop-filter makes that div the containing
         block for `position: fixed`, so the button scrolled away with the list. */}
-    <div className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
+    <div className="fixed bottom-[calc(var(--dock-bottom)+var(--dock-h)+0.75rem)] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
         <Button
           onClick={() => setIsAddingNew(true)}
           className="h-14 w-14 rounded-full bg-accent shadow-lg hover:shadow-xl text-accent-foreground transition-shadow"

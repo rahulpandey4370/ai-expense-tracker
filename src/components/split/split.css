@@ -67,7 +67,7 @@
 }
 .s-input:focus { border-color: var(--s-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-accent) 22%, transparent); }
 
-.s-tabbar { background: color-mix(in srgb, var(--s-card) 92%, transparent); backdrop-filter: blur(14px); border-top: 1px solid var(--s-line); }
+.s-tabbar { background: color-mix(in srgb, var(--s-card) 50%, transparent); backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5); border-color: color-mix(in srgb, var(--s-line) 60%, transparent); }
 .s-tab { color: var(--s-sec); }
 .s-tab[data-on="true"] { color: var(--s-deep); }
 

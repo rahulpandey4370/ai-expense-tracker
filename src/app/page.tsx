@@ -788,7 +788,7 @@ export default function DashboardPage() {
       </main>
       
       {/* Sits above the mobile bottom nav rather than on top of it. */}
-      <div className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
+      <div className="fixed bottom-[calc(var(--dock-bottom)+var(--dock-h)+0.75rem)] right-[max(1rem,env(safe-area-inset-right))] z-40 md:hidden">
         <Button 
           onClick={handleOpenForm}
           className="h-14 w-14 rounded-full bg-accent text-accent-foreground shadow-lg transition-shadow hover:shadow-xl"
