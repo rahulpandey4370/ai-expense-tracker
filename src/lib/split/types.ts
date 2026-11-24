@@ -79,6 +79,7 @@ export interface GroupSummary extends GroupInfo {
   myBalance: number;
   myShareTotal: number;
   memberCount: number;
+  memberNames: string[];
   totalSpent: number;
   lastActivity: string;
 }

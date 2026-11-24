@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useInvalidateFinance } from "@/hooks/use-finance-queries";
 import { useAdjustPendingCount } from "@/hooks/use-optimistic";
 import { cn } from "@/lib/utils";
-import { MessageSquareText, Loader2, Check, X, Sparkles } from "lucide-react";
+import { MessageSquareText, Loader2, Check, X, Sparkles, Users } from "lucide-react";
 import { getCategories, getPaymentMethods } from "@/lib/actions/transactions";
 import {
   getPendingTransactions,
@@ -21,8 +21,10 @@ import {
   dismissPendingTransaction,
   dismissPendingTransactions,
   aiFillPendingTransaction,
+  resolvePendingAsSplit,
   type PendingTransaction,
 } from "@/lib/actions/pending";
+import { SplitComposer } from "@/components/split/split-composer";
 import type { Category, PaymentMethod } from "@/lib/types";
 
 const glowClass = "shadow-[shadow:var(--card-glow)] dark:shadow-[shadow:var(--card-glow-dark)]";
@@ -37,6 +39,7 @@ export default function PendingPage() {
   const { toast } = useToast();
   const invalidateFinance = useInvalidateFinance(); // inbox badge + dashboard totals
   const adjustBadge = useAdjustPendingCount();
+  const [splitting, setSplitting] = useState<PendingTransaction | null>(null);
   const [items, setItems] = useState<PendingTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -221,6 +224,9 @@ export default function PendingPage() {
                 <Button variant="outline" onClick={() => dismiss(item)}>
                   <X className="mr-2 h-4 w-4" /> Dismiss
                 </Button>
+                <Button variant="outline" onClick={() => setSplitting(item)} title="Log it as a group split (uses your note, e.g. 'split with Asha in Goa trip')">
+                  <Users className="mr-2 h-4 w-4" /> Split
+                </Button>
                 <Button onClick={() => confirm(item)}>
                   <Check className="mr-2 h-4 w-4" />
                   Log it
@@ -229,6 +235,21 @@ export default function PendingPage() {
             </CardContent>
           </Card>
         ))
+      )}
+      {splitting && (
+        <SplitComposer
+          open onOpenChange={o => !o && setSplitting(null)}
+          seed={{ amount: splitting.amount, description: splitting.description, date: splitting.date, instruction: notes[splitting.id]?.trim() || undefined }}
+          spendingDefaults={{ categoryId: splitting.categoryId ?? undefined, paymentMethodId: splitting.paymentMethodId ?? undefined, expenseType: splitting.expenseType ?? undefined }}
+          onSaved={async expenseId => {
+            const item = splitting;
+            setSplitting(null);
+            setItems(list => list.filter(i => i.id !== item.id));
+            adjustBadge(-1);
+            try { await resolvePendingAsSplit(item.id, expenseId); invalidateFinance(); }
+            catch (e: any) { toast({ title: "Split saved, but the SMS stayed in the inbox", description: e.message, variant: "destructive" }); load(); }
+          }}
+        />
       )}
     </div>
   );

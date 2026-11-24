@@ -28,12 +28,13 @@ export function MobileBottomNav() {
     <nav
       aria-label="Primary"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur-sm md:hidden',
-        // Keeps the bar clear of the iOS home indicator.
-        'pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]'
+        // Floating dock: inset from the edges, lifted clear of the iOS home indicator.
+        'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 md:hidden',
+        'ml-[env(safe-area-inset-left)] mr-[env(safe-area-inset-right)]',
+        'rounded-[26px] border border-border/60 bg-background/85 shadow-[0_10px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl'
       )}
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-5 px-1.5 py-1.5">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
@@ -42,13 +43,13 @@ export function MobileBottomNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  // 56px tall — comfortably above the 44px minimum touch target.
-                  'flex h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors',
+                  // 52px tall — comfortably above the 44px minimum touch target.
+                  'group flex h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-[20px] text-[10px] font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
                   active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <span className="relative">
+                <span className={cn('relative flex h-8 w-12 items-center justify-center rounded-full transition-colors', active && 'bg-primary/10 dark:bg-primary/20')}>
                   <Icon className={cn('h-5 w-5', active && 'stroke-[2.4]')} />
                   {href === '/pending' && pendingCount > 0 && (
                     <span aria-label={`${pendingCount} waiting`} className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">

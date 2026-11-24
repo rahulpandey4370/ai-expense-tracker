@@ -37,6 +37,10 @@ import { SplitEditor, type SplitEditorValue } from './splits/split-editor';
 import { useSplitUsers, useInvalidateFinance } from '@/hooks/use-finance-queries';
 import { addSplitUser } from '@/lib/actions/splits';
 import { resolveParsedSplit } from '@/lib/split-utils';
+import { SplitComposer, type SplitSeed } from '@/components/split/split-composer';
+import { useSplitHome } from '@/components/split/use-split';
+import { useAuth } from '@/contexts/AuthContext';
+import { toDataUri } from '@/lib/attachment';
 import { VoiceInputButton } from './ai/voice-input-button';
 
 
@@ -95,6 +99,12 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
   const [formId, setFormId] = useState<string | null>(null);
   const { data: splitUsers = EMPTY_SPLIT_USERS } = useSplitUsers();
   const invalidateFinance = useInvalidateFinance();
+  const { isOwner } = useAuth();
+  // Group splits: the composer opens from the form ("Split this expense") or an AI-parsed row.
+  const splitHome = useSplitHome(isOwner);
+  const [composer, setComposer] = useState<{ seed: SplitSeed; row?: number } | null>(null);
+  const [aiSplitSeeds, setAiSplitSeeds] = useState<(SplitSeed | null)[]>([]);
+  const [aiSplitDone, setAiSplitDone] = useState<Record<number, string>>({});
   const handleAddSplitUser = useCallback(async (name: string) => {
     const user = await addSplitUser({ name });
     invalidateFinance();
@@ -265,6 +275,11 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
     }
   };
 
+
+  /** New expense from the form → the group split form, prefilled with what's typed so far. */
+  const openFormComposer = (mode: 'equally' | 'not_mine') => setComposer({
+    seed: { amount: parseFloat(amount) || undefined, description: description || undefined, date: date ? format(date, 'yyyy-MM-dd') : undefined, mode },
+  });
 
   const handleSingleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -568,6 +583,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
         categories: categoryNamesForAI,
         paymentMethods: paymentMethodNamesForAI,
         splitUsers: splitUsers.map(u => ({ id: u.id, name: u.name })),
+        splitGroups: (splitHome.data?.groups ?? []).filter(g => !g.archived).map(g => ({ name: g.name, members: g.memberNames.join(', ') })),
         model: selectedModel,
       });
       
@@ -675,13 +691,29 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
             splits: resolvedSplit?.splits,
           } as TransactionInput,
           unmatchedNames: resolvedSplit?.unmatchedNames ?? [],
+          aiTx,
         };
       }).filter(({ tx }) => tx.amount && tx.amount > 0 && tx.description);
       setAiReviewTransactions(initialReviewItems.map(i => i.tx));
       setAiUnmatchedSplitNames(initialReviewItems.map(i => i.unmatchedNames));
+      // A split the AI spotted goes through the group split form, not the old per-person editor.
+      const seeds = initialReviewItems.map(({ tx, aiTx }) => {
+        const sd = aiTx.splitDetails;
+        if (!sd || tx.type !== 'expense') return null;
+        return {
+          amount: tx.amount, description: tx.description, date: format(tx.date, 'yyyy-MM-dd'),
+          groupHint: sd.groupName || undefined, paidByName: sd.paidByName || undefined, mode: sd.mode as SplitSeed['mode'],
+          participantNames: sd.participants.map(p => p.name),
+          amountsByName: sd.mode === 'custom' ? Object.fromEntries(sd.participants.filter(p => p.amount).map(p => [p.name, p.amount as number])) : undefined,
+        } satisfies SplitSeed;
+      });
+      setAiSplitSeeds(seeds);
+      setAiSplitDone({});
+      if (isOwner && seeds.length === 1 && seeds[0]) setComposer({ seed: seeds[0], row: 0 });
     } else {
       setAiReviewTransactions([]);
       setAiUnmatchedSplitNames([]);
+      setAiSplitSeeds([]);
     }
   }, [parsedAITransactions, expenseCategories, incomeCategories, paymentMethods, splitUsers]);
 
@@ -693,6 +725,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
 
     const transactionsToSubmit: TransactionInput[] = [];
     for(const [index, reviewItem] of aiReviewTransactions.entries()) {
+        if (isOwner && aiSplitSeeds[index]) continue; // logged via the group split form instead
         const validation = TransactionInputSchema.safeParse(reviewItem);
         if (validation.success) {
             transactionsToSubmit.push(validation.data);
@@ -1019,6 +1052,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 type="button" variant={showSplitEditor && !notMineShortcut ? "secondary" : "outline"} size="sm"
                 disabled={isFetchingDropdowns}
                 onClick={() => {
+                  if (isOwner && !initialTransactionData) { openFormComposer('equally'); return; }
                   const next = showSplitEditor && !notMineShortcut ? false : true;
                   setShowSplitEditor(next);
                   setNotMineShortcut(false);
@@ -1032,6 +1066,7 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                 type="button" variant={notMineShortcut ? "secondary" : "outline"} size="sm"
                 disabled={isFetchingDropdowns}
                 onClick={() => {
+                  if (isOwner && !initialTransactionData) { openFormComposer('not_mine'); return; }
                   const next = !notMineShortcut;
                   setNotMineShortcut(next);
                   setShowSplitEditor(next);
@@ -1243,7 +1278,25 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                      {(tx.splits && tx.splits.length > 0) && (
+                      {isOwner && aiSplitSeeds[index] ? (
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+                          <Users className="h-3.5 w-3.5 text-primary" />
+                          {aiSplitDone[index] ? (
+                            <span className="text-xs font-medium text-green-600 dark:text-green-400">Added to the group ✓</span>
+                          ) : (
+                            <>
+                              <span className="text-xs">
+                                Split{aiSplitSeeds[index]!.participantNames?.length ? ` with ${aiSplitSeeds[index]!.participantNames!.join(', ')}` : ''}
+                                {aiSplitSeeds[index]!.groupHint ? ` in ${aiSplitSeeds[index]!.groupHint}` : ''}
+                              </span>
+                              <Button type="button" size="sm" className="h-7 px-2 text-xs"
+                                onClick={() => setComposer({ seed: { ...aiSplitSeeds[index]!, amount: tx.amount, description: tx.description, date: format(tx.date, 'yyyy-MM-dd') }, row: index })}>
+                                Open split
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      ) : (tx.splits && tx.splits.length > 0) && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant="outline" className="gap-1 text-[11px] font-normal">
                             <Users className="h-3 w-3" />
@@ -1452,6 +1505,19 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus className="mr-2 h-4 w-4" />}
                     Submit Reviewed Receipt Transaction
                 </Button>
+                {isOwner && (
+                  <Button type="button" variant="outline" className="w-full" disabled={!aiReceiptReviewTransaction?.amount}
+                    onClick={async () => {
+                      const r = aiReceiptReviewTransaction!;
+                      const photo = receiptFile ? await toDataUri(receiptFile).catch(() => undefined) : undefined;
+                      setComposer({
+                        seed: { amount: r.amount, description: r.description, date: r.date ? format(r.date, 'yyyy-MM-dd') : undefined, mode: 'equally', receiptDataUri: photo },
+                        row: -1,
+                      });
+                    }}>
+                    <Users className="mr-2 h-4 w-4" /> Split it in a group (keeps the receipt)
+                  </Button>
+                )}
             </div>
         )}
     </div>
@@ -1484,6 +1550,30 @@ export function TransactionForm({ onTransactionAdded, initialTransactionData, on
                     {renderAIReceiptForm()}
                 </TabsContent>
             </Tabs>
+        )}
+        {composer && (
+          <SplitComposer
+            open onOpenChange={o => !o && setComposer(null)} seed={composer.seed}
+            spendingDefaults={composer.row !== undefined && composer.row >= 0
+              ? { categoryId: aiReviewTransactions[composer.row]?.categoryId, paymentMethodId: aiReviewTransactions[composer.row]?.paymentMethodId, expenseType: aiReviewTransactions[composer.row]?.expenseType }
+              : composer.row === -1
+                ? { categoryId: aiReceiptReviewTransaction?.categoryId, paymentMethodId: aiReceiptReviewTransaction?.paymentMethodId, expenseType: aiReceiptReviewTransaction?.expenseType }
+                : { categoryId: selectedCategoryId, paymentMethodId: selectedPaymentMethodId, expenseType }}
+            onSaved={() => {
+              const row = composer.row;
+              invalidateFinance();
+              if (row !== undefined && row >= 0) {
+                const next = { ...aiSplitDone, [row]: 'done' };
+                setAiSplitDone(next);
+                // All parsed rows were splits → nothing left to add here.
+                if (aiReviewTransactions.every((_, i) => aiSplitSeeds[i] && next[i])) onTransactionAdded?.();
+              } else {
+                if (row === -1) { setReceiptFile(null); setReceiptPreview(null); setParsedReceiptTransaction(null); setAiReceiptReviewTransaction(null); }
+                onTransactionAdded?.();
+              }
+              setComposer(null);
+            }}
+          />
         )}
       </CardContent>
     </FormWrapperComponent>

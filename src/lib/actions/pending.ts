@@ -214,3 +214,16 @@ export async function setNotificationPref(kind: NotificationKind, enabled: boole
   const { error } = await getSupabase().from('notification_prefs').upsert({ kind, enabled: !!enabled, updated_at: new Date().toISOString() });
   if (error) throw new Error(`Could not save: ${error.message}`);
 }
+
+/** The SMS was logged as a group split instead: mark it done and point it at the transaction the split created. */
+export async function resolvePendingAsSplit(id: string, expenseId: string): Promise<void> {
+  const supabase = getSupabase();
+  const { data: e } = await supabase.from('split_expenses').select('transaction_id').eq('id', expenseId).maybeSingle();
+  const { error } = await supabase
+    .from('pending_transactions')
+    .update({ status: 'confirmed', resolved_at: new Date().toISOString(), transaction_id: e?.transaction_id ?? null })
+    .eq('id', id)
+    .eq('status', 'pending');
+  if (error) throw new Error(`Could not update the SMS: ${error.message}`);
+  revalidatePath('/pending');
+}

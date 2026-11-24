@@ -146,6 +146,7 @@ export async function getHome(user: SessionUser): Promise<HomeData> {
     const lastActivity = [g.updated_at, expenses[0]?.createdAt, settlements[0]?.createdAt].filter(Boolean).sort().at(-1)!;
     groups.push({
       ...toInfo(g), myBalance: balances[me.id] ?? 0, memberCount: active(members).length,
+      memberNames: active(members).filter(m => m.id !== me.id).map(m => m.name),
       myShareTotal: r2(expenses.reduce((a, e) => a + (e.shares[me.id] ?? 0), 0)),
       totalSpent: r2(expenses.reduce((a, e) => a + e.amount, 0)), lastActivity,
     });

@@ -6,6 +6,10 @@ import { getRecurringRules, updateRecurringRule } from '@/lib/actions/recurring'
 import { canonicalizeDescription } from '@/lib/merchants';
 import type { AppTransaction, TransactionInput } from '@/lib/types';
 import type { ActionPreview } from '@/lib/chat-types';
+import { getSessionUser } from '@/lib/auth/supabase-server';
+import { attachReceipt, getGroup, getHome, saveExpense, type SaveExpenseInput } from '@/lib/split/service';
+import { resolveShares } from '@/lib/split/math';
+import { emojiFor } from '@/lib/split/emoji';
 
 /*
  * Tools that change data. Each one is gated by ADK's requireConfirmation: the
@@ -183,6 +187,115 @@ export const settleSplitTool = gated({
   },
 });
 
+// ---------- group split expenses ----------
+
+const SplitArgs = z.object({
+  groupName: z.string().describe('Exact split group name from list_split_groups (fuzzy is OK: "goa" → "Goa trip")'),
+  description: z.string().min(1).max(120).describe('Short, e.g. "Dinner at Ramiro"'),
+  amount: z.number().positive().describe('Total in INR'),
+  date: ymd.optional(),
+  paidByName: z.string().optional().describe('Who paid; omit if the user paid'),
+  participantNames: z.array(z.string()).max(50).optional().describe('Who shares it (the user is "me"); omit = everyone in the group'),
+  method: z.enum(['equal', 'exact', 'percent', 'shares', 'cover']).default('equal'),
+  values: z.array(z.object({ name: z.string(), value: z.number().min(0) })).optional().describe('exact rupees / percent / share weights per person (name "me" = the user)'),
+  coveredByName: z.string().optional().describe('For method "cover": who owes the whole bill'),
+  categoryName: z.string().optional().describe('To also count the user\'s share in their spending (with paymentMethodName + expenseType)'),
+  paymentMethodName: z.string().optional(),
+  expenseType: z.enum(expenseTypes).optional(),
+  receiptFilename: z.string().optional().describe('An attached receipt photo to keep on the expense, e.g. attachment-1.jpeg'),
+});
+type SplitArgs = z.infer<typeof SplitArgs>;
+
+const norm = (x: string) => x.trim().toLowerCase();
+
+/** Names → ids in the user's groups; never creates people. Returns the save input or the problems. */
+async function resolveSplit(a: SplitArgs): Promise<{ problems: string[]; input?: SaveExpenseInput; groupName?: string; names?: Record<string, string> }> {
+  const user = await getSessionUser();
+  if (!user?.isOwner) return { problems: ['only the owner can add split expenses from chat'] };
+  const groups = (await getHome(user)).groups.filter(g => !g.archived);
+  const want = norm(a.groupName);
+  const g = groups.find(x => norm(x.name) === want) ?? groups.find(x => norm(x.name).includes(want) || want.includes(norm(x.name)));
+  if (!g) return { problems: [`no split group named "${a.groupName}" (groups: ${groups.map(x => x.name).join(', ') || 'none'})`] };
+  const d = await getGroup({ user }, g.id);
+  const active = d.members.filter(m => !m.removed);
+  const me = d.meMemberId!;
+  const find = (n?: string) => {
+    if (!n) return undefined;
+    const k = norm(n);
+    if (['me', 'i', 'myself', 'you', user.name.toLowerCase()].includes(k)) return me;
+    return (active.find(m => norm(m.name) === k) ?? active.find(m => norm(m.name).split(' ')[0] === k.split(' ')[0]))?.id;
+  };
+  const problems: string[] = [];
+  const unknown = (n: string) => problems.push(`"${n}" isn't in ${g.name} (members: ${active.map(m => m.name).join(', ')})`);
+  const paidBy = a.paidByName ? find(a.paidByName) : me;
+  if (!paidBy) unknown(a.paidByName!);
+  const participants = a.participantNames?.length
+    ? [...new Set(a.participantNames.map(n => find(n) ?? (unknown(n), '')).filter(Boolean))]
+    : active.map(m => m.id);
+  const values: Record<string, number> = {};
+  for (const v of a.values ?? []) { const id = find(v.name); if (id) values[id] = v.value; else unknown(v.name); }
+  const coveredBy = a.method === 'cover' ? find(a.coveredByName) : undefined;
+  if (a.method === 'cover' && !coveredBy) problems.push('method "cover" needs coveredByName from the group');
+  if (problems.length) return { problems };
+  const parts = a.method === 'exact' || a.method === 'percent' || a.method === 'shares' ? [...new Set([...participants, ...Object.keys(values)])] : participants;
+  const check = resolveShares(a.amount, a.method, { participants: parts, values, coveredBy });
+  if (check.error) return { problems: [check.error] };
+
+  let spending: SaveExpenseInput['spending'];
+  if (a.categoryName || a.paymentMethodName) {
+    const { cat, pm } = await lookups();
+    const c = cat(a.categoryName, 'expense'), p = pm(a.paymentMethodName);
+    if (!c || !p || !a.expenseType) return { problems: ['to count it in spending give an exact categoryName, paymentMethodName and expenseType (or omit all three)'] };
+    spending = { categoryId: c.id, paymentMethodId: p.id, expenseType: a.expenseType };
+  }
+  const names = Object.fromEntries(active.map(m => [m.id, m.id === me ? 'You' : m.name]));
+  return {
+    problems: [], groupName: g.name, names,
+    input: {
+      groupId: g.id, description: a.description, amount: a.amount, date: a.date ?? new Date().toISOString().slice(0, 10),
+      emoji: emojiFor(a.description), method: a.method, paidBy: paidBy!, participants: parts, values, coveredBy, spending,
+    },
+  };
+}
+
+export const addSplitExpenseTool = gated({
+  name: 'add_split_expense',
+  description:
+    'Log a shared expense in one of the user\'s split groups (everyone in the group sees it). The user sees a Confirm card first. ' +
+    'Use when the user says to split something / add it to a group. Names are matched to group members; never invent people. ' +
+    'If a receipt photo is attached, pass receiptFilename so it is kept on the expense.',
+  parameters: SplitArgs,
+  valid: async (a: SplitArgs) => (await resolveSplit(a)).problems.length === 0,
+  execute: async (a: SplitArgs, ctx?: any) => {
+    const r = await resolveSplit(a);
+    if (r.problems.length) return { added: false, problems: r.problems };
+    const user = (await getSessionUser())!;
+    const { id } = await saveExpense({ user }, { ...r.input!, said: undefined });
+    let receipt = 'none';
+    if (a.receiptFilename && ctx?.loadArtifact) {
+      const part = await ctx.loadArtifact(a.receiptFilename).catch(() => null);
+      const data = part?.inlineData;
+      if (data?.data) {
+        receipt = await attachReceipt({ user }, { groupId: r.input!.groupId, expenseId: id, dataUri: `data:${data.mimeType};base64,${data.data}` })
+          .then(() => 'attached', (e: Error) => `not attached: ${e.message}`);
+      }
+    }
+    return { added: true, group: r.groupName, expenseId: id, inSpending: !!r.input!.spending, receipt };
+  },
+});
+
+export const listSplitGroupsTool = new FunctionTool({
+  name: 'list_split_groups',
+  description: "The user's split groups with their members and the user's balance in each (positive = they're owed).",
+  parameters: z.object({}) as any,
+  execute: async () => {
+    const user = await getSessionUser();
+    if (!user) return { groups: [] };
+    const home = await getHome(user);
+    return { groups: home.groups.filter(g => !g.archived).map(g => ({ name: g.name, members: g.memberNames, myBalance: g.myBalance })) };
+  },
+});
+
 export const setRecurringActiveTool = gated({
   name: 'set_recurring_active',
   description: 'Pause (active=false) or resume (active=true) a recurring rule by id, from get_recurring_rules.',
@@ -194,7 +307,7 @@ export const setRecurringActiveTool = gated({
   },
 });
 
-export const ACTION_TOOLS = [addTransactionsTool, updateTransactionTool, deleteTransactionTool, settleSplitTool, setRecurringActiveTool];
+export const ACTION_TOOLS = [addTransactionsTool, updateTransactionTool, deleteTransactionTool, settleSplitTool, addSplitExpenseTool, listSplitGroupsTool, setRecurringActiveTool];
 
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -203,6 +316,26 @@ const human = (t: AppTransaction) => `${t.description} · ${inr(t.amount)} · ${
 
 export async function previewAction(name: string, args: any): Promise<ActionPreview> {
   switch (name) {
+    case 'add_split_expense': {
+      const r = await resolveSplit(SplitArgs.parse(args));
+      const i = r.input;
+      if (!i) return { title: 'Add this split?', lines: [{ label: 'Problem', value: r.problems.join('; ') }] };
+      const who = (id: string) => r.names?.[id] ?? id;
+      const how = i.method === 'cover' ? `${who(i.coveredBy!)} covers it`
+        : i.method === 'equal' ? `Equally: ${i.participants.map(who).join(', ')}`
+        : `${i.method}: ${Object.entries(i.values ?? {}).map(([k, v]) => `${who(k)} ${v}`).join(', ')}`;
+      return {
+        title: `Add this to ${r.groupName}?`,
+        lines: [
+          { label: 'Amount', value: inr(i.amount) },
+          { label: 'Description', value: i.description },
+          { label: 'Paid by', value: who(i.paidBy) },
+          { label: 'Split', value: how },
+          ...(i.spending ? [{ label: 'Your spending', value: 'Your share is added to transactions' }] : []),
+          ...(args.receiptFilename ? [{ label: 'Receipt', value: 'Attached photo is kept' }] : []),
+        ],
+      };
+    }
     case 'add_transactions': {
       const txs: NewTx[] = args.transactions ?? [];
       if (txs.length === 1) {

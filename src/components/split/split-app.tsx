@@ -61,7 +61,7 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
   const tabs = TABS;
 
   return (
-    <div className={cn('mx-auto w-full max-w-2xl px-4 pt-4', mode === 'friend' ? 'pb-28' : 'pb-8')}>
+    <div className={cn('mx-auto w-full max-w-2xl px-4 pt-4', mode === 'friend' ? 'pb-32' : 'pb-8')}>
       <header className="mb-4 flex items-center justify-between gap-3">
         <button type="button" onClick={() => go({ tab: 'home' })} className="flex items-center gap-2" aria-label="Split home">
           <span className="text-2xl" aria-hidden>{sidekickOf(look)}</span>
@@ -114,14 +114,18 @@ function SplitAppInner({ mode }: { mode: 'owner' | 'friend' }) {
       </SplitSheet>
 
       {mode === 'friend' && (
-        <nav className="s-tabbar fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)]" aria-label="Split sections">
-          <div className="mx-auto flex max-w-2xl">
-            {tabs.map(t => (
-              <button key={t.id} type="button" className="s-tab flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold"
-                data-on={!groupId && tab === t.id} onClick={() => go({ tab: t.id })}>
-                <t.icon className="h-5 w-5" /> {t.label}
-              </button>
-            ))}
+        <nav className="s-tabbar border-[var(--s-line)] fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl rounded-[26px] border shadow-[0_10px_30px_rgba(0,0,0,0.12)]" aria-label="Split sections">
+          <div className="flex p-1.5">
+            {tabs.map(t => {
+              const on = !groupId && tab === t.id;
+              return (
+                <button key={t.id} type="button" className="s-tab flex flex-1 flex-col items-center gap-0.5 rounded-[20px] py-1.5 text-[11px] font-semibold"
+                  data-on={on} aria-current={on ? 'page' : undefined} onClick={() => go({ tab: t.id })}>
+                  <span className={cn('flex h-8 w-12 items-center justify-center rounded-full', on && 'bg-[var(--s-soft)]')}><t.icon className="h-5 w-5" /></span>
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </nav>
       )}

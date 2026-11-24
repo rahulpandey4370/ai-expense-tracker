@@ -133,8 +133,9 @@ export default function AppSidebar({ isDemoMode = false }: AppSidebarProps) {
                       )}
                     </Tooltip>
                   </TooltipProvider>
+                  {/* The button sits inside a Link, so the badge's peer-based placement never applies; centre it on its own row. */}
                   {item.href === "/pending" && pendingCount > 0 && (
-                    <SidebarMenuBadge className="bg-primary text-primary-foreground" aria-label={`${pendingCount} waiting`}>{pendingCount}</SidebarMenuBadge>
+                    <SidebarMenuBadge className="right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground" aria-label={`${pendingCount} waiting`}>{pendingCount}</SidebarMenuBadge>
                   )}
                 </SidebarMenuItem>
               ))}
